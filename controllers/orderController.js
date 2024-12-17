@@ -11,6 +11,7 @@ exports.createOrder = async (req, res) => {
             volume,
             quantity
         });
+        //This should be replaced with userId from middleware
         newOrder.createdBy = new mongoose.Types.ObjectId();
 
         const savedOrder = await newOrder.save();
