@@ -7,6 +7,7 @@ const mongoose = require('mongoose');
 
 // Import routes
 const authRoutes = require('./routes/userRoutes');
+const orderRoutes = require('./routes/orderRoutes');
 
 // Create an instance of Express
 const app = express();
@@ -24,6 +25,8 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Use authentication routes
 app.use('/api', authRoutes);
+
+app.use('/api', orderRoutes);
 
 
 // Start server
