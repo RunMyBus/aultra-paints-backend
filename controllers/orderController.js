@@ -1,5 +1,5 @@
 const Order = require('../models/Order');
-
+const mongoose = require('mongoose');
 // Create a new order
 exports.createOrder = async (req, res) => {
     try {
@@ -11,6 +11,7 @@ exports.createOrder = async (req, res) => {
             volume,
             quantity
         });
+        newOrder.createdBy = new mongoose.Types.ObjectId();
 
         const savedOrder = await newOrder.save();
         res.status(201).json({ success: true, data: savedOrder });

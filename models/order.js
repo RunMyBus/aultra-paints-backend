@@ -7,18 +7,33 @@ const orderSchema = new Schema({
   brand: { type: String, required: true },
   productName: { type: String, required: true },
   volume: { type: Number, required: true },
-  quantity: { type: Number, required: true },
-  createdBy: { type: String},
-  createdAt: { type: Date, default: Date.now },
-  updatedBy: { type: String},
-  updatedAt: { type: Date, default: Date.now }
-});
+  quantity: { type: Number, required: true }
+}, { timestamps: true });
+orderSchema.plugin(createdUpdatedPlugin);
 
-// Middleware to update 'updatedAt' on every save or update
-orderSchema.pre('save', function (next) {
-  this.updatedAt = Date.now();
-  next();
-});
+function createdUpdatedPlugin(schema, options) {
+  schema.add({
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  });
+
+  schema.pre('save', function (next) {
+    if (this.isNew) {
+      this.updatedBy = this.createdBy;
+    }
+    next();
+  });
+
+  schema.pre('findOneAndUpdate', function (next) {
+    const userId = this.options.context?.userId;
+    if (userId) {
+      this.getUpdate().updatedBy = userId;
+    }
+    next();
+  });
+}
+
 // Create and export the model
 const order = mongoose.model('order', orderSchema);
+
 module.exports = order;
