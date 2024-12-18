@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
+const passport = require('passport');
+
 const orderController = require('../controllers/orderController');
+
+router.use(passport.authenticate('jwt', { session: false }));
 
 // Create an order
 router.post('/orders', orderController.createOrder);
