@@ -1,3 +1,4 @@
+// controllers/branchController.js
 const Branch = require('../models/branch');  // Ensure correct path
 
 // Create a new branch with products
@@ -12,7 +13,6 @@ exports.createBranch = async (req, res) => {
             Products
         });
 
-        
         await newBranch.save();
         res.status(201).json({
             message: 'Branch and products added successfully',
@@ -23,11 +23,31 @@ exports.createBranch = async (req, res) => {
     }
 };
 
-// Get all branches with their products
+// Get all branches with their products flattened
 exports.getAllBranches = async (req, res) => {
     try {
         const branches = await Branch.find(); // Fetch all branches from DB
-        res.status(200).json(branches);
+        let response = [];
+
+        branches.forEach(branch => {
+            // Flatten products and merge each product with its branch data
+            branch.Products.forEach(product => {
+                response.push({
+                    _id: branch._id,
+                    Branch: branch.Branch,
+                    CreationDate: branch.CreationDate,
+                    ExpiryDate: branch.ExpiryDate,
+                    BatchNumber: product.BatchNumber,
+                    Brand: product.Brand,
+                    ProductName: product.ProductName,
+                    Volume: product.Volume,
+                    Quantity: product.Quantity,
+                    __v: branch.__v
+                });
+            });
+        });
+
+        res.status(200).json(response);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching branches', error: error.message });
     }
@@ -39,7 +59,6 @@ exports.updateBranch = async (req, res) => {
         const { Quantity, ProductName, Volume, Brand } = req.body;
         const batchNumberParam = req.params.batchNumber;  
 
-        
         const updatedBranch = await Branch.findOneAndUpdate(
             { "Products.BatchNumber": batchNumberParam },  
             {
@@ -74,7 +93,7 @@ exports.deleteBranch = async (req, res) => {
 
         const updatedBranch = await Branch.findOneAndUpdate(
             { "Products.BatchNumber": batchNumberParam },  
-            { $pull: { Products: { BatchNumber: batchNumberParam } } }, 
+            { $pull: { Products: { BatchNumber: batchNumberParam } } },  
             { new: true } 
         );
 
