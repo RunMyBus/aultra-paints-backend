@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const Branch = require('../models/branch');
+const Transaction = require('../models/Transaction');
+const { v4: uuidv4 } = require('uuid');
 
 // Create a new branch with products
 exports.createBranch = async (req, res) => {
@@ -31,8 +33,22 @@ exports.createBranch = async (req, res) => {
       });
 
       const savedBatchNumber = await newBatchNumber.save();
+
+      // Generate transactions based on Quantity
+      const transactionPromises = Array.from({ length: product.Quantity }, () => {
+        const qrCode = uuidv4();  // Generate unique QR
+        return new Transaction({
+          batchId: savedBatchNumber._id,  // Use the new batch ID
+          qr_code: qrCode,
+          isProcessed: false
+        }).save();
+      });
+
+      await Promise.all(transactionPromises);
       return savedBatchNumber;
     });
+
+
 
     // Wait for all batch numbers to be saved
     const savedBatchNumbers = await Promise.all(BatchNumberPromises);
