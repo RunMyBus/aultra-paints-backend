@@ -1,112 +1,131 @@
-// controllers/branchController.js
-const Branch = require('../models/branch');  // Ensure correct path
+const mongoose = require('mongoose');
+const Branch = require('../models/branch');
 
 // Create a new branch with products
 exports.createBranch = async (req, res) => {
-    try {
-        const { Branch: branchName, CreationDate, ExpiryDate, Products } = req.body;
+  try {
+    const { Branch: branchName, CreationDate, ExpiryDate, BatchNumbers } = req.body;
 
-        const newBranch = new Branch({
-            Branch: branchName,  
-            CreationDate,
-            ExpiryDate,
-            Products
-        });
+    const BatchNumberPromises = BatchNumbers.map(async (product) => {
+      // Check if a record with the same branch name and batch number already exists
+      const existingBatch = await Branch.findOne({
+        Branch: branchName,
+        BatchNumber: product.BatchNumber
+      });
 
-        await newBranch.save();
-        res.status(201).json({
-            message: 'Branch and products added successfully',
-            branch: newBranch
-        });
-    } catch (error) {
-        res.status(500).json({ message: 'Error saving branch', error: error.message });
-    }
+      if (existingBatch) {
+        // If a batch with the same branch name and batch number exists, throw an error
+        throw new Error(`Batch number ${product.BatchNumber} already exists for branch ${branchName}`);
+      }
+
+      // If no existing batch found, create a new batch entry
+      const newBatchNumber = new Branch({
+        Branch: branchName,
+        CreationDate,
+        ExpiryDate,
+        BatchNumber: product.BatchNumber,
+        Brand: product.Brand,
+        ProductName: product.ProductName,
+        Volume: product.Volume,
+        Quantity: product.Quantity
+      });
+
+      const savedBatchNumber = await newBatchNumber.save();
+      return savedBatchNumber;
+    });
+
+    // Wait for all batch numbers to be saved
+    const savedBatchNumbers = await Promise.all(BatchNumberPromises);
+    res.status(201).json(savedBatchNumbers);
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Error saving branch and products', error: error.message });
+  }
 };
 
-// Get all branches with their products flattened
+// Get all branches with pagination
 exports.getAllBranches = async (req, res) => {
-    try {
-        const branches = await Branch.find(); // Fetch all branches from DB
-        let response = [];
+  const { page = 1, limit = 10 } = req.query; // Default to page 1 and 10 items per page
 
-        branches.forEach(branch => {
-            // Flatten products and merge each product with its branch data
-            branch.Products.forEach(product => {
-                response.push({
-                    _id: branch._id,
-                    Branch: branch.Branch,
-                    CreationDate: branch.CreationDate,
-                    ExpiryDate: branch.ExpiryDate,
-                    BatchNumber: product.BatchNumber,
-                    Brand: product.Brand,
-                    ProductName: product.ProductName,
-                    Volume: product.Volume,
-                    Quantity: product.Quantity,
-                    __v: branch.__v
-                });
-            });
-        });
+  try {
+    const branches = await Branch.find()
+      .skip((page - 1) * limit) // Skip items for the current page
+      .limit(parseInt(limit)) // Limit the number of items returned
+      .exec();
 
-        res.status(200).json(response);
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching branches', error: error.message });
-    }
+    const totalBranches = await Branch.countDocuments(); // Total count for pagination metadata
+
+    res.status(200).json({
+      total: totalBranches,
+      pages: Math.ceil(totalBranches / limit), // Calculate total pages
+      currentPage: parseInt(page),
+      branches
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error retrieving branches', error: error.message });
+  }
 };
 
-// Update a product in a branch by BatchNumber
+// Get a single branch by BatchNumber
+exports.getBranchByBatchNumber = async (req, res) => {
+    const { BatchNumber } = req.params;
+  
+    try {
+      const branch = await Branch.findOne({ BatchNumber });
+  
+      if (!branch) {
+        return res.status(404).json({ message: 'Branch/product not found by BatchNumber' });
+      }
+  
+      res.status(200).json(branch);
+    } catch (error) {
+      res.status(500).json({ message: 'Error retrieving branch by BatchNumber', error: error.message });
+    }
+  };
+  
+ // Update a branch by BatchNumber and all its product information
 exports.updateBranch = async (req, res) => {
+    const { BatchNumber } = req.params;  // Get BatchNumber from the request parameters
+    const updatedData = req.body;        // Get all the fields to be updated from the request body
+  
     try {
-        const { Quantity, ProductName, Volume, Brand } = req.body;
-        const batchNumberParam = req.params.batchNumber;  
-
-        const updatedBranch = await Branch.findOneAndUpdate(
-            { "Products.BatchNumber": batchNumberParam },  
-            {
-                $set: {
-                    "Products.$.Quantity": Quantity,         
-                    "Products.$.ProductName": ProductName,    
-                    "Products.$.Volume": Volume,              
-                    "Products.$.Brand": Brand                 
-                }
-            },
-            { new: true } 
-        );
-
-        if (!updatedBranch) {
-            return res.status(404).json({ message: 'Branch with the specified BatchNumber not found' });
-        }
-
-        res.status(200).json({
-            message: 'Product updated successfully',
-            branch: updatedBranch
-        });
+      // Find the branch by BatchNumber
+      const updatedBranch = await Branch.findOne({ BatchNumber });
+  
+      if (!updatedBranch) {
+        return res.status(404).json({ message: 'Branch with the given BatchNumber not found' });
+      }
+  
+      // Update all the fields from the request body
+      Object.keys(updatedData).forEach((key) => {
+        updatedBranch[key] = updatedData[key];  // Dynamically update all fields
+      });
+  
+      // Save the updated branch
+      const savedBranch = await updatedBranch.save();
+  
+      // Return the full branch data (including the updated information)
+      res.status(200).json(savedBranch);
+  
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error updating branch', error: error.message });
+      res.status(500).json({ message: 'Error updating branch and product', error: error.message });
     }
+  };
+  
+
+// Delete a branch/product by BatchNumber
+exports.deleteBranchByBatchNumber = async (req, res) => {
+  const { BatchNumber } = req.params;
+
+  try {
+    const deletedBranch = await Branch.findOneAndDelete({ BatchNumber });
+
+    if (!deletedBranch) {
+      return res.status(404).json({ message: 'Branch/product not found' });
+    }
+
+    res.status(200).json({ message: 'Branch/product deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting branch/product', error: error.message });
+  }
 };
 
-// Delete a product in a branch by BatchNumber
-exports.deleteBranch = async (req, res) => {
-    try {
-        const batchNumberParam = req.params.batchNumber;  
-
-        const updatedBranch = await Branch.findOneAndUpdate(
-            { "Products.BatchNumber": batchNumberParam },  
-            { $pull: { Products: { BatchNumber: batchNumberParam } } },  
-            { new: true } 
-        );
-
-        if (!updatedBranch) {
-            return res.status(404).json({ message: 'Branch with the specified BatchNumber not found' });
-        }
-
-        res.status(200).json({
-            message: 'Product deleted successfully',
-            branch: updatedBranch
-        });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error deleting product from branch', error: error.message });
-    }
-};

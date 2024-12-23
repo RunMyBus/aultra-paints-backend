@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const User = require('../models/User');  // Import the User model
+const User = require('../models/User'); 
 const bcrypt = require('bcryptjs');
 
 
@@ -38,7 +38,7 @@ exports.register = async (req, next) => {
             return next({status: 400, message: 'User already exists'});
         }
 
-        // Hash the password before saving the user
+        
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -49,7 +49,7 @@ exports.register = async (req, next) => {
             password: hashedPassword,
         });
 
-        // Save the user to the database
+        
         await user.save();
 
         return next({status: 200, message: 'User registered successfully'});
