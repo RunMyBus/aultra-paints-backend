@@ -19,10 +19,11 @@ exports.markTransactionAsProcessed = async (req, res) => {
     const { qr } = req.params;  // Assuming qr is passed as a URL parameter
 
     try {
+        // Find the transaction and update isProcessed to true
         const updatedTransaction = await Transaction.findOneAndUpdate(
-            { qr: qr },
+            { qr_code: qr },  // Match the QR code
             { isProcessed: true },  // Update isProcessed to true
-            { new: true }
+            { new: true }  // Return the updated document
         );
 
         if (!updatedTransaction) {

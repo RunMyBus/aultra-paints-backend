@@ -2,6 +2,29 @@ const mongoose = require('mongoose');
 const Branch = require('../models/branch');
 const Transaction = require('../models/Transaction');
 const { v4: uuidv4 } = require('uuid');
+const AWS = require('aws-sdk');
+
+AWS.config.update({
+  accessKeyId: 'YOUR_ACCESS_KEY',  // Replace with your access key
+  secretAccessKey: 'YOUR_SECRET_KEY',  // Replace with your secret key
+  region: 'YOUR_REGION'  // Replace with your AWS region
+});
+
+const s3 = new AWS.S3();
+
+const uploadQRCodeToS3 = async (qrCode) => {
+  const buffer = await QRCode.toBuffer(qrCode, { errorCorrectionLevel: 'H' });  // Generate QR code buffer
+
+  const params = {
+    Bucket: 'YOUR_BUCKET_NAME',  // Replace with your S3 bucket name
+    Key: `qrcodes/${qrCode}.png`,  // File name for the QR code image
+    Body: buffer,  // The buffer containing the image
+    ContentType: 'image/png',  // Content type for the image
+    ACL: 'public-read'  // Make it publicly readable
+  };
+
+  return s3.upload(params).promise();
+};
 
 // Create a new branch with products
 exports.createBranch = async (req, res) => {
@@ -35,26 +58,29 @@ exports.createBranch = async (req, res) => {
       const savedBatchNumber = await newBatchNumber.save();
 
       // Generate transactions based on Quantity
-      const transactionPromises = Array.from({ length: product.Quantity }, () => {
+      const transactionPromises = Array.from({ length: product.Quantity }, async () => {
         const qrCode = uuidv4();  // Generate unique QR
-        return new Transaction({
-          batchId: savedBatchNumber._id,  // Use the new batch ID
-          qr_code: qrCode,
-          isProcessed: false
-        }).save();
+        await uploadQRCodeToS3(qrCode);  // Save QR code to S3
+        const transactionId = uuidv4();  // Generate unique transaction ID
+
+        const transaction = new Transaction({
+          transactionId,  // Unique transaction ID
+          batchId: savedBatchNumber._id,  // Reference to batch ID
+          qr_code: qrCode,  // Save the generated QR code
+          isProcessed: false  // Default is false
+        });
+
+        await transaction.save();  // Save each transaction
       });
 
-      await Promise.all(transactionPromises);
+      await Promise.all(transactionPromises);  // Wait for all transactions to be saved
       return savedBatchNumber;
     });
 
-
-
-    // Wait for all batch numbers to be saved
-    const savedBatchNumbers = await Promise.all(BatchNumberPromises);
-    res.status(201).json(savedBatchNumbers);
+    const batches = await Promise.all(BatchNumberPromises);
+    res.status(200).json({ message: 'Branch and batches created successfully', batches });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Error saving branch and products', error: error.message });
+    res.status(500).json({ error: error.message });
   }
 };
 
