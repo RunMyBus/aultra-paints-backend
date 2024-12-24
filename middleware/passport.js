@@ -40,16 +40,19 @@ const localLogin = new LocalStrategy({
 
 const opts = {
     jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-    secretOrKey: config.jwt_secret,
+    secretOrKey: 'aultra-paints',
 };
 
 const jwtLogin = new JwtStrategy(
     {...opts, passReqToCallback: true},
     async (req, jwtPayload, done) => {
+        console.log(jwtPayload, '----')
         try {
             let user = await User.findOne({_id: jwtPayload._id});
             if (user) {
                 const token = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+                console.log(token, '----========', user)
+
                 if (user.token === token) {
                     return done(null, user);
                 } else {
