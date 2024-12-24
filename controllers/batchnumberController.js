@@ -75,7 +75,7 @@ exports.createBatchNumber = async (req, res) => {
     });
 
     const savedBatchNumbers = await Promise.all(BatchNumberPromises);
-    res.status(201).json(savedBatchNumbers);
+    res.status(200).json(savedBatchNumbers);
     const batches = await Promise.all(BatchNumberPromises);
     res.status(200).json({ message: 'Branch and batches created successfully', batches });
   } catch (error) {
@@ -114,7 +114,7 @@ exports.getBranchByBatchNumber = async (req, res) => {
       const branch = await Batch.findOne({ BatchNumber });
   
       if (!branch) {
-        return res.status(404).json({ message: 'Branch/product not found by BatchNumber' });
+        return res.status(400).json({ message: 'Branch/product not found by BatchNumber' });
       }
   
       res.status(200).json(branch);

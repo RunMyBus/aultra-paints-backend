@@ -10,7 +10,7 @@ const router = express.Router();
 router.get('/health-check', (req, res) => res.send('OK'));
 
 router.use('/auth', authRoutes);
-router.use('/batchnumbers', batchnumberRoutes);
+router.use('/batchNumbers', batchnumberRoutes);
 router.use('/transaction', transactionRoutes);
 
 
