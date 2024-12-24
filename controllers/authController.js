@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 
 async function generateToken(user, next) {
     try {
-        const token = jwt.sign(user, config.jwt_secret);
+        const token = jwt.sign(user, 'aultra-paints');
         if (user) {
             await User.findByIdAndUpdate(user._id, {token})
         }

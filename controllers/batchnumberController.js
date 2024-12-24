@@ -76,6 +76,7 @@ exports.createBatchNumber = async (req, res) => {
           qr_code: qrCodeUrl, // Save the S3 URL
           qr_code_id: qrCodeId, // Save the unique QR code ID
           isProcessed: false,
+          createdBy: req.user._id
         });
 
         await transaction.save(); // Save each transaction
@@ -88,7 +89,7 @@ exports.createBatchNumber = async (req, res) => {
     const savedBatchNumbers = await Promise.all(BatchNumberPromises);
 
     // Send a single response
-    res.status(201).json({
+    res.status(200).json({
       message: 'Branch and batches created successfully',
       batches: savedBatchNumbers,
     });
