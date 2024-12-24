@@ -2,16 +2,19 @@ const express = require('express');
 const router = express.Router();
 const branchController = require('../controllers/branchController');
 
-// Create a new branch with products
-router.post('/', branchController.createBranch);
-
-// Get all branches
+// GET all branches with pagination
 router.get('/', branchController.getAllBranches);
 
-// Update a product in a branch by BatchNumber
-router.put('/:batchNumber', branchController.updateBranch);
+// GET a single branch by ID
+router.get('/:BatchNumber', branchController.getBranchByBatchNumber);
 
-// Delete a product in a branch by BatchNumber
-router.delete('/:batchNumber', branchController.deleteBranch);
+// POST to create a new branch with products
+router.post('/', branchController.createBranch);
+
+// PUT to update a branch by BatchNumber
+router.put('/:BatchNumber', branchController.updateBranch);
+
+// DELETE a branch/product by BatchNumber
+router.delete('/:BatchNumber', branchController.deleteBranchByBatchNumber);
 
 module.exports = router;

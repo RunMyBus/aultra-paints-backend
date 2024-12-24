@@ -1,26 +1,25 @@
-// models/branch.js
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-// Product Schema (embedded inside the Branch Schema)
-const productSchema = new Schema({
-  BatchNumber: { type: String, required: true },
-  Brand: { type: String, required: true },
-  ProductName: { type: String, required: true },
-  Volume: { type: Number, required: true },
-  Quantity: { type: String, required: true }
-});
-
 // Branch Schema
-const branchSchema = new Schema({
-  Branch: { type: String, required: true },
-  CreationDate: { type: Date, required: true },
-  ExpiryDate: { type: Date, required: true },
-  Products: [productSchema]  // Array of products for this branch
-});
+const BranchSchema = new Schema(
+  {
+    Branch: { type: String, required: true },      // Branch Name as a String
+    CreationDate: { type: Date, required: true },  // Creation date of the branch
+    ExpiryDate: { type: Date, required: true },    // Expiry date for products
+    BatchNumber: { type: String, required: true }, // Batch number for products
+    Brand: { type: String, required: true },       // Brand name
+    ProductName: { type: String, required: true }, // Name of the product
+    Volume: { type: Number, required: true },      // Volume of the product
+    Quantity: { type: String, required: true }     // Quantity in stock
+  },
+  {
+    timestamps: true // Automatically adds `createdAt` and `updatedAt` fields
+  }
+);
 
-// Model creation
-const Branch = mongoose.model('Branch', branchSchema);
+// Create the Branch model
+const Branch = mongoose.model('Branch', BranchSchema);
 
-// Export the model
+// Export the Branch model
 module.exports = Branch;
