@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const Batch = require('../models/batchnumber');
-const Branch = require('../models/branch');
+
 const Transaction = require('../models/Transaction');
 const { v4: uuidv4 } = require('uuid');
 const AWS = require('aws-sdk');
