@@ -1,25 +1,21 @@
 const mongoose = require('mongoose');
-const Branch = require('../models/branch');
+const Batch = require('../models/batchnumber');
 
 // Create a new branch with products
-exports.createBranch = async (req, res) => {
+exports.createBatchNumber = async (req, res) => {
   try {
     const { Branch: branchName, CreationDate, ExpiryDate, BatchNumbers } = req.body;
 
     const BatchNumberPromises = BatchNumbers.map(async (product) => {
-      // Check if a record with the same branch name and batch number already exists
-      const existingBatch = await Branch.findOne({
+      const existingBatch = await Batch.findOne({
         Branch: branchName,
         BatchNumber: product.BatchNumber
       });
 
       if (existingBatch) {
-        // If a batch with the same branch name and batch number exists, throw an error
         throw new Error(`Batch number ${product.BatchNumber} already exists for branch ${branchName}`);
       }
-
-      // If no existing batch found, create a new batch entry
-      const newBatchNumber = new Branch({
+      const newBatchNumber = new Batch({
         Branch: branchName,
         CreationDate,
         ExpiryDate,
@@ -33,8 +29,7 @@ exports.createBranch = async (req, res) => {
       const savedBatchNumber = await newBatchNumber.save();
       return savedBatchNumber;
     });
-
-    // Wait for all batch numbers to be saved
+    
     const savedBatchNumbers = await Promise.all(BatchNumberPromises);
     res.status(201).json(savedBatchNumbers);
   } catch (error) {
@@ -42,21 +37,21 @@ exports.createBranch = async (req, res) => {
   }
 };
 
-// Get all branches with pagination
-exports.getAllBranches = async (req, res) => {
-  const { page = 1, limit = 10 } = req.query; // Default to page 1 and 10 items per page
+
+exports.getAllBatchNumbers = async (req, res) => {
+  const { page = 1, limit = 10 } = req.query; 
 
   try {
-    const branches = await Branch.find()
-      .skip((page - 1) * limit) // Skip items for the current page
-      .limit(parseInt(limit)) // Limit the number of items returned
+    const branches = await Batch.find()
+      .skip((page - 1) * limit) 
+      .limit(parseInt(limit)) 
       .exec();
 
-    const totalBranches = await Branch.countDocuments(); // Total count for pagination metadata
+    const totalBranches = await Batch.countDocuments(); 
 
     res.status(200).json({
       total: totalBranches,
-      pages: Math.ceil(totalBranches / limit), // Calculate total pages
+      pages: Math.ceil(totalBranches / limit), 
       currentPage: parseInt(page),
       branches
     });
@@ -70,7 +65,7 @@ exports.getBranchByBatchNumber = async (req, res) => {
     const { BatchNumber } = req.params;
   
     try {
-      const branch = await Branch.findOne({ BatchNumber });
+      const branch = await Batch.findOne({ BatchNumber });
   
       if (!branch) {
         return res.status(404).json({ message: 'Branch/product not found by BatchNumber' });
@@ -83,27 +78,23 @@ exports.getBranchByBatchNumber = async (req, res) => {
   };
   
  // Update a branch by BatchNumber and all its product information
-exports.updateBranch = async (req, res) => {
-    const { BatchNumber } = req.params;  // Get BatchNumber from the request parameters
-    const updatedData = req.body;        // Get all the fields to be updated from the request body
+exports.updateBatchNumber = async (req, res) => {
+    const { BatchNumber } = req.params;  
+    const updatedData = req.body;        
   
     try {
-      // Find the branch by BatchNumber
-      const updatedBranch = await Branch.findOne({ BatchNumber });
+      const updatedBranch = await Batch.findOne({ BatchNumber });
   
       if (!updatedBranch) {
         return res.status(404).json({ message: 'Branch with the given BatchNumber not found' });
       }
   
-      // Update all the fields from the request body
+     
       Object.keys(updatedData).forEach((key) => {
-        updatedBranch[key] = updatedData[key];  // Dynamically update all fields
+        updatedBranch[key] = updatedData[key];  
       });
-  
-      // Save the updated branch
+
       const savedBranch = await updatedBranch.save();
-  
-      // Return the full branch data (including the updated information)
       res.status(200).json(savedBranch);
   
     } catch (error) {
@@ -117,7 +108,7 @@ exports.deleteBranchByBatchNumber = async (req, res) => {
   const { BatchNumber } = req.params;
 
   try {
-    const deletedBranch = await Branch.findOneAndDelete({ BatchNumber });
+    const deletedBranch = await Batch.findOneAndDelete({ BatchNumber });
 
     if (!deletedBranch) {
       return res.status(404).json({ message: 'Branch/product not found' });

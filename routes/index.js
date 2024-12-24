@@ -1,8 +1,7 @@
 const express = require('express');
 const authRoutes = require('./authRoute');
 const orderRoutes = require('./orderRoutes');
-const productRoutes = require('./productRoutes');
-const branchRoutes = require('./branchRoutes');
+const batchnumberRoutes = require('./batchnumberRoute');
 
 
 const router = express.Router();
@@ -12,8 +11,7 @@ router.get('/health-check', (req, res) => res.send('OK'));
 
 router.use('/auth', authRoutes);
 router.use('/order', orderRoutes);
-router.use('/product', productRoutes);
-router.use('/branches', branchRoutes);
+router.use('/batchnumbers', batchnumberRoutes);
 
 
 module.exports = router;
