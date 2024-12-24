@@ -11,7 +11,7 @@ const BatchNumberSchema = new Schema(
     Brand: { type: String, required: true },       
     ProductName: { type: String, required: true }, 
     Volume: { type: String, required: true },     
-    Quantity: { type: String, required: true }  
+    Quantity: { type: Number, required: true }
   },
   {
     timestamps: true 

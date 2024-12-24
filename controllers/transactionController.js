@@ -1,10 +1,13 @@
 const Transaction = require('../models/Transaction');
 
 exports.getAllTransactionsForBatch = async (req, res) => {
-    const { batchId } = req.params;
-
+    console.log(req.body)
+    const { batchId } = req.body;
+    let query = {};
+    if (batchId)
+        query.batchId = new ObjectId(batchId);
     try {
-        const transactions = await Transaction.find({ batchId: batchId });
+        const transactions = await Transaction.find(query);
 
         if (transactions.length === 0) {
             return res.status(404).json({ message: 'No transactions found for this batch.' });
