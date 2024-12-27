@@ -46,13 +46,10 @@ const opts = {
 const jwtLogin = new JwtStrategy(
     {...opts, passReqToCallback: true},
     async (req, jwtPayload, done) => {
-        console.log(jwtPayload, '----')
         try {
             let user = await User.findOne({_id: jwtPayload._id});
             if (user) {
                 const token = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
-                console.log(token, '----========', user)
-
                 if (user.token === token) {
                     return done(null, user);
                 } else {

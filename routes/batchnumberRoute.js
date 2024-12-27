@@ -10,15 +10,18 @@ router.use(passport.authenticate('jwt', { session: false }));
 router.get('/', batchnumberController.getAllBatchNumbers);
 
 // GET a single branch by ID
-router.get('/:BatchNumber',batchnumberController.getBranchByBatchNumber);
+router.get('batch/:BatchNumber', batchnumberController.getBranchByBatchNumber);
 
 // POST to create a new branch with products
-router.post('/', batchnumberController.createBatchNumber);
+router.post('/add', batchnumberController.createBatchNumber);
 
 // PUT to update a branch by BatchNumber
 router.put('/:BatchNumber', batchnumberController.updateBatchNumber);
 
 // DELETE a branch/product by BatchNumber
 router.delete('/:BatchNumber', batchnumberController.deleteBranchByBatchNumber);
+
+// Get all distinct CouponSeries values
+router.get('/couponSeries', batchnumberController.getCouponSeries);
 
 module.exports = router;
