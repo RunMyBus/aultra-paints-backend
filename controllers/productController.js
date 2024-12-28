@@ -13,15 +13,31 @@ const createProduct = async (req, res) => {
   }
 };
 
-// Get all products
+// Controller function to get all products with pagination
 const getProducts = async (req, res) => {
+  const page = parseInt(req.query.page) || 1;  
+  const limit = parseInt(req.query.limit) || 10;  
+
+  // Calculate how many products to skip based on the current page
+  const skip = (page - 1) * limit;
+
   try {
-    const products = await Product.find(); 
-    res.status(200).json(products);  
+    const products = await Product.find().skip(skip).limit(limit);
+    const totalProducts = await Product.countDocuments();
+    const totalPages = Math.ceil(totalProducts / limit);
+    res.json({
+      products,  
+      pagination: {
+        currentPage: page,  
+        totalPages,  
+        totalProducts,  
+      },
+    });
   } catch (error) {
     res.status(400).json({ error: 'Error fetching products' });
   }
 };
+
 
 // Get a specific product by its ID
 const getProductById = async (req, res) => {
