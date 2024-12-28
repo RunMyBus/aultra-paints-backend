@@ -120,4 +120,13 @@ const deleteBrand = async (req, res) => {
   }
 };
 
-module.exports = { createBrand, getBrandsByProductId, getAllBrands, updateBrand, deleteBrand };
+const getAllBrandsForSelect = async (req, res) => {
+  try {
+    const products = await Brand.find({proId: req.params.brandId});
+    res.status(200).json(products);
+  } catch (error) {
+    res.status(400).json({ error: 'Error fetching products' });
+  }
+};
+
+module.exports = { createBrand, getBrandsByProductId, getAllBrands, updateBrand, deleteBrand, getAllBrandsForSelect };

@@ -7,7 +7,7 @@ router.use(passport.authenticate('jwt', { session: false }));
 
 
 // GET all branches with pagination
-router.get('/', batchnumberController.getAllBatchNumbers);
+router.post('/', batchnumberController.getAllBatchNumbers);
 
 // GET a single branch by ID
 router.get('batch/:BatchNumber', batchnumberController.getBranchByBatchNumber);
@@ -16,7 +16,7 @@ router.get('batch/:BatchNumber', batchnumberController.getBranchByBatchNumber);
 router.post('/add', batchnumberController.createBatchNumber);
 
 // PUT to update a branch by BatchNumber
-router.put('/:BatchNumber', batchnumberController.updateBatchNumber);
+router.put('/update/:id', batchnumberController.updateBatchNumber);
 
 // DELETE a branch/product by BatchNumber
 router.delete('/:BatchNumber', batchnumberController.deleteBranchByBatchNumber);
