@@ -45,7 +45,6 @@ exports.getAllTransactionsForBatch = async (req, res) => {
                     isProcessed: 1,
                     createdAt: 1,
                     updatedAt: 1,
-                    data: '$uploadData'
                 }
             },
             { $skip: ((page - 1) * limit) },

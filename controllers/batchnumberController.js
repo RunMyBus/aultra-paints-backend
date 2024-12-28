@@ -5,6 +5,7 @@ const sequenceModel = require('../models/sequence.model');
 const {v4: uuidv4} = require('uuid');
 const AWS = require('aws-sdk');
 const QRCode = require('qrcode');
+const {ObjectId} = require("mongodb");
 // const {config} = require("dotenv");
 
 AWS.config.update({
@@ -148,24 +149,184 @@ exports.createBatchNumber = async (req, res) => {
     }
 };
 
+// exports.getAllBatchNumbers = async (req, res) => {
+//     // const {page = 1, limit = 10} = req.query;
+//     // let page = parseInt(req.query.page || 1)
+//     // let limit = parseInt(req.query.limit || 10)
+//
+//     try {
+//         const page = req.body.page || 1;
+//         const limit = req.body.limit || 10;
+//         let query = {}
+//         if (req.body.searchQuery) {
+//             // query['$text'] = { $search: req.body.searchQuery };
+//             query['$or'] = [
+//                 {'Branch': {$regex: new RegExp(req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}},
+//                 {'BatchNumber': {$regex: new RegExp(req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}}
+//             ]
+//         }
+//         const branches = await Batch.find(query).skip((page - 1) * limit).limit(parseInt(limit)).exec();
+//
+//         const totalBranches = await Batch.countDocuments(query);
+//
+//         return res.status(200).json({
+//             total: totalBranches,
+//             pages: Math.ceil(totalBranches / limit),
+//             currentPage: parseInt(page),
+//             branches
+//         });
+//     } catch (error) {
+//         return res.status(500).json({message: 'Error retrieving branches', error: error.message});
+//     }
+// };
+
 exports.getAllBatchNumbers = async (req, res) => {
-    // const {page = 1, limit = 10} = req.query;
-    let page = parseInt(req.query.page || 1)
-    let limit = parseInt(req.query.limit || 10)
-
     try {
-        const branches = await Batch.find().skip((page - 1) * limit).limit(parseInt(limit)).exec();
+        const page = parseInt(req.body.page) || 1;
+        const limit = parseInt(req.body.limit) || 10;
+        const skip = (page - 1) * limit;
 
-        const totalBranches = await Batch.countDocuments();
+        // Build the match query
+        let matchQuery = {};
+        if (req.body.searchQuery) {
+            const searchRegex = new RegExp(req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i");
+            matchQuery = {
+                $or: [
+                    { Branch: { $regex: searchRegex } },
+                    { BatchNumber: { $regex: searchRegex } }
+                ]
+            };
+        }
+
+        // Use aggregation pipeline
+        const result = await Batch.aggregate([
+            { $match: matchQuery }, // Filter documents
+            {
+                $facet: {
+                    metadata: [{ $count: "total" }], // Count total documents
+                    data: [
+                        { $skip: skip }, // Skip for pagination
+                        { $limit: limit } // Limit for pagination
+                    ]
+                }
+            }
+        ]);
+
+        // Extract metadata and data
+        const total = result[0]?.metadata[0]?.total || 0;
+        const branches = result[0]?.data || [];
 
         return res.status(200).json({
-            total: totalBranches,
-            pages: Math.ceil(totalBranches / limit),
-            currentPage: parseInt(page),
+            total,
+            pages: Math.ceil(total / limit),
+            currentPage: page,
             branches
         });
     } catch (error) {
-        return res.status(500).json({message: 'Error retrieving branches', error: error.message});
+        return res.status(500).json({ message: 'Error retrieving branches', error: error.message });
+    }
+};
+
+exports.getAllBatchNumbers = async (req, res) => {
+    try {
+        const page = parseInt(req.body.page) || 1;
+        const limit = parseInt(req.body.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        let matchQuery = {};
+        if (req.body.searchQuery) {
+            const searchRegex = new RegExp(req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i");
+            matchQuery = {
+                $or: [
+                    { Branch: { $regex: searchRegex } },
+                    { BatchNumber: { $regex: searchRegex } }
+                ]
+            };
+        }
+
+        const result = await Batch.aggregate([
+            { $match: matchQuery },
+            {
+                $addFields: {
+                    brandId: {
+                        $cond: {
+                            if: { $regexMatch: { input: "$Brand", regex: /^[0-9a-fA-F]{24}$/ } },
+                            then: { $toObjectId: "$Brand" },
+                            else: null
+                        }
+                    }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'brands',
+                    localField: 'brandId',
+                    foreignField: '_id',
+                    as: 'brandsData'
+                }
+            },
+            { $unwind: { path: '$brandsData', preserveNullAndEmptyArrays: true } },
+            {
+                $addFields: {
+                    productId: {
+                        $cond: {
+                            if: { $regexMatch: { input: "$ProductName", regex: /^[0-9a-fA-F]{24}$/ } },
+                            then: { $toObjectId: "$ProductName" },
+                            else: null
+                        }
+                    }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'products',
+                    localField: 'productId',
+                    foreignField: '_id',
+                    as: 'productsData'
+                }
+            },
+            { $unwind: { path: '$productsData', preserveNullAndEmptyArrays: true } },
+            {
+                $project: {
+                    _id: 1,
+                    Branch: 1,
+                    CreationDate: 1,
+                    ExpiryDate: 1,
+                    BatchNumber: 1,
+                    Brand: 1,
+                    BrandName: { $ifNull: ['$brandsData.brands', ''] },
+                    ProductName: 1,
+                    ProductNameStr: { $ifNull: ['$productsData.name', ''] },
+                    value: 1,
+                    Volume: 1,
+                    Quantity: 1,
+                    RedeemablePoints: 1,
+                    CouponSeries: 1,
+                }
+            },
+            {
+                $facet: {
+                    metadata: [{ $count: "total" }],
+                    data: [
+                        { $skip: skip },
+                        { $limit: limit }
+                    ]
+                }
+            }
+        ]);
+
+        const total = result[0]?.metadata[0]?.total || 0;
+        const branches = result[0]?.data || [];
+
+        return res.status(200).json({
+            total,
+            pages: Math.ceil(total / limit),
+            currentPage: page,
+            branches
+        });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Error retrieving branches', error: error.message });
     }
 };
 
@@ -188,11 +349,11 @@ exports.getBranchByBatchNumber = async (req, res) => {
 
 // Update a branch by BatchNumber and all its product information
 exports.updateBatchNumber = async (req, res) => {
-    const {BatchNumber} = req.params;
+    const id = req.params.id;
     const updatedData = req.body;
 
     try {
-        const updatedBranch = await Batch.findOne({BatchNumber});
+        const updatedBranch = await Batch.findOne({_id: new ObjectId(id)});
 
         if (!updatedBranch) {
             return res.status(404).json({message: 'Branch with the given BatchNumber not found'});
@@ -204,10 +365,10 @@ exports.updateBatchNumber = async (req, res) => {
         });
 
         const savedBranch = await updatedBranch.save();
-        res.status(200).json(savedBranch);
+        return res.status(200).json(savedBranch);
 
     } catch (error) {
-        res.status(500).json({message: 'Error updating branch and product', error: error.message});
+        return res.status(500).json({message: 'Error updating branch and product', error: error.message});
     }
 };
 

@@ -8,6 +8,8 @@ router.post('/', createProduct);
 // Get all products
 router.get('/', getProducts);
 
+router.get('/getAllProducts', getAllProducts);
+
 // Get a product by ID
 router.get('/:id', getProductById);
 
