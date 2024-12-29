@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const Brand = require('../models/Brand');
+const Transaction = require("../models/Transaction");
 
 // Create a new brand and associate it with a product
 const createBrand = async (req, res) => {
@@ -53,7 +54,44 @@ const getAllBrands = async (req, res) => {
   const skip = (page - 1) * limit;
 
   try {
-    const brands = await Brand.find().skip(skip).limit(limit);
+    let querySet = [
+      { $match: { } },
+      {
+        $addFields: {
+          productId: {
+            $cond: {
+              if: { $regexMatch: { input: "$ProductName", regex: /^[0-9a-fA-F]{24}$/ } },
+              then: { $toObjectId: "$ProductName" },
+              else: null
+            }
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'productId',
+          foreignField: '_id',
+          as: 'productsData'
+        }
+      },
+      { $unwind: { path: '$productsData', preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 1,
+          proId: { type: String, required: true },
+          productName: '$productData.Branch',
+          brands: { type: String, required: true },
+          createdByName: { $ifNull: ['$userData.name', ''] },
+          updatedByName: { $ifNull: ['$uploadData.name', ''] },
+        }
+      },
+      { $skip: ((page - 1) * limit) },
+      { $limit: limit },
+    ];
+    const brands = await Brand.aggregate(querySet)
+
+    // const brands = await Brand.find().skip(skip).limit(limit);
     const totalBrands = await Brand.countDocuments();
     const totalPages = Math.ceil(totalBrands / limit);
 
@@ -107,16 +145,15 @@ const updateBrand = async (req, res) => {
 // Delete a brand by its ID
 const deleteBrand = async (req, res) => {
   const { id } = req.params;
-
   try {
     const brand = await Brand.findByIdAndDelete(id);
     if (!brand) {
       return res.status(404).json({ error: 'Brand not found' });
     }
-    res.status(200).json({ message: 'Brand deleted successfully' });
+    return res.status(200).json({ message: 'Brand deleted successfully' });
   } catch (error) {
     console.error('Error deleting brand:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 

@@ -9,6 +9,12 @@ router.get('/all', async (req, res) => {
     })
 });
 
+router.post('/searchUser', async (req, res) => {
+    userController.searchUser(req.body, result => {
+        res.status(result.status).json(result);
+    })
+});
+
 router.post('/add', async (req, res) => {
     userController.addUser(req.body, result => {
         res.status(result.status).json(result)

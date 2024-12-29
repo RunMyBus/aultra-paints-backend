@@ -7,36 +7,32 @@ const User = require('../models/User');  // Import the User model
 const bcrypt = require('bcryptjs');
 
 
-const localLogin = new LocalStrategy({
-        usernameField: 'email',
-        passwordField: 'password'
-    },
-    async (email, password, done) => {
-        try {
-            // Check if the user exists in the database
-            let user = await User.findOne({email: email});
-            if (!user) {
-                return done( {
+const localLogin = new LocalStrategy({usernameField: 'mobile', passwordField: 'password'}, async (mobile, password, done) => {
+    try {
+        // Check if the user exists in the database
+        let user = await User.findOne({mobile: mobile});
+        if (!user) {
+            return done( {
+                status: 400,
+                message: 'MOBILE_NOT_FOUND',
+            });
+        } else {
+            const isMatch = await bcrypt.compareSync(password, user.password);
+            if (!isMatch) {
+                return done({
                     status: 400,
-                    message: 'EMAIL_NOT_FOUND',
+                    message: 'Invalid Password',
                 });
-            } else {
-                const isMatch = await bcrypt.compareSync(password, user.password);
-                if (!isMatch) {
-                    return done({
-                        status: 400,
-                        message: 'Invalid Password',
-                    });
-                }
-                return done(null, user);
             }
-
-        } catch (err) {
-            return done({status: 400, message: 'Internal Server Error'});
+            return done(null, user);
         }
 
+    } catch (err) {
+        console.log(err);
+        return done({status: 400, message: 'Internal Server Error'});
     }
-);
+
+});
 
 const opts = {
     jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -63,6 +59,16 @@ const jwtLogin = new JwtStrategy(
         }
     }
 );
+
+passport.serializeUser((user, done) => {
+    done(null, user._id);
+});
+
+passport.deserializeUser((id, done) => {
+    User.findById(id, (err, user) => {
+        done(err, user);
+    });
+});
 
 passport.use(jwtLogin);
 passport.use(localLogin);

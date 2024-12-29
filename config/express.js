@@ -1,5 +1,6 @@
 const path = require('path');
 const express = require('express');
+const session = require('express-session');
 const httpError = require('http-errors');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
@@ -11,6 +12,13 @@ const routes = require('../routes/index');
 const passport = require('../middleware/passport');
 
 const app = express();
+
+app.use(session({
+    secret: 'aultra-paints',
+    resave: false,
+    saveUninitialized: true,
+    cookie: {}
+}));
 
 var distDir = '../../dist/';
 
