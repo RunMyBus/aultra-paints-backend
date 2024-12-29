@@ -106,29 +106,33 @@ exports.deleteUser = async (id, res) => {
     }
 }
 
-exports.toggleUserStatus = async (id, res) => {
+exports.toggleUserStatus = async (userId, res) => {
     try {
-        // Validate ObjectId format
-        if (!ObjectId.isValid(id)) {
-            return res.status(400).json({ message: 'Invalid user ID format' });
-        }
-
-        // Find the user by id
-        let user = await userModel.findById(id);
-
+        // Find the user by their ID
+        const user = await userModel.findById(userId); 
+        
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
-
-        // Toggle the status between 'active' and 'inactive'
-        const newStatus = user.status === 'active' ? 'inactive' : 'active';
-
-        // Update the user status in the database
-        user = await userModel.updateOne({ _id: new ObjectId(id) }, { $set: { status: newStatus } });
-
-        return res.status(200).json({ message: `User status updated to ${newStatus}` });
-    } catch (err) {
-        console.log(err);
-        return res.status(500).json({ message: 'Something went wrong' });
+    
+        // Toggle the user's status (active <-> inactive)
+        user.status = user.status === 'active' ? 'inactive' : 'active';
+    
+        // Save only the status field (no need to revalidate other fields like mobile)
+        await user.save({ validateModifiedOnly: true }); 
+    
+        // Respond with the updated user object
+        return res.status(200).json({
+            message: `User status has been successfully updated.`,
+            user: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                status: user.status,  
+            }
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'An error occurred while toggling user status' });
     }
-}
+};
