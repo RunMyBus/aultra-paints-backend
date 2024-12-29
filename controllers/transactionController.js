@@ -32,7 +32,11 @@ exports.getAllTransactionsForBatch = async (req, res) => {
                     _id: 1,
                     transactionId: 1,
                     batchId: 1,
-                    batchName: '$batchData.Branch',
+                    batchName: { $ifNull: ['$batchData.Branch', ''] },
+                    batchNumber: { $ifNull: ['$batchData.BatchNumber', ''] },
+                    couponCode: 1,
+                    redeemablePoints: { $ifNull: ['$batchData.RedeemablePoints', ''] },
+                    value: { $ifNull: ['$batchData.value', ''] },
                     createdByName: { $ifNull: ['$userData.name', ''] },
                     updatedByName: { $ifNull: ['$uploadData.name', ''] },
                     createdBy: 1,
@@ -47,6 +51,7 @@ exports.getAllTransactionsForBatch = async (req, res) => {
                     updatedAt: 1,
                 }
             },
+            { $sort: { createdAt: -1, _id: -1 } },
             { $skip: ((page - 1) * limit) },
             { $limit: limit },
         ];
