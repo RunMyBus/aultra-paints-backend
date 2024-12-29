@@ -85,10 +85,10 @@ exports.markTransactionAsProcessed = async (req, res) => {
                 {isProcessed: true, updatedBy: req.user._id},  // Update isProcessed to true
                 {new: true}  // Return the updated document
             );
-
+            let batch = {};
             if (updatedTransaction.isProcessed) {
                 let getTransaction = await Transaction.findOne({qr_code_id: qr})
-                let batch = await Batch.findOne({_id: getTransaction.batchId});
+                batch = await Batch.findOne({_id: getTransaction.batchId});
                 // const sequenceDoc = await sequenceModel.findOneAndUpdate({name: "CouponSeries"}, [{$set: {value: {$add: ["$value", 1]},},}])
                 if (batch) {
                     const redeemablePointsCount = batch.RedeemablePoints || 0;
@@ -125,12 +125,11 @@ exports.markTransactionAsProcessed = async (req, res) => {
             const data = {
                 qr_code_id: updatedTransaction.qr_code_id,
                 isProcessed: updatedTransaction.isProcessed,
-                updatedBy: updatedTransaction.updatedBy,
-                updatedByName: updatedTransaction.uploadData?.name,
                 redeemablePoints: updatedTransaction.redeemablePoints,
-                cash: updatedTransaction.cash,
-                points: updatedTransaction.points,
-                redeemedBy: updatedTransaction.redeemedBy,
+                couponCode: document.couponCode,
+                cash: batch.value,
+                batchName: batch.Branch,
+                batchNumber: batch.BatchNumber,
             }
 
             return res.status(200).json({message: "Coupon redeemed Successfully..!", data: data});
