@@ -18,8 +18,10 @@ router.post('/add', batchnumberController.createBatchNumber);
 // PUT to update a branch by BatchNumber
 router.put('/update/:id', batchnumberController.updateBatchNumber);
 
+router.get('/branchDeletedAffectedCouponsCount/:id', batchnumberController.branchDeletedAffectedCouponsCount)
+
 // DELETE a branch/product by BatchNumber
-router.delete('/:BatchNumber', batchnumberController.deleteBranchByBatchNumber);
+router.delete('/delete/:id', batchnumberController.deleteBranchByBatchNumber);
 
 // Get all distinct CouponSeries values
 router.get('/couponSeries', batchnumberController.getCouponSeries);

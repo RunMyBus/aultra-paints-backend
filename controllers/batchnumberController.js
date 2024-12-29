@@ -372,21 +372,27 @@ exports.updateBatchNumber = async (req, res) => {
     }
 };
 
+exports.branchDeletedAffectedCouponsCount = async (req, res) => {
+    try {
+        const couponCount = await Transaction.countDocuments({batchId: new ObjectId(req.params.id)});
+        return res.status(200).json({message: `Batch deleted, ${couponCount} coupons affected.`});
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({message: 'Error delete count', error: error.message});
+    }
+}
+
 
 // Delete a branch/product by BatchNumber
 exports.deleteBranchByBatchNumber = async (req, res) => {
-    const {BatchNumber} = req.params;
-
     try {
-        const deletedBranch = await Batch.findOneAndDelete({BatchNumber});
-
+        const deletedBranch = await Batch.findOneAndDelete({_id: new ObjectId(req.params.id)});
         if (!deletedBranch) {
-            return res.status(404).json({message: 'Branch/product not found'});
+            return res.status(404).json({message: 'Batch not found'});
         }
-
-        res.status(200).json({message: 'Branch/product deleted successfully'});
+        return res.status(200).json({message: 'Batch deleted successfully'});
     } catch (error) {
-        res.status(500).json({message: 'Error deleting branch/product', error: error.message});
+        return res.status(500).json({message: 'Error deleting Batch', error: error.message});
     }
 };
 

@@ -5,7 +5,7 @@ const passport = require('passport');
 const AuthController = require('../controllers/authController')
 
 
-router.post('/login', passport.authenticate('local', {session: false}), async (req, res) => {
+router.post('/login', passport.authenticate('local', {session: true}), async (req, res) => {
     await AuthController.login(req, result => {
         res.status(result.status).json(result);
     })

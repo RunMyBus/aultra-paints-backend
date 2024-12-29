@@ -16,14 +16,17 @@ async function generateToken(user, next) {
 }
 
 exports.login = async (req, next) => {
-    let user = {name: req.user.name, email: req.user.email, _id: req.user._id};
+    let user = {name: req.user.name, mobile: req.user.mobile, email: req.user.email, _id: req.user._id};
     await generateToken(user, token => {
         next({
             status: 200,
             email: req.user.email,
+            mobile: req.user.mobile,
             id: req.user._id,
             fullName: req.user.name,
             token: token,
+            redeemablePoints: req.user.redeemablePoints,
+            cash: req.user.cash,
             message: "LOGGED_IN_SUCCESSFULLY"
         });
     });
