@@ -47,14 +47,26 @@ const getBrandsByProductId = async (req, res) => {
   }
 };
 
-// Get all brands
 const getAllBrands = async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const skip = (page - 1) * limit;
+
   try {
-    const brands = await Brand.find();
-    res.status(200).json(brands);
+    const brands = await Brand.find().skip(skip).limit(limit);
+    const totalBrands = await Brand.countDocuments();
+    const totalPages = Math.ceil(totalBrands / limit);
+
+    res.json({
+      brands,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalBrands,
+      },
+    });
   } catch (error) {
-    console.error('Error fetching all brands:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(400).json({ error: 'Error fetching brands' });
   }
 };
 
