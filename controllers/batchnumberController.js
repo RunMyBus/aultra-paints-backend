@@ -40,15 +40,6 @@ preFillZeros = async (number, length) => {
 // Create a new branch with products
 exports.createBatchNumber = async (req, res) => {
     try {
-        // const {
-        //     Branch: branchName,
-        //     CreationDate,
-        //     ExpiryDate,
-        //     BatchNumbers,
-        //     CouponSeries,
-        //     RedeemablePoints
-        // } = req.body;
-
         let userId = req.user.id.toString();
 
         const date = new Date();
@@ -62,7 +53,7 @@ exports.createBatchNumber = async (req, res) => {
         }
 
         // Process each batch number in the request
-        const BatchNumberPromises = req.body.BatchNumbers.map(async (product) => {
+        const BatchNumberPromises = req.body.BatchNumbers.map(async (product, index) => {
             const startOfMonth = new Date(req.body.CreationDate);
             startOfMonth.setDate(1);
             const endOfMonth = new Date(startOfMonth);
@@ -81,10 +72,6 @@ exports.createBatchNumber = async (req, res) => {
                 );
             }
 
-            const sequenceDoc = await sequenceModel.findOneAndUpdate({name: "CouponSeries"}, [{$set: {value: {$add: ["$value", 1]},},}])
-
-            const paddedSequence = await preFillZeros(sequenceDoc.value - 1, 4);
-
             // Create and save batch
             const newBatchNumber = new Batch({
                 Branch: req.body.Branch,
@@ -97,7 +84,7 @@ exports.createBatchNumber = async (req, res) => {
                 Volume: product.Volume,
                 Quantity: product.Quantity,
                 RedeemablePoints: product.redeemablePoints,
-                CouponSeries: paddedSequence,
+                CouponSeries: product.CouponSeries,
             });
 
             const savedBatchNumber = await newBatchNumber.save();
@@ -105,7 +92,8 @@ exports.createBatchNumber = async (req, res) => {
             // Generate transactions
             const transactionPromises = Array.from(
                 {length: product.Quantity},
-                async () => {
+                async (_, i) => {
+                    const couponCode = product.CouponSeries + i;
                     const qrCodeId = uuidv4();
                     const qrCodeData = await QRCode.toBuffer(qrCodeId);
                     const qrCodeKey = `${savedBatchNumber._id}-${qrCodeId}.png`;
@@ -114,8 +102,11 @@ exports.createBatchNumber = async (req, res) => {
                     const transaction = new Transaction({
                         transactionId: uuidv4(),
                         batchId: savedBatchNumber._id,
+                        redeemablePoints: product.redeemablePoints,
+                        value: product.value,
                         qr_code: qrCodeUrl,
                         qr_code_id: qrCodeId,
+                        couponCode: couponCode,
                         isProcessed: false,
                         createdBy: userId,
                     });
@@ -148,37 +139,6 @@ exports.createBatchNumber = async (req, res) => {
         return res.status(500).json({error: error.message});
     }
 };
-
-// exports.getAllBatchNumbers = async (req, res) => {
-//     // const {page = 1, limit = 10} = req.query;
-//     // let page = parseInt(req.query.page || 1)
-//     // let limit = parseInt(req.query.limit || 10)
-//
-//     try {
-//         const page = req.body.page || 1;
-//         const limit = req.body.limit || 10;
-//         let query = {}
-//         if (req.body.searchQuery) {
-//             // query['$text'] = { $search: req.body.searchQuery };
-//             query['$or'] = [
-//                 {'Branch': {$regex: new RegExp(req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}},
-//                 {'BatchNumber': {$regex: new RegExp(req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}}
-//             ]
-//         }
-//         const branches = await Batch.find(query).skip((page - 1) * limit).limit(parseInt(limit)).exec();
-//
-//         const totalBranches = await Batch.countDocuments(query);
-//
-//         return res.status(200).json({
-//             total: totalBranches,
-//             pages: Math.ceil(totalBranches / limit),
-//             currentPage: parseInt(page),
-//             branches
-//         });
-//     } catch (error) {
-//         return res.status(500).json({message: 'Error retrieving branches', error: error.message});
-//     }
-// };
 
 exports.getAllBatchNumbers = async (req, res) => {
     try {
@@ -304,6 +264,7 @@ exports.getAllBatchNumbers = async (req, res) => {
                     CouponSeries: 1,
                 }
             },
+            { $sort: { createdAt: -1, _id: -1 } },
             {
                 $facet: {
                     metadata: [{ $count: "total" }],

@@ -10,6 +10,9 @@ const transactionSchema = new mongoose.Schema({
     qr_code: { type: String, required: true, unique: true },
     couponValue: { type: Number },
     points: { type: Number },
+    redeemablePoints: { type: Number },
+    value: { type: Number },
+    couponCode: { type: Number },
     redeemedBy: { type: String },// user who redeemed this coupon
     isProcessed: { type: Boolean, default: false }  // Default set to false
 }, { timestamps: true });
