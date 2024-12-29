@@ -122,7 +122,18 @@ exports.markTransactionAsProcessed = async (req, res) => {
                 return res.status(404).json({message: 'Transaction not found.'});
             }
 
-            return res.status(200).json({message: "Coupon redeemed Successfully..!"});
+            const data = {
+                qr_code_id: updatedTransaction.qr_code_id,
+                isProcessed: updatedTransaction.isProcessed,
+                updatedBy: updatedTransaction.updatedBy,
+                updatedByName: updatedTransaction.uploadData?.name,
+                redeemablePoints: updatedTransaction.redeemablePoints,
+                cash: updatedTransaction.cash,
+                points: updatedTransaction.points,
+                redeemedBy: updatedTransaction.redeemedBy,
+            }
+
+            return res.status(200).json({message: "Coupon redeemed Successfully..!", data: data});
         }
     } catch (error) {
         console.log(error);
