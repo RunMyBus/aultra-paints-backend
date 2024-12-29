@@ -33,15 +33,18 @@ exports.login = async (req, next) => {
 }
 
 exports.register = async (req, next) => {
-    const {name, email, password} = req.body;
+    const { name, email, password, mobile } = req.body; 
     try {
         // Check if the user already exists
-        let user = await User.findOne({email});
+        let user = await User.findOne({ email });
         if (user) {
-            return next({status: 400, message: 'User already exists'});
+            return next({ status: 400, message: 'User already exists' });
         }
 
-        
+        if (!mobile) {
+            return next({ status: 400, message: 'Mobile number is required' });
+        }
+
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -50,14 +53,14 @@ exports.register = async (req, next) => {
             name,
             email,
             password: hashedPassword,
+            mobile, 
         });
 
-        
         await user.save();
 
-        return next({status: 200, message: 'User registered successfully'});
+        return next({ status: 200, message: 'User registered successfully' });
     } catch (err) {
         console.error(err);
-        return next({status: 500, message: 'Server error'});
+        return next({ status: 500, message: 'Server error' });
     }
 }

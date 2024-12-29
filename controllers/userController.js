@@ -41,9 +41,9 @@ exports.addUser = async (body, res) => {
         if (oldMobile)
             errorArray.push('Mobile already exists')
 
-        const oldEmail = await userModel.findOne({email: {$regex: new RegExp(`^${body.email.trim()}$`), "$options": "i"}});
-        if (oldEmail)
-            errorArray.push('Email already exists')
+        // const oldEmail = await userModel.findOne({email: {$regex: new RegExp(`^${body.email.trim()}$`), "$options": "i"}});
+        // if (oldEmail)
+        //     errorArray.push('Email already exists')
 
         if (errorArray.length) {
             return res({ status: 400, error: errorArray })
@@ -67,12 +67,13 @@ exports.userUpdate = async (id, body, res) => {
             errorArray.push('Mobile already exists')
             // return res({ status: 400, message: 'Mobile already exists' });
         }
-        const oldEmail = await userModel.findOne({ email: {$regex: new RegExp(`^${body.email.trim()}$`), "$options": "i"}});
-        if (body.email !== undefined && body.email !== null && oldEmail !== null && oldEmail._id.toString() !== id) {
-            errorArray.push('Email already exists')
-            // return res({ status: 400, message: 'Email already exists' });
-        }
-        if (errorArray.length) {
+        // const oldEmail = await userModel.findOne({ email: {$regex: new RegExp(`^${body.email.trim()}$`), "$options": "i"}});
+        // if (body.email !== undefined && body.email !== null && oldEmail !== null && oldEmail._id.toString() !== id) {
+        //     errorArray.push('Email already exists')
+        //     // return res({ status: 400, message: 'Email already exists' });
+        // }
+
+        if (errorArray.length > 0) {
             return res({ status: 400, error: errorArray, })
         }
         let user = await userModel.updateOne({ _id: new ObjectId(id) }, { $set: body });
@@ -102,5 +103,32 @@ exports.deleteUser = async (id, res) => {
         return res({status: 200, data: data})
     } catch (err) {
         return res({status: 500, message: err})
+    }
+}
+
+exports.toggleUserStatus = async (id, res) => {
+    try {
+        // Validate ObjectId format
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).json({ message: 'Invalid user ID format' });
+        }
+
+        // Find the user by id
+        let user = await userModel.findById(id);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Toggle the status between 'active' and 'inactive'
+        const newStatus = user.status === 'active' ? 'inactive' : 'active';
+
+        // Update the user status in the database
+        user = await userModel.updateOne({ _id: new ObjectId(id) }, { $set: { status: newStatus } });
+
+        return res.status(200).json({ message: `User status updated to ${newStatus}` });
+    } catch (err) {
+        console.log(err);
+        return res.status(500).json({ message: 'Something went wrong' });
     }
 }

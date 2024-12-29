@@ -33,6 +33,12 @@ router.put('/:id', async (req, res) => {
     })
 });
 
+router.put('/toggle-status/:id', (req, res) => {
+    const { id } = req.params; 
+    userController.toggleUserStatus(id, res);  
+});
+
+
 
 router.delete('/:id', async (req, res) => {
     userController.deleteUser(req.params, result => {
