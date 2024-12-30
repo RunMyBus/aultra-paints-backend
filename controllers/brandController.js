@@ -157,4 +157,60 @@ const getAllBrandsForSelect = async (req, res) => {
   }
 };
 
-module.exports = { createBrand, getBrandsByProductId, getAllBrands, updateBrand, deleteBrand, getAllBrandsForSelect };
+const getBrandsByBrandName = async (req, res) => {
+  const { brandName } = req.params;  // Get the brand name from the URL parameter
+
+  try {
+    // Use an aggregation pipeline to search for the brand and also include the ProductNameStr
+    const querySet = [
+      { 
+        $match: {
+          brands: { $regex: brandName, $options: 'i' }  // Search for the brand name (case-insensitive)
+        }
+      },
+      {
+        $addFields: {
+          productId: {
+            $cond: {
+              if: { $regexMatch: { input: "$proId", regex: /^[0-9a-fA-F]{24}$/ } },
+              then: { $toObjectId: "$proId" }, 
+              else: null
+            }
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: 'products', 
+          localField: 'productId', 
+          foreignField: '_id', 
+          as: 'productData'
+        }
+      },
+      { $unwind: { path: '$productData', preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 1,
+          proId: 1,
+          brands: 1,
+          ProductNameStr: { $ifNull: ['$productData.name', ''] }  // Add the product name to the response
+        }
+      }
+    ];
+
+    const brands = await Brand.aggregate(querySet);
+
+    if (brands.length === 0) {
+      return res.status(404).json({ error: 'No brands found with this name' });
+    }
+
+    res.status(200).json(brands);  // Return the found brands, now with ProductNameStr included
+  } catch (error) {
+    console.error('Error fetching brands by name:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+
+
+module.exports = { createBrand, getBrandsByProductId, getAllBrands, updateBrand, deleteBrand, getAllBrandsForSelect,getBrandsByBrandName };
