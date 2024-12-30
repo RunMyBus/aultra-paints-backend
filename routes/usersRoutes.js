@@ -40,6 +40,7 @@ router.put('/toggle-status/:id', (req, res) => {
 
 
 
+
 router.delete('/:id', async (req, res) => {
     userController.deleteUser(req.params, result => {
         res.status(result.status).json(result)
