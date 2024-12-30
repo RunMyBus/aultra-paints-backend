@@ -3,18 +3,23 @@ const mongoose = require("mongoose");
 const Batch = require("../models/batchnumber");
 const User = require('../models/User');
 const sequenceModel = require("../models/sequence.model");
+const {ObjectId} = require("mongodb");
 
 exports.getAllTransactionsForBatch = async (req, res) => {
     // console.log(req.body)
     try {
         let page = parseInt(req.body.page || 1);
         let limit = parseInt(req.body.limit || 10);
-        const { batchId } = req.body;
+
+        const { batchId, userId } = req.body;
         let query = {};
         if (batchId)
             query.batchId = new ObjectId(batchId);
+        if (userId)
+            query.redeemedBy = new ObjectId(userId);
+
         let querySet = [
-            { $match: { } },
+            { $match: query },
             { $addFields: { batchId: { $toObjectId: "$batchId" } } },
             { $lookup: { from: 'batchnumbers', localField: 'batchId', foreignField: '_id', as: 'batchData' } },
             { $unwind: '$batchData' },
@@ -56,7 +61,7 @@ exports.getAllTransactionsForBatch = async (req, res) => {
             { $limit: limit },
         ];
         const transactionsData = await Transaction.aggregate(querySet)
-        const totalTransaction = await Transaction.countDocuments();
+        const totalTransaction = await Transaction.countDocuments(query);
         return res.status(200).json({
             total: totalTransaction,
             pages: Math.ceil(totalTransaction / limit),
@@ -82,7 +87,7 @@ exports.markTransactionAsProcessed = async (req, res) => {
             // Find the transaction and update isProcessed to true
             const updatedTransaction = await Transaction.findOneAndUpdate(
                 {qr_code_id: qr},  // Match the QR code
-                {isProcessed: true, updatedBy: req.user._id},  // Update isProcessed to true
+                {isProcessed: true, updatedBy: req.user._id, redeemedBy: req.user._id},  // Update isProcessed to true
                 {new: true}  // Return the updated document
             );
             let batch = {};
