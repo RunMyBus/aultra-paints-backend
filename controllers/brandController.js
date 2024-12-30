@@ -60,30 +60,21 @@ const getAllBrands = async (req, res) => {
         $addFields: {
           productId: {
             $cond: {
-              if: { $regexMatch: { input: "$ProductName", regex: /^[0-9a-fA-F]{24}$/ } },
-              then: { $toObjectId: "$ProductName" },
-              else: null
+              if: { $regexMatch: { input: "$proId", regex: /^[0-9a-fA-F]{24}$/ } }, then: { $toObjectId: "$proId" }, else: null
             }
           }
         }
       },
       {
-        $lookup: {
-          from: 'products',
-          localField: 'productId',
-          foreignField: '_id',
-          as: 'productsData'
-        }
+        $lookup: {from: 'products', localField: 'productId', foreignField: '_id', as: 'productsData'}
       },
       { $unwind: { path: '$productsData', preserveNullAndEmptyArrays: true } },
       {
         $project: {
           _id: 1,
-          proId: { type: String, required: true },
-          productName: '$productData.Branch',
-          brands: { type: String, required: true },
-          createdByName: { $ifNull: ['$userData.name', ''] },
-          updatedByName: { $ifNull: ['$uploadData.name', ''] },
+          proId: 1,
+          ProductNameStr: { $ifNull: ['$productsData.name', ''] },
+          brands: 1,
         }
       },
       { $skip: ((page - 1) * limit) },
