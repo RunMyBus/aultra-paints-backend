@@ -35,12 +35,15 @@ exports.searchUser = async (body, res) => {
 exports.addUser = async (body, res) => {
     try {
         let errorArray = [];
-        const oldMobile = await userModel.findOne({
-            mobile: {$regex: new RegExp(`^${body.mobile.trim()}$`), "$options": "i"}
-        });
-        if (oldMobile)
-            errorArray.push('Mobile already exists')
-
+        if (body.mobile) {
+            const oldMobile = await userModel.findOne({
+                mobile: {$regex: new RegExp(`^${body.mobile.trim()}$`), "$options": "i"}
+            });
+            if (oldMobile)
+                errorArray.push('Mobile already exists');
+        } else {
+            errorArray.push('Enter mobile number');
+        }
         // const oldEmail = await userModel.findOne({email: {$regex: new RegExp(`^${body.email.trim()}$`), "$options": "i"}});
         // if (oldEmail)
         //     errorArray.push('Email already exists')
@@ -62,10 +65,19 @@ exports.addUser = async (body, res) => {
 exports.userUpdate = async (id, body, res) => {
     try {
         let errorArray = [];
-        const oldMobile = await userModel.findOne({ mobile: {$regex: new RegExp(`^${body.mobile.trim()}$`), "$options": "i" }});
-        if (body.mobile !== undefined && oldMobile !== null && oldMobile._id.toString() !== id) {
-            errorArray.push('Mobile already exists')
-            // return res({ status: 400, message: 'Mobile already exists' });
+        if (body.mobile) {
+            const oldMobile = await userModel.findOne({
+                mobile: {
+                    $regex: new RegExp(`^${body.mobile.trim()}$`),
+                    "$options": "i"
+                }
+            });
+            if (body.mobile !== undefined && oldMobile !== null && oldMobile._id.toString() !== id) {
+                errorArray.push('Mobile already exists');
+                // return res({ status: 400, message: 'Mobile already exists' });
+            }
+        } else {
+            errorArray.push('Enter mobile number');
         }
         // const oldEmail = await userModel.findOne({ email: {$regex: new RegExp(`^${body.email.trim()}$`), "$options": "i"}});
         // if (body.email !== undefined && body.email !== null && oldEmail !== null && oldEmail._id.toString() !== id) {
