@@ -38,11 +38,14 @@ router.put('/toggle-status/:id', (req, res) => {
     userController.toggleUserStatus(id, res);  
 });
 
-
-
-
 router.delete('/:id', async (req, res) => {
     userController.deleteUser(req.params, result => {
+        res.status(result.status).json(result)
+    })
+});
+
+router.post('/:id', async (req, res) => {
+    userController.resetPassword(req, result => {
         res.status(result.status).json(result)
     })
 });

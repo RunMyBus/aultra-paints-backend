@@ -148,3 +148,21 @@ exports.toggleUserStatus = async (userId, res) => {
         res.status(500).json({ message: 'An error occurred while toggling user status' });
     }
 };
+
+exports.resetPassword = async (req, res) => {
+    try {
+        const {_id, password } = req.body;
+        const user = await userModel.findOne({ _id: new ObjectId(_id) });
+        if (!user) {
+            return res({ status: 400, message: 'User not found' })
+        }
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+        user.password = hashedPassword;
+        await user.save();
+        return res({status: 200, message: 'Password has been reset successfully' })
+    } catch (err) {
+        console.log(err)
+        return res({ status: 500, message: err });
+    }
+}
