@@ -1,5 +1,5 @@
 const express = require('express');
-const { createProduct, getProducts, getProductById, updateProduct, deleteProduct } = require('../controllers/productController');
+const { createProduct, getProducts,  getProductByName, updateProduct, deleteProduct } = require('../controllers/productController');
 const router = express.Router();
 
 // Create a new product
@@ -10,8 +10,8 @@ router.get('/', getProducts);
 
 router.get('/getAllProducts', getAllProducts);
 
-// Get a product by ID
-router.get('/:id', getProductById);
+// Get a product by Name (new route for search)
+router.get('/search/:name', getProductByName);  
 
 // Update a product by ID
 router.put('/:id', updateProduct);
