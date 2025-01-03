@@ -83,7 +83,7 @@ exports.markTransactionAsProcessed = async (req, res) => {
         const document = await Transaction.findOne({ qr_code_id:  qr });
         if(document.isProcessed) {
             return res.status(404).json({ message: 'Coupon Redeemed already.' });
-        }else {
+        } else {
             // Find the transaction and update isProcessed to true
             const updatedTransaction = await Transaction.findOneAndUpdate(
                 {qr_code_id: qr},  // Match the QR code
@@ -94,7 +94,6 @@ exports.markTransactionAsProcessed = async (req, res) => {
             if (updatedTransaction.isProcessed) {
                 let getTransaction = await Transaction.findOne({qr_code_id: qr})
                 batch = await Batch.findOne({_id: getTransaction.batchId});
-                // const sequenceDoc = await sequenceModel.findOneAndUpdate({name: "CouponSeries"}, [{$set: {value: {$add: ["$value", 1]},},}])
                 if (batch) {
                     const redeemablePointsCount = batch.RedeemablePoints || 0;
                     const cashCount = batch.value || 0;
@@ -139,6 +138,32 @@ exports.markTransactionAsProcessed = async (req, res) => {
 
             return res.status(200).json({message: "Coupon redeemed Successfully..!", data: data});
         }
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ error: error.message });
+    }
+};
+
+exports.scanQRCode = async (req, res) => {
+    try {
+        const { mobile } = req.body;
+        const user = await User.findOne({ mobile });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+        const transaction = await Transaction.findOne({ qr_code_id: req.query.qr });
+        if (!transaction) {
+            return res.status(404).json({ message: 'Transaction not found.' });
+        }
+        if (transaction.isProcessed) {
+            return res.status(400).json({ message: 'Coupon already redeemed.' });
+        }
+        const updatedTransaction = await Transaction.findOneAndUpdate(
+            { qr_code_id: req.query.qr },
+            { isProcessed: true, updatedBy: user._id, redeemedBy: user._id },
+            { new: true }
+        );
+        return res.status(200).json({ message: 'Coupon redeemed Successfully..!' });
     } catch (error) {
         console.log(error);
         return res.status(500).json({ error: error.message });
