@@ -99,7 +99,6 @@ const getAllBrands = async (req, res) => {
   }
 };
 
-// Update a brand by its ID
 const updateBrand = async (req, res) => {
   const { id } = req.params;
   const { proId, brands } = req.body;
@@ -111,21 +110,35 @@ const updateBrand = async (req, res) => {
       return res.status(404).json({ error: 'Brand not found' });
     }
 
-    // Check if the product exists
+    // Check if the product ID is valid
     if (!mongoose.Types.ObjectId.isValid(proId)) {
       return res.status(400).json({ error: 'Invalid Product ID' });
     }
 
+    // Check if the product exists
     const product = await Product.findById(proId);
     if (!product) {
       return res.status(404).json({ error: 'Product not found' });
     }
 
-    // Update the brand
+    // Check for duplicate brand-product combination (exclude the current brand from the check)
+    const existingBrand = await Brand.findOne({ proId, brands });
+    if (existingBrand && existingBrand._id.toString() !== brand._id.toString()) {
+      return res.status(400).json({ error: 'This product and brand combination already exists.' });
+    }
+
+    // If data is the same, allow saving without error
+    if (brand.proId.toString() === proId && brand.brands === brands) {
+      return res.status(200).json(brand);  // No changes, so return the brand as it is.
+    }
+
+    // Update the brand with new data
     brand.proId = proId || brand.proId;
     brand.brands = brands || brand.brands;
 
+    // Save the updated brand
     await brand.save();
+
     res.status(200).json(brand);
   } catch (error) {
     console.error('Error updating brand:', error);

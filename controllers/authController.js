@@ -38,12 +38,19 @@ exports.login = async (req, next) => {
 exports.register = async (req, next) => {
     const { name, email, password, mobile } = req.body; 
     try {
-        // Check if the user already exists
+        // Check if the user already exists by email
         let user = await User.findOne({ email });
         if (user) {
-            return next({ status: 400, message: 'User already exists' });
+            return next({ status: 400, message: 'User already exists with this email' });
         }
 
+        // Check if the mobile number already exists
+        user = await User.findOne({ mobile });
+        if (user) {
+            return next({ status: 400, message: 'Mobile number already exists' });
+        }
+
+        // Ensure mobile number is provided
         if (!mobile) {
             return next({ status: 400, message: 'Mobile number is required' });
         }
