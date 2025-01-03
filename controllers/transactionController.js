@@ -16,7 +16,7 @@ exports.getAllTransactionsForBatch = async (req, res) => {
         if (batchId)
             query.batchId = new ObjectId(batchId);
         if (userId)
-            query.redeemedBy = new ObjectId(userId);
+            query.redeemedBy = userId;
 
         let querySet = [
             { $match: query },
@@ -87,7 +87,7 @@ exports.markTransactionAsProcessed = async (req, res) => {
             // Find the transaction and update isProcessed to true
             const updatedTransaction = await Transaction.findOneAndUpdate(
                 {qr_code_id: qr},  // Match the QR code
-                {isProcessed: true, updatedBy: req.user._id, redeemedBy: req.user._id},  // Update isProcessed to true
+                {isProcessed: true, updatedBy: req.user._id, redeemedBy: req.user._id.toString()},  // Update isProcessed to true
                 {new: true}  // Return the updated document
             );
             let batch = {};

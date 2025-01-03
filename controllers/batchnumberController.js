@@ -132,7 +132,7 @@ exports.createBatchNumber = async (req, res) => {
         // Handle duplicate batch number error
         if (error.code === 11000 && error.keyPattern?.BatchNumber) {
             return res.status(409).json({
-                error: "Duplicate BatchNumber encountered. Please retry.",
+                message: "Duplicate BatchNumber encountered. Please retry.",
             });
         }
 

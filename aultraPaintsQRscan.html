@@ -11,10 +11,10 @@
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            /*display: flex;*/
+            /*flex-direction: column;*/
+            /*align-items: center;*/
+            /*justify-content: center;*/
             height: 100vh;
             background-color: #f9f9f9;
         }
@@ -60,13 +60,36 @@
     </style>
 </head>
 <body>
-<h1>Enter Mobile Number</h1>
-<form id="mobileForm">
-    <input class="form-control" type="text" id="mobileNumber" value="9030989698" placeholder="Enter 10-digit mobile number" required />
-    <button class="btn btn-success" type="submit">Submit</button>
-    <div id="message"></div>
-</form>
+<div class="container" style="height: 85vh">
+    <div class="row">
+        <div class="col-12 my-5">
+            <h1 style="text-align: center;">Enter Mobile Number</h1>
+            <form id="mobileForm">
+                <div class="input-group mb-3" style="width: 20%;">
+                    <span class="input-group-text" id="basic-addon1">+91</span>
+                    <input class="form-control" type="text" id="mobileNumber" value="9030989698" placeholder="Enter 10-digit mobile number" required
+                           maxlength="10" oninput="this.mobile = this.mobile.replace(/[^0-9]/g, '').slice(0, 10);" />
+                </div>
+<!--                <input class="form-control" type="text" id="mobileNumber" value="9030989698" placeholder="Enter 10-digit mobile number" required-->
+<!--                       maxlength="10" oninput="this.mobile = this.mobile.replace(/[^0-9]/g, '').slice(0, 10);" />-->
+                <button class="btn btn-success" type="submit">Submit</button>
+                <div id="message"></div>
+            </form>
+        </div>
+    </div>
+</div>
 
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="text-end">
+                <img src="assets/logo3.png" alt="Logo 2" class="navbar-logo" />
+<!--                <p>Copyright &copy; 2022 QR Code Mobile Submission</p>-->
+            </div>
+        </div>
+    </div>
+    <!-- Images/Logo in the navbar -->
+</div>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         const form = document.getElementById('mobileForm');
@@ -106,7 +129,7 @@
                     console.log(jsonData)
                     const popup = document.createElement('div');
                     popup.style.position = 'fixed';
-                    popup.style.top = '50%';
+                    popup.style.top = '26%';
                     popup.style.left = '50%';
                     popup.style.transform = 'translate(-50%, -50%)';
                     // popup.style.backgroundColor = 'white';
@@ -159,7 +182,7 @@
                     // messageDiv.textContent = errorData.error || 'An error occurred. Please try again.';
                     const popup = document.createElement('div');
                     popup.style.position = 'fixed';
-                    popup.style.top = '50%';
+                    popup.style.top = '26%';
                     popup.style.left = '50%';
                     popup.style.transform = 'translate(-50%, -50%)';
                     popup.innerHTML = `<div class="card mb-3 shadow-lg rounded-3" style="width: 40rem;">
