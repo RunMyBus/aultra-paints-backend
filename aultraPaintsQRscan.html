@@ -67,7 +67,7 @@
             <form id="mobileForm">
                 <div class="input-group mb-3" style="width: 20%;">
                     <span class="input-group-text" id="basic-addon1">+91</span>
-                    <input class="form-control" type="text" id="mobileNumber" value="9030989698" placeholder="Enter 10-digit mobile number" required
+                    <input class="form-control" type="text" id="mobileNumber" placeholder="Enter 10-digit mobile number" required
                            maxlength="10" oninput="this.mobile = this.mobile.replace(/[^0-9]/g, '').slice(0, 10);" />
                 </div>
 <!--                <input class="form-control" type="text" id="mobileNumber" value="9030989698" placeholder="Enter 10-digit mobile number" required-->
@@ -117,7 +117,7 @@
             }
 
             try {
-                const response = await fetch(`http://localhost:4300/api/auth/redeem/${qrCodeId}`, {
+                const response = await fetch(`http://api.aultrapaints.com/api/auth/redeem/${qrCodeId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ mobile }),
