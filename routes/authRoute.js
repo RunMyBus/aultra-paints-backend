@@ -17,4 +17,10 @@ router.post('/register', async (req, res) => {
     })
 });
 
+router.post('/redeem/:qrCodeID', async (req, res) => {
+    await AuthController.redeem(req, result => {
+        res.status(result.status).json(result);
+    });
+});
+
 module.exports = router;

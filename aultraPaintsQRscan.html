@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Mobile Submission</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/boxicons@latest/css/boxicons.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #f9f9f9;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        input[type="text"] {
+            width: 250px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        #message {
+            margin-top: 10px;
+            font-size: 14px;
+            color: red;
+        }
+    </style>
+</head>
+<body>
+<h1>Enter Mobile Number</h1>
+<form id="mobileForm">
+    <input class="form-control" type="text" id="mobileNumber" value="9030989698" placeholder="Enter 10-digit mobile number" required />
+    <button class="btn btn-success" type="submit">Submit</button>
+    <div id="message"></div>
+</form>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('mobileForm');
+        const mobileNumberInput = document.getElementById('mobileNumber');
+        const messageDiv = document.getElementById('message');
+
+        // Extract QR Code ID from URL
+        const params = new URLSearchParams(window.location.search);
+        const qrCodeId = params.get('qrCodeId');
+
+        if (!qrCodeId) {
+            messageDiv.textContent = 'Invalid QR Code. Please try again.';
+            return;
+        }
+
+        // Form submission handler
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const mobile = mobileNumberInput.value.trim();
+
+            // Validate mobile number
+            if (!/^\d{10}$/.test(mobile)) {
+                messageDiv.textContent = 'Please enter a valid 10-digit mobile number.';
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://localhost:4300/api/auth/redeem/${qrCodeId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mobile }),
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const jsonData = data.data;
+                    console.log(jsonData)
+                    const popup = document.createElement('div');
+                    popup.style.position = 'fixed';
+                    popup.style.top = '50%';
+                    popup.style.left = '50%';
+                    popup.style.transform = 'translate(-50%, -50%)';
+                    // popup.style.backgroundColor = 'white';
+                    // popup.style.padding = '20px';
+                    // popup.style.borderRadius = '5px';
+                    // popup.style.boxShadow = '0 0 10px rgba(0,0,0,0.2)';
+                    popup.innerHTML = `<div class="card mb-3 shadow-lg rounded-3" style="width: 40rem;">
+                                        <div class="d-flex justify-content-around" style="padding: 20px; background-color: #218838; color: white">
+                                            <i class='bx bx-badge-check bx-tada' style="font-size: 150px;"></i>
+                                            <i class='bx bx-rupee' style="font-size: 150px;opacity: 0.2;"></i>
+                                        </div>
+                                        <div class="card-body">
+                                            <table class="table table-borderless">
+                                                <tbody>
+                                                <tr>
+                                                    <th>Redeemable Points</th>
+                                                    <td>${jsonData.redeemablePoints}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Coupon</th>
+                                                    <td>${jsonData.couponCode}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Cash</th>
+                                                    <td>${jsonData.cash} Rs.</td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Batch Name</th>
+                                                    <td>${jsonData.batchName}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Batch Number</th>
+                                                    <td>${jsonData.batchNumber}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Status</th>
+                                                    <td>${jsonData.isProcessed? 'Processed' : 'Not Processed'}</td>
+                                                </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>`;
+                    document.body.appendChild(popup);
+                    messageDiv.style.color = 'green';
+                    messageDiv.textContent = 'Mobile number submitted successfully!';
+                    form.reset();
+                } else {
+                    const errorData = await response.json();
+                    console.log(errorData)
+                    // messageDiv.textContent = errorData.error || 'An error occurred. Please try again.';
+                    const popup = document.createElement('div');
+                    popup.style.position = 'fixed';
+                    popup.style.top = '50%';
+                    popup.style.left = '50%';
+                    popup.style.transform = 'translate(-50%, -50%)';
+                    popup.innerHTML = `<div class="card mb-3 shadow-lg rounded-3" style="width: 40rem;">
+                                        <div class="d-flex justify-content-around" style="padding: 20px; background-color: red; color: white">
+                                            <i class='bx bx-error-circle bx-tada' style="font-size: 150px;"></i>
+                                            <i class='bx bx-rupee' style="font-size: 150px;opacity: 0.2;"></i>
+                                        </div>
+                                        <div class="card-body">
+                                        <p>${errorData.message}</p>
+                                        </div>
+                                    </div>`;
+                    document.body.appendChild(popup);
+                    messageDiv.style.color = 'green';
+                    messageDiv.textContent = 'Mobile number submitted successfully!';
+                    form.reset();
+                }
+            } catch (error) {
+                console.error('Error submitting mobile number:', error);
+                messageDiv.textContent = 'Failed to submit. Please try again later.';
+            }
+        });
+    });
+
+</script>
+</body>
+</html>
