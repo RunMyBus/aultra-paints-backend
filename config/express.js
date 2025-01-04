@@ -40,8 +40,28 @@ app.use(methodOverride());
 // secure apps by setting various HTTP headers
 app.use(helmet());
 
+// Define allowed ports
+const allowedOrigins = [
+    'http://localhost:4300',
+    'http://localhost:4400',
+    'http://localhost:4200',
+    'https://app.aultrapaints.com',
+    'http://redeem.aultrapaints.com'
+];
+
+// Configure CORS
+const corsOptions = {
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true); // Allow the request
+        } else {
+            callback(new Error('Not allowed by CORS')); // Block the request
+        }
+    }
+};
+
 // enable CORS - Cross Origin Resource Sharing
-app.use(cors());
+app.use(cors(corsOptions));
 
 app.use(passport.initialize());
 

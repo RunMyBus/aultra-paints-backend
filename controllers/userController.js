@@ -23,7 +23,7 @@ exports.searchUser = async (body, res) => {
                 {'email': {$regex: new RegExp(body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}},
             ]
         }
-        let data = await userModel.find(query).skip((page - 1) * limit).limit(parseInt(limit));
+        let data = await userModel.find(query, {password: 0}).skip((page - 1) * limit).limit(parseInt(limit));
         const totalUsers = await userModel.countDocuments(query);
         return res({status: 200, data, total: totalUsers, pages: Math.ceil(totalUsers / limit), currentPage: page});
         // return res({status: 200, data});
@@ -49,7 +49,7 @@ exports.addUser = async (body, res) => {
         //     errorArray.push('Email already exists')
 
         if (errorArray.length) {
-            return res({ status: 400, error: errorArray })
+            return res({ status: 400, errors: errorArray })
         }
 
         body.password = await bcrypt.hash(body.password, 10);
@@ -57,8 +57,8 @@ exports.addUser = async (body, res) => {
         let userData = await userModel.insertMany(body);
         return res({status: 200, message: userData});
     } catch (err) {
-        console.log(err)
-        return res({status: 500, message: err});
+        console.log(err);
+        return res({status: 500, message: err.message});
     }
 }
 

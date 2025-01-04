@@ -95,7 +95,8 @@ exports.createBatchNumber = async (req, res) => {
                 async (_, i) => {
                     const couponCode = product.CouponSeries + i;
                     const qrCodeId = uuidv4();
-                    const qrCodeData = await QRCode.toBuffer(qrCodeId);
+                    const customUrl = `${config.redeemUrl}/aultraPaintsQRscan.html?qrCodeId=${qrCodeId}`;
+                    const qrCodeData = await QRCode.toBuffer(customUrl);
                     const qrCodeKey = `${savedBatchNumber._id}-${qrCodeId}.png`;
                     const qrCodeUrl = await uploadQRCodeToS3(qrCodeData, qrCodeKey);
 

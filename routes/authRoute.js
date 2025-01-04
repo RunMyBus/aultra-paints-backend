@@ -23,4 +23,10 @@ router.post('/redeem/:qrCodeID', async (req, res) => {
     });
 });
 
+router.get('/sms', async (req, res) => {
+    await AuthController.smsFunction(req, result => {
+        res.status(result.status).json(result);
+    });
+});
+
 module.exports = router;
