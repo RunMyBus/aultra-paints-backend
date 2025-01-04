@@ -51,6 +51,7 @@ exports.getAllTransactionsForBatch = async (req, res) => {
                     couponValue: 1,
                     points: 1,
                     redeemedBy: 1,
+                    redeemedByMobile: 1,
                     isProcessed: 1,
                     createdAt: 1,
                     updatedAt: 1,
