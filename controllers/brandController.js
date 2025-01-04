@@ -171,59 +171,49 @@ const getAllBrandsForSelect = async (req, res) => {
 };
 
 const getBrandsByBrandName = async (req, res) => {
-  const { brandName } = req.params;  // Get the brand name from the URL parameter
+  const { brandName } = req.params;
+  const page = parseInt(req.query.page || 1);
+  const limit = parseInt(req.query.limit || 10);
 
   try {
-    // Use an aggregation pipeline to search for the brand and also include the ProductNameStr
     const querySet = [
-      { 
-        $match: {
-          brands: { $regex: brandName, $options: 'i' }  // Search for the brand name (case-insensitive)
-        }
-      },
+      { $match: { brands: { $regex: brandName, $options: 'i' } } },
       {
         $addFields: {
           productId: {
             $cond: {
               if: { $regexMatch: { input: "$proId", regex: /^[0-9a-fA-F]{24}$/ } },
-              then: { $toObjectId: "$proId" }, 
+              then: { $toObjectId: "$proId" },
               else: null
             }
           }
         }
       },
-      {
-        $lookup: {
-          from: 'products', 
-          localField: 'productId', 
-          foreignField: '_id', 
-          as: 'productData'
-        }
-      },
+      { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'productData' } },
       { $unwind: { path: '$productData', preserveNullAndEmptyArrays: true } },
-      {
-        $project: {
-          _id: 1,
-          proId: 1,
-          brands: 1,
-          ProductNameStr: { $ifNull: ['$productData.name', ''] }  // Add the product name to the response
-        }
-      }
+      { $project: { _id: 1, proId: 1, brands: 1, ProductNameStr: { $ifNull: ['$productData.name', ''] } } }
     ];
 
-    const brands = await Brand.aggregate(querySet);
+    const [brands, totalBrands] = await Promise.all([
+      Brand.aggregate(querySet).skip((page - 1) * limit).limit(limit),
+      Brand.countDocuments({ brands: { $regex: brandName, $options: 'i' } })
+    ]);
 
-    if (brands.length === 0) {
-      return res.status(404).json({ error: 'No brands found with this name' });
-    }
+    if (!brands.length) return res.status(404).json({ error: 'No brands found matching that name' });
 
-    res.status(200).json(brands);  // Return the found brands, now with ProductNameStr included
+    res.status(200).json({
+      status: 200,
+      data: brands,
+      total: totalBrands,
+      pages: Math.ceil(totalBrands / limit),
+      currentPage: page
+    });
+
   } catch (error) {
     console.error('Error fetching brands by name:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
-
 
 
 module.exports = { createBrand, getBrandsByProductId, getAllBrands, updateBrand, deleteBrand, getAllBrandsForSelect,getBrandsByBrandName };
