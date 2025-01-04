@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const Transaction = require("../models/Transaction");
 const Batch = require("../models/batchnumber");
 const {ObjectId} = require("mongodb");
-
+const sms = require('../services/sms.service');
 
 async function generateToken(user, next) {
     try {
@@ -146,5 +146,59 @@ exports.redeem = async (req, next) => {
     } catch (err) {
         console.error(err);
         return next({ status: 500, message: 'Server error' });
+    }
+}
+
+const username = config.SMS_USERNAME;
+const apikey = 'config.SMS_APIKEY';
+const message = 'SMS MESSAGE';
+const sender = 'config.SMS_SENDER';
+const apirequest = 'Text';
+const route = config.SMS_ROUTE;
+const templateid = config.SMS_TEMPLATEID;
+
+exports.smsFunction = async (req, res) => {
+    const { mobile, message } = req.body;
+    try {
+        const params = {
+            username: username,
+            apikey: apikey,
+            apirequest: "Text",
+            route: route,
+            sender: sender,
+            mobile: req.body.mobile,
+            TemplateID: templateid,
+            message: "SMS MESSAGE",
+        };
+
+        const queryParams = require('querystring').stringify(params);
+        const requestUrl = `http://sms.infrainfotech.com/sms-panel/api/http/index.php?${queryParams}`;
+
+        console.log("Request URL:", requestUrl);
+
+        // Send the HTTP request
+        await require('http').get(requestUrl, (response) => {
+            let data = '';
+
+            console.log(response, '-----------------------------------------------------')
+
+            // Collect the response data
+            response.on('data', (chunk) => {
+                data += chunk;
+            });
+
+            // Handle the response completion
+            response.on('end', () => {
+                console.log("SMS Response:", data);
+                return res({status: 200, message: 'SMS sent successfully', response: data });
+            });
+        }).on('error', (err) => {
+            console.error("HTTP Error:", err.message);
+            return res({status: 500,  error: err.message });
+        });
+
+    } catch (error) {
+        console.error("Error sending SMS:", error);
+        return res({status: 500, error: 'Failed to send SMS' });
     }
 }

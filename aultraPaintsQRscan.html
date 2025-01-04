@@ -117,7 +117,9 @@
             }
 
             try {
-                const response = await fetch(`http://api.aultrapaints.com/api/auth/redeem/${qrCodeId}`, {
+                // let url = `http://localhost:4300/api/auth/redeem/${qrCodeId}`
+                let url = `http://api.aultrapaints.com/api/auth/redeem/${qrCodeId}`
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ mobile }),
@@ -129,7 +131,7 @@
                     console.log(jsonData)
                     const popup = document.createElement('div');
                     popup.style.position = 'fixed';
-                    popup.style.top = '26%';
+                    popup.style.top = '50%';
                     popup.style.left = '50%';
                     popup.style.transform = 'translate(-50%, -50%)';
                     // popup.style.backgroundColor = 'white';
@@ -182,7 +184,7 @@
                     // messageDiv.textContent = errorData.error || 'An error occurred. Please try again.';
                     const popup = document.createElement('div');
                     popup.style.position = 'fixed';
-                    popup.style.top = '26%';
+                    popup.style.top = '50%';
                     popup.style.left = '50%';
                     popup.style.transform = 'translate(-50%, -50%)';
                     popup.innerHTML = `<div class="card mb-3 shadow-lg rounded-3" style="width: 40rem;">

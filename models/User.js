@@ -9,11 +9,15 @@ const userSchema = new mongoose.Schema({
     redeemablePoints: {type: Number, default: 0},
     cash: {type: Number, default: 0},
     status: { type: String, default: 'inactive' },
-    address: {type: String, required: true},
+
+    address: {type: String, required: 'Address required'},
+
     primaryContactPerson: {type: String, required: true},
     primaryContactPersonMobile: {type: String, required: true},
+
     dealerCode: {type: String, required: true, unique: true},
     parentDealer: {type: String},
+
     accountType: { type: String, default: 'Painter'}
 }, {timestamps: true})
 
