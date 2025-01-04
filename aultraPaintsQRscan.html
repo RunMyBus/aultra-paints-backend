@@ -118,7 +118,7 @@
 
             try {
                 // let url = `http://localhost:4300/api/auth/redeem/${qrCodeId}`
-                let url = `http://api.aultrapaints.com/api/auth/redeem/${qrCodeId}`
+                let url = `https://api.aultrapaints.com/api/auth/redeem/${qrCodeId}`
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
