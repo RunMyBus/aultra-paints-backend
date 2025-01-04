@@ -14,6 +14,7 @@ const transactionSchema = new mongoose.Schema({
     value: { type: Number },
     couponCode: { type: Number },
     redeemedBy: { type: String },// user who redeemed this coupon
+    redeemedByMobile: { type: String },
     isProcessed: { type: Boolean, default: false }  // Default set to false
 }, { timestamps: true });
 
