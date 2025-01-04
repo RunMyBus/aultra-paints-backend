@@ -46,7 +46,7 @@ const allowedOrigins = [
     'http://localhost:4400',
     'http://localhost:4200',
     'https://app.aultrapaints.com',
-    'http://redeem.aultrapaints.com'
+    'https://redeem.aultrapaints.com'
 ];
 
 // Configure CORS
