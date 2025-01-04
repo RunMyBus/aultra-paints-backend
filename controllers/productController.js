@@ -60,15 +60,37 @@ const updateProduct = async (req, res) => {
   const { name } = req.body;
 
   try {
-    const updatedProduct = await Product.findByIdAndUpdate(id, { name }, { new: true });  
+    const product = await Product.findById(id);
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    // Check for duplicate product name (excluding the current product)
+    const existingProduct = await Product.findOne({ name });
+    if (existingProduct && existingProduct._id.toString() !== product._id.toString()) {
+      return res.status(400).json({ error: 'This product name already exists.' });
+    }
+
+    // If the name is the same as before, return the existing product
+    if (product.name === name) {
+      return res.status(200).json(product);  
+    }
+
+    // Update the product with the new name
+    const updatedProduct = await Product.findByIdAndUpdate(id, { name }, { new: true });
+
+    // Check if the product was successfully updated
     if (!updatedProduct) {
       return res.status(404).json({ error: 'Product not found' });
     }
+
     res.status(200).json(updatedProduct); 
   } catch (error) {
-    res.status(400).json({ error: 'Error updating product' });
+    console.error('Error updating product:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
+
 
 // Delete a product by its ID
 const deleteProduct = async (req, res) => {
