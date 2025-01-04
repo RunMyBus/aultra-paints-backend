@@ -39,20 +39,40 @@ const getProducts = async (req, res) => {
 };
 
 
-// Get a product by its name
 const getProductByName = async (req, res) => {
   const { name } = req.params;
+  let page = parseInt(req.query.page || 1);
+  let limit = parseInt(req.query.limit || 10);
 
   try {
-    const product = await Product.findOne({ name: new RegExp(name, 'i') }); // Using regex for case-insensitive search
-    if (!product) {
-      return res.status(404).json({ error: 'Product not found' });
+    let query = {};
+    if (name) {
+      query.name = { $regex: new RegExp(name, 'i') };
     }
-    res.status(200).json(product);
+
+    const products = await Product.find(query)
+      .skip((page - 1) * limit)
+      .limit(limit);
+
+    const totalProducts = await Product.countDocuments(query);
+
+    if (products.length === 0) {
+      return res.status(404).json({ error: 'No products found matching that name' });
+    }
+
+    return res.status(200).json({
+      status: 200,
+      data: products,
+      total: totalProducts,
+      pages: Math.ceil(totalProducts / limit),
+      currentPage: page
+    });
+
   } catch (error) {
-    res.status(400).json({ error: 'Error fetching product by name' });
+    return res.status(500).json({ error: 'Error fetching products by name' });
   }
 };
+
 
 // Update a product by its ID
 const updateProduct = async (req, res) => {
