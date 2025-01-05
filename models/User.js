@@ -10,12 +10,12 @@ const userSchema = new mongoose.Schema({
     cash: {type: Number, default: 0},
     status: { type: String, default: 'inactive' },
 
-    address: {type: String, required: 'Address required'},
+    address: {type: String},
 
-    primaryContactPerson: {type: String, required: true},
-    primaryContactPersonMobile: {type: String, required: true},
+    primaryContactPerson: {type: String},
+    primaryContactPersonMobile: {type: String},
 
-    dealerCode: {type: String, required: true, unique: true},
+    dealerCode: {type: String},
     parentDealer: {type: String},
 
     accountType: { type: String, default: 'Painter'}
