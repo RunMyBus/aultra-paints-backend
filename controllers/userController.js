@@ -44,9 +44,35 @@ exports.addUser = async (body, res) => {
         } else {
             errorArray.push('Enter mobile number');
         }
-        // const oldEmail = await userModel.findOne({email: {$regex: new RegExp(`^${body.email.trim()}$`), "$options": "i"}});
-        // if (oldEmail)
-        //     errorArray.push('Email already exists')
+
+        if (body.accountType && body.accountType.toLowerCase() === 'dealer') {
+            if (!body.primaryContactPerson) {
+                errorArray.push('Primary contact person is required for dealers');
+            }
+            if (!body.primaryContactPersonMobile) {
+                errorArray.push('Primary contact person mobile is required for dealers');
+            }
+            if (!body.dealerCode) {
+                errorArray.push('Dealer code is required for dealers');
+            } else {
+                const oldDealerCode = await userModel.findOne({
+                    _id: new ObjectId(id),
+                    dealerCode: {
+                        $regex: new RegExp(`^${body.dealerCode.trim()}$`),
+                        "$options": "i"
+                    }
+                });
+                if (body.dealerCode!== undefined && oldDealerCode!== null && oldDealerCode._id.toString()!== id) {
+                    errorArray.push('Dealer code already exists');
+                }
+            }
+            if (!body.parentDealer) {
+                errorArray.push('Parent dealer is required for dealers');
+            }
+            if (!body.address) {
+                errorArray.push('Address is required for dealers');
+            }
+        }
 
         if (errorArray.length) {
             return res({ status: 400, errors: errorArray })
@@ -79,14 +105,37 @@ exports.userUpdate = async (id, body, res) => {
         } else {
             errorArray.push('Enter mobile number');
         }
-        // const oldEmail = await userModel.findOne({ email: {$regex: new RegExp(`^${body.email.trim()}$`), "$options": "i"}});
-        // if (body.email !== undefined && body.email !== null && oldEmail !== null && oldEmail._id.toString() !== id) {
-        //     errorArray.push('Email already exists')
-        //     // return res({ status: 400, message: 'Email already exists' });
-        // }
+        if (body.accountType && body.accountType.toLowerCase() === 'dealer') {
+            if (!body.primaryContactPerson) {
+                errorArray.push('Primary contact person is required for dealers');
+            }
+            if (!body.primaryContactPersonMobile) {
+                errorArray.push('Primary contact person mobile is required for dealers');
+            }
+            if (!body.dealerCode) {
+                errorArray.push('Dealer code is required for dealers');
+            } else {
+                const oldDealerCode = await userModel.findOne({
+                    dealerCode: {
+                        $regex: new RegExp(`^${body.dealerCode.trim()}$`),
+                        "$options": "i"
+                    }
+                });
+                if (body.dealerCode!== undefined && oldDealerCode!== null && oldDealerCode._id.toString()!== id) {
+                    errorArray.push('Dealer code already exists');
+                    // return res({ status: 400, message: 'Dealer code already exists' });
+                }
+            }
+            if (!body.parentDealer) {
+                errorArray.push('Parent dealer is required for dealers');
+            }
+            if (!body.address) {
+                errorArray.push('Address is required for dealers');
+            }
+        }
 
         if (errorArray.length > 0) {
-            return res({ status: 400, error: errorArray, })
+            return res({ status: 400, errors: errorArray, })
         }
         let user = await userModel.updateOne({ _id: new ObjectId(id) }, { $set: body });
         return res({ status: 200, message: user });
