@@ -6,6 +6,8 @@ const redeemedUserModel = require("../models/redeemedUser.model");
 const Batch = require("../models/batchnumber");
 const {ObjectId} = require("mongodb");
 const sms = require('../services/sms.service');
+const axios = require("axios");
+const UserLoginSMSModel = require('../models/UserLoginSMS')
 
 async function generateToken(user, next) {
     try {
@@ -196,9 +198,9 @@ exports.redeem = async (req, next) => {
 }
 
 const username = config.SMS_USERNAME;
-const apikey = 'config.SMS_APIKEY';
+const apikey = config.SMS_APIKEY;
 const message = 'SMS MESSAGE';
-const sender = 'config.SMS_SENDER';
+const sender = config.SMS_SENDER;
 const apirequest = 'Text';
 const route = config.SMS_ROUTE;
 const templateid = config.SMS_TEMPLATEID;
@@ -214,7 +216,8 @@ exports.smsFunction = async (req, res) => {
             sender: sender,
             mobile: req.body.mobile,
             TemplateID: templateid,
-            message: "SMS MESSAGE",
+            message: `Aultra Paints: Your OTP for login is ${OTP}. This code is valid for 10 minutes. Do not share this OTP with anyone`,
+            format: "JSON"
         };
 
         const queryParams = require('querystring').stringify(params);
@@ -248,3 +251,49 @@ exports.smsFunction = async (req, res) => {
         return res({status: 500, error: 'Failed to send SMS' });
     }
 }
+
+// Helper function to generate a random 6-digit OTP
+function generateOTP() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+exports.loginWithOTP = async (req, res) => {
+    const { mobile } = req.body;
+    const OTP_EXPIRY_MINUTES = 10;
+
+    if (!mobile) return res({status: 500, error: 'Mobile number is required' });
+
+    let user = await User.findOne({mobile: mobile});
+    if (!user) {
+        return res({status: 404, error: 'MOBILE_NOT_FOUND'})
+    }
+
+    try {
+        const OTP = generateOTP();
+        const expiryTime = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+        await UserLoginSMSModel.create({mobile: mobile, otp: OTP, expiryTime });
+        // Sending OTP via SMS
+        const params = {
+            username: username,
+            apikey: apikey,
+            apirequest: "Text",
+            route: route,
+            sender: sender,
+            mobile: mobile,
+            TemplateID: templateid,
+            message: `Aultra Paints: Your OTP for login is ${OTP}. This code is valid for 10 minutes. Do not share this OTP with anyone`,
+            format: "JSON"
+        };
+        const queryParams = require('querystring').stringify(params);
+        const requestUrl = `http://sms.infrainfotech.com/sms-panel/api/http/index.php?${queryParams}`;
+        console.log("Request Url: ", requestUrl);
+        const response = await axios.get(requestUrl);
+        console.log("SMS Response:", response.data);
+        return res({status: 200, message: 'OTP sent successfully.'})
+        //return res.status(200).json({ message: 'OTP sent successfully' });
+    } catch (error) {
+        console.error("Error sending OTP:", error);
+        return res({status: 500, message: 'Failed to send OTP.'})
+        //return res.status(500).json({ error: 'Failed to send OTP' });
+    }
+};
