@@ -31,6 +31,7 @@ exports.login = async (req, next) => {
             id: req.user._id,
             fullName: req.user.name,
             token: token,
+            accountType: req.user.accountType,
             redeemablePoints: req.user.redeemablePoints,
             cash: req.user.cash,
             message: "LOGGED_IN_SUCCESSFULLY"
@@ -286,7 +287,6 @@ exports.loginWithOTP = async (req, res) => {
         };
         const queryParams = require('querystring').stringify(params);
         const requestUrl = `http://sms.infrainfotech.com/sms-panel/api/http/index.php?${queryParams}`;
-        console.log("Request Url: ", requestUrl);
         const response = await axios.get(requestUrl);
         console.log("SMS Response:", response.data);
         return res({status: 200, message: 'OTP sent successfully.'})

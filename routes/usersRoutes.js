@@ -47,9 +47,16 @@ router.delete('/:id', async (req, res) => {
     })
 });
 
-router.post('/:id', async (req, res) => {
+router.post('resetPassword/:id', async (req, res) => {
     userController.resetPassword(req, result => {
         res.status(result.status).json(result)
+    })
+});
+
+// router.post('/userDashboard', async (req, res) => {
+router.post('/userDashboard', async (req, res) => {
+    userController.getUserDashboard(req.body, result => {
+        res.status(result.status).json(result);
     })
 });
 
