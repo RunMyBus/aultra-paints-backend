@@ -1,6 +1,8 @@
 const userModel = require('../models/User');
 const bcrypt = require("bcryptjs");
 const { ObjectId } = require('mongodb');
+const Transaction = require('../models/Transaction');
+const redeemedUserModel = require("../models/redeemedUser.model");
 
 exports.getAll = async (body, res) => {
     try {
@@ -213,5 +215,57 @@ exports.resetPassword = async (req, res) => {
     } catch (err) {
         console.log(err)
         return res({ status: 500, message: err });
+    }
+}
+
+exports.getUserDashboard = async (body, res) => {
+    try {
+        let data = {
+            totalRedeemablePoints: 0,
+            totalValue: 0,
+            userTotalRewards: 0,
+            userTotalCash: 0,
+        }
+        if (body.accountType === 'Super User') {
+            let couponData = await Transaction.aggregate([{$group: {_id: null, total: { $sum: "$redeemablePoints" }, totalValue: { $sum: "$value" }}}]);
+            let userData = await userModel.aggregate([{$group: {_id: null, redeemablePoints: { $sum: "$redeemablePoints" }, cash: { $sum: "$cash" }}}]);
+            let redeemedUsers = await redeemedUserModel.aggregate([{$group: {_id: null, redeemedPoints: { $sum: "$redeemedPoints" }, cash: { $sum: "$cash" }}}]);
+            data.userTotalRewards = userData[0].redeemablePoints + redeemedUsers[0]?.redeemedPoints;
+            data.userTotalCash = userData[0].cash + redeemedUsers[0]?.cash;
+            data.totalRedeemablePoints = couponData[0].total;
+            data.totalValue = couponData[0].totalValue;
+        } else {
+            let userData = await userModel.findOne({_id: new ObjectId(body.id)}, {password: 0, token: 0});
+            data.userTotalRewards = userData.redeemablePoints;
+            data.userTotalCash = userData.cash;
+            let querySet = [
+                { $match: {redeemedBy: body.id} },
+                { $addFields: { batchId: { $toObjectId: "$batchId" } } },
+                { $lookup: { from: 'batchnumbers', localField: 'batchId', foreignField: '_id', as: 'batchData' } },
+                { $unwind: '$batchData' },
+                {
+                    $project: {
+                        _id: 1,
+                        transactionId: 1,
+                        batchId: 1,
+                        batchName: { $ifNull: ['$batchData.Branch', ''] },
+                        batchNumber: { $ifNull: ['$batchData.BatchNumber', ''] },
+                        couponCode: 1,
+                        redeemablePoints: { $ifNull: ['$batchData.RedeemablePoints', ''] },
+                        value: { $ifNull: ['$batchData.value', ''] },
+                        couponValue: 1,
+                        redeemedBy: 1,
+                        redeemedByMobile: 1,
+                        isProcessed: 1,
+                        createdAt: 1,
+                    }
+                },
+            ]
+            data.userTotalRedeemablePointsList = await Transaction.aggregate(querySet);
+        }
+        return res({status: 200, data});
+    } catch (err) {
+        console.log(err)
+        return res({status: 500, message: "Something went wrong"});
     }
 }
