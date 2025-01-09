@@ -100,7 +100,7 @@
 
     // Extract QR Code ID from URL
     const params = new URLSearchParams(window.location.search);
-    const qrCodeId = params.get('qrCodeId');
+    const qrCodeId = params.get('tx');
 
     if (!qrCodeId) {
       messageDiv.textContent = 'Invalid QR Code. Please try again.';

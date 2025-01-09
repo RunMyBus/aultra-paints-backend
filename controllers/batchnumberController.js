@@ -67,7 +67,7 @@ exports.createBatchNumber = async (req, res) => {
                 for (let i = 0; i < batchResult.Quantity; i++) {
                     const couponCode = batchResult.CouponSeries + i;
                     const qrCodeId = uuidv4();
-                    const customUrl = `${config.redeemUrl}/redeem.html?qrCodeId=${qrCodeId}`;
+                    const customUrl = `${config.redeemUrl}/redeem.html?tx=${qrCodeId}`;
                     const qrCodeData = await QRCode.toBuffer(customUrl);
                     const qrCodeKey = `${batchResult._id}-${qrCodeId}.png`;
                     const qrCodeUrl = await uploadQRCodeToS3(qrCodeData, qrCodeKey);
