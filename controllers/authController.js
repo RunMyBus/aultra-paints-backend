@@ -270,8 +270,14 @@ exports.loginWithOTP = async (req, res) => {
     }
 
     try {
-        const OTP = generateOTP();
+        let OTP = generateOTP();
         const expiryTime = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+        if (mobile === config.STATIC_MOBILE_NUMBER) {
+            OTP = config.STATIC_OTP;
+            await UserLoginSMSModel.create({mobile: mobile, otp: OTP, expiryTime });
+            return res({status: 200, message: 'OTP sent successfully.'});
+        }
+
         await UserLoginSMSModel.create({mobile: mobile, otp: OTP, expiryTime });
         // Sending OTP via SMS
         const params = {
