@@ -87,7 +87,7 @@ exports.redeem = async (req, next) => {
         // if (!user) {
         //     return next({status: 404, message: 'User not found.' });
         // }
-        const transaction = await Transaction.findOne({ qr_code_id: qr });
+        const transaction = await Transaction.findOne({ couponCode: qr });
         if (!transaction) {
             return next({status: 404, message: 'Transaction not found.' });
         }
@@ -97,13 +97,13 @@ exports.redeem = async (req, next) => {
 
         if (user) {
             const updatedTransaction = await Transaction.findOneAndUpdate(
-                { qr_code_id: qr },
+                { couponCode: qr },
                 { isProcessed: true, updatedBy: user._id, redeemedBy: user._id.toString() },
                 { new: true }
             );
             let batch = {};
             if (updatedTransaction.isProcessed) {
-                let getTransaction = await Transaction.findOne({qr_code_id: qr})
+                let getTransaction = await Transaction.findOne({couponCode: qr})
                 batch = await Batch.findOne({_id: getTransaction.batchId});
                 if (batch) {
                     const redeemablePointsCount = batch.RedeemablePoints || 0;
@@ -140,7 +140,7 @@ exports.redeem = async (req, next) => {
             const data = {
                 userName: user.name,
                 mobile: user.mobile,
-                qr_code_id: updatedTransaction.qr_code_id,
+                // qr_code_id: updatedTransaction.qr_code_id,
                 isProcessed: updatedTransaction.isProcessed,
                 redeemablePoints: updatedTransaction.redeemablePoints,
                 couponCode: transaction.couponCode,
@@ -152,14 +152,14 @@ exports.redeem = async (req, next) => {
             return next({status: 200, message: "Coupon redeemed Successfully..!", data: data});
         } else {
             const updatedTransaction = await Transaction.findOneAndUpdate(
-                { qr_code_id: qr },
+                { couponCode: qr },
                 { isProcessed: true, redeemedByMobile: mobile },
                 { new: true }
             );
             let batch = {};
             let userData = {};
             if (updatedTransaction.isProcessed) {
-                let getTransaction = await Transaction.findOne({qr_code_id: qr})
+                let getTransaction = await Transaction.findOne({couponCode: qr})
                 batch = await Batch.findOne({_id: getTransaction.batchId});
                 if (batch) {
                     const redeemablePointsCount = batch.RedeemablePoints || 0;
@@ -181,7 +181,7 @@ exports.redeem = async (req, next) => {
             const data = {
                 userName: 'NA',
                 mobile: userData.mobile,
-                qr_code_id: updatedTransaction.qr_code_id,
+                // qr_code_id: updatedTransaction.qr_code_id,
                 isProcessed: updatedTransaction.isProcessed,
                 redeemablePoints: updatedTransaction.redeemablePoints,
                 couponCode: transaction.couponCode,

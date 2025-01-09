@@ -81,7 +81,7 @@ exports.markTransactionAsProcessed = async (req, res) => {
     const { qr } = req.params;  // Assuming qr is passed as a URL parameter
 
     try {
-        const document = await Transaction.findOne({ qr_code_id:  qr });
+        const document = await Transaction.findOne({ couponCode:  qr });
         if(document.isProcessed) {
             return res.status(404).json({ message: 'Coupon Redeemed already.' });
         } else {
@@ -93,7 +93,7 @@ exports.markTransactionAsProcessed = async (req, res) => {
             );
             let batch = {};
             if (updatedTransaction.isProcessed) {
-                let getTransaction = await Transaction.findOne({qr_code_id: qr})
+                let getTransaction = await Transaction.findOne({couponCode: qr})
                 batch = await Batch.findOne({_id: getTransaction.batchId});
                 if (batch) {
                     const redeemablePointsCount = batch.RedeemablePoints || 0;
@@ -128,7 +128,7 @@ exports.markTransactionAsProcessed = async (req, res) => {
             }
 
             const data = {
-                qr_code_id: updatedTransaction.qr_code_id,
+                // qr_code_id: updatedTransaction.qr_code_id,
                 isProcessed: updatedTransaction.isProcessed,
                 redeemablePoints: updatedTransaction.redeemablePoints,
                 couponCode: document.couponCode,
