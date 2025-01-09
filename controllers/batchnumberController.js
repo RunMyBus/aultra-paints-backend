@@ -66,10 +66,10 @@ exports.createBatchNumber = async (req, res) => {
                 // const batchId = batchResult._id;
                 for (let i = 0; i < batchResult.Quantity; i++) {
                     const couponCode = batchResult.CouponSeries + i;
-                    const qrCodeId = uuidv4();
-                    const customUrl = `${config.redeemUrl}/redeem.html?tx=${qrCodeId}`;
+                    // const qrCodeId = uuidv4();
+                    const customUrl = `${config.redeemUrl}/redeem.html?tx=${couponCode}`;
                     const qrCodeData = await QRCode.toBuffer(customUrl);
-                    const qrCodeKey = `${batchResult._id}-${qrCodeId}.png`;
+                    const qrCodeKey = `${batchResult._id}-${couponCode}.png`;
                     const qrCodeUrl = await uploadQRCodeToS3(qrCodeData, qrCodeKey);
 
                     const transaction = new Transaction({
@@ -78,7 +78,7 @@ exports.createBatchNumber = async (req, res) => {
                         redeemablePoints: batchResult.RedeemablePoints,
                         value: batchResult.value,
                         qr_code: qrCodeUrl,
-                        qr_code_id: qrCodeId,
+                        // qr_code_id: qrCodeId,
                         couponCode: couponCode,
                         isProcessed: false,
                         createdBy: userId,
