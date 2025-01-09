@@ -37,35 +37,22 @@ const UserLoginSMSModel = require("../models/UserLoginSMS");
 
 const localLogin = new LocalStrategy({usernameField: 'mobile', passwordField: 'otp'}, async (mobile, otp, done) => {
     if (!mobile || !otp) return done.status(400).json({ error: 'Mobile number and OTP are required' });
-
     try {
         let user = await User.findOne({mobile: mobile});
         if (!user) {
-            return done( {
-                status: 400,
-                message: 'MOBILE_NOT_FOUND',
-            });
-        }else {
+            return done({status: 400, message: 'MOBILE_NOT_FOUND',});
+        } else {
             const otpRecord = await UserLoginSMSModel.findOne({ mobile: mobile, otp , active: true });
             if (!otpRecord)
-                return done( {
-                    status: 404,
-                    message: 'OTP_NOT_FOUND_OR_ALREADY_USED',
-                });
+                return done({status: 404, message: 'OTP_NOT_FOUND_OR_ALREADY_USED',});
 
             if (new Date() > otpRecord.expiryTime) {
                 otpRecord.active = false;
                 await otpRecord.save();
-                return done( {
-                    status: 400,
-                    message: 'OTP_EXPIRED',
-                });
+                return done( {status: 400, message: 'OTP_EXPIRED',});
             }
 
-            if (otpRecord.otp !== otp) return done( {
-                status: 400,
-                message: 'INVALID_OTP',
-            });
+            if (otpRecord.otp !== otp) return done({status: 400, message: 'INVALID_OTP',});
             otpRecord.active = false;
             await otpRecord.save();
             return done(null, user);
