@@ -16,7 +16,7 @@ const userSchema = new mongoose.Schema({
     primaryContactPersonMobile: {type: String},
 
     dealerCode: {type: String},
-    parentDealer: {type: String},
+    // parentDealer: {type: String},
 
     accountType: { type: String, default: 'Painter'}
 }, {timestamps: true})
