@@ -58,7 +58,6 @@ exports.addUser = async (body, res) => {
                 errorArray.push('Dealer code is required for dealers');
             } else {
                 const oldDealerCode = await userModel.findOne({
-                    _id: new ObjectId(id),
                     dealerCode: {
                         $regex: new RegExp(`^${body.dealerCode.trim()}$`),
                         "$options": "i"
@@ -68,9 +67,9 @@ exports.addUser = async (body, res) => {
                     errorArray.push('Dealer code already exists');
                 }
             }
-            if (!body.parentDealer) {
-                errorArray.push('Parent dealer is required for dealers');
-            }
+            // if (!body.parentDealer) {
+            //     errorArray.push('Parent dealer is required for dealers');
+            // }
             if (!body.address) {
                 errorArray.push('Address is required for dealers');
             }
@@ -128,9 +127,9 @@ exports.userUpdate = async (id, body, res) => {
                     // return res({ status: 400, message: 'Dealer code already exists' });
                 }
             }
-            if (!body.parentDealer) {
-                errorArray.push('Parent dealer is required for dealers');
-            }
+            // if (!body.parentDealer) {
+            //     errorArray.push('Parent dealer is required for dealers');
+            // }
             if (!body.address) {
                 errorArray.push('Address is required for dealers');
             }
