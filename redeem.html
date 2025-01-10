@@ -1,203 +1,293 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>QR Code Mobile Submission</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/boxicons@latest/css/boxicons.min.css">
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      /*display: flex;*/
-      /*flex-direction: column;*/
-      /*align-items: center;*/
-      /*justify-content: center;*/
-      height: 100vh;
-      background-color: #f9f9f9;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Mobile Submission</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/boxicons@latest/css/boxicons.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            /*display: flex;*/
+            /*flex-direction: column;*/
+            /*align-items: center;*/
+            /*justify-content: center;*/
+            height: 100vh;
+            background-color: #f9f9f9;
+        }
 
-    h1 {
-      color: #333;
-    }
+        h1 {
+            color: #333;
+        }
 
-    form {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
-    }
+        form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
 
-    input[type="text"] {
-      width: 250px;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      font-size: 16px;
-    }
+        input[type="text"] {
+            width: 250px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+        }
 
-    button {
-      padding: 10px 20px;
-      background-color: #28a745;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 16px;
-    }
+        button {
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
 
-    button:hover {
-      background-color: #218838;
-    }
+        button:hover {
+            background-color: #218838;
+        }
 
-    #message {
-      margin-top: 10px;
-      font-size: 14px;
-      color: red;
-    }
-  </style>
+        #message {
+            margin-top: 10px;
+            font-size: 14px;
+            color: red;
+        }
+
+
+        height:
+
+        100
+        vh
+
+        ;
+        }
+
+        .card {
+
+            position: relative;
+            background-color: #7B1FA2;
+            padding: 10px;
+            width: 400px;
+            border: none;
+
+
+        }
+
+        .content {
+
+            z-index: 10;
+        }
+
+        .logo {
+
+            margin-bottom: 50px;
+        }
+
+
+        .off {
+
+            line-height: 0px;
+        }
+
+        .off h1 {
+
+            font-size: 80px;
+        }
+
+        .off span {
+
+            margin-right: 111px;
+        }
+
+
+        .plus {
+            font-size: 23px;
+        }
+
+        .code {
+
+            text-transform: uppercase;
+            padding: 10px;
+            background-color: #fff;
+            color: red;
+            font-size: 20px;
+        }
+
+        .cross-bg {
+
+            height: 100%;
+            width: 100%;
+            position: absolute;
+
+            background-color: #9C27B0;
+
+            left: 0px;
+            top: 0px;
+            opacity: 0.4;
+            clip-path: polygon(50% 0%, 90% 20%, 100% 60%, 75% 100%, 25% 100%, 0% 60%, 10% 20%);
+            z-index: 1;
+        }
+    </style>
 </head>
 <body>
 <div class="container" style="height: 85vh">
-  <div class="row">
-    <div class="col-sm-4"></div>
-    <div class="col-sm-4 my-5">
-      <h1 style="text-align: center;">Enter Mobile Number</h1>
-      <form id="mobileForm">
-        <div class="input-group mb-3">
-          <span class="input-group-text" id="basic-addon1">+91</span>
-          <input class="form-control" type="text" id="mobileNumber" placeholder="Enter 10-digit mobile number" required
-                 maxlength="10" oninput="this.mobile = this.mobile.replace(/[^0-9]/g, '').slice(0, 10);" />
+    <div class="row">
+        <div class="col-sm-4"></div>
+        <div class="col-sm-4 my-5">
+            <h1 style="text-align: center;">Enter Mobile Number</h1>
+            <form id="mobileForm">
+                <div class="input-group mb-3">
+                    <span class="input-group-text" id="basic-addon1">+91</span>
+                    <input class="form-control" type="text" id="mobileNumber" placeholder="Enter 10-digit mobile number"
+                           required
+                           maxlength="10" oninput="this.mobile = this.mobile.replace(/[^0-9]/g, '').slice(0, 10);"/>
+                </div>
+                <!--                <input class="form-control" type="text" id="mobileNumber" value="9030989698" placeholder="Enter 10-digit mobile number" required-->
+                <!--                       maxlength="10" oninput="this.mobile = this.mobile.replace(/[^0-9]/g, '').slice(0, 10);" />-->
+                <button class="btn btn-success" type="submit">Submit</button>
+                <div id="message"></div>
+            </form>
         </div>
-        <!--                <input class="form-control" type="text" id="mobileNumber" value="9030989698" placeholder="Enter 10-digit mobile number" required-->
-        <!--                       maxlength="10" oninput="this.mobile = this.mobile.replace(/[^0-9]/g, '').slice(0, 10);" />-->
-        <button class="btn btn-success" type="submit">Submit</button>
-        <div id="message"></div>
-      </form>
+        <div class="col-sm-4"></div>
     </div>
-    <div class="col-sm-4"></div>
-  </div>
 </div>
 
 <div class="container-fluid">
-  <div class="row">
-    <div class="col-12">
-      <div class="text-end">
-        <img src="assets/logo3.png" alt="Logo 2" class="navbar-logo" />
-        <!--                <p>Copyright &copy; 2022 QR Code Mobile Submission</p>-->
-      </div>
+    <div class="row">
+        <div class="col-12">
+            <div class="text-end">
+                <img src="assets/logo3.png" alt="Logo 2" class="navbar-logo"/>
+                <!--                <p>Copyright &copy; 2022 QR Code Mobile Submission</p>-->
+            </div>
+        </div>
     </div>
-  </div>
-  <!-- Images/Logo in the navbar -->
+    <!-- Images/Logo in the navbar -->
 </div>
 <script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const form = document.getElementById('mobileForm');
-    const mobileNumberInput = document.getElementById('mobileNumber');
-    const messageDiv = document.getElementById('message');
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('mobileForm');
+        const mobileNumberInput = document.getElementById('mobileNumber');
+        const messageDiv = document.getElementById('message');
 
-    // Extract QR Code ID from URL
-    const params = new URLSearchParams(window.location.search);
-    const qrCodeId = params.get('tx');
+        // Extract QR Code ID from URL
+        const params = new URLSearchParams(window.location.search);
+        const qrCodeId = params.get('tx');
 
-    if (!qrCodeId) {
-      messageDiv.textContent = 'Invalid QR Code. Please try again.';
-      return;
-    }
+        if (!qrCodeId) {
+            messageDiv.textContent = 'Invalid QR Code. Please try again.';
+            return;
+        }
 
-    // Form submission handler
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const mobile = mobileNumberInput.value.trim();
+        // Form submission handler
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const mobile = mobileNumberInput.value.trim();
 
-      // Validate mobile number
-      if (!/^\d{10}$/.test(mobile)) {
-        messageDiv.textContent = 'Please enter a valid 10-digit mobile number.';
-        return;
-      }
+            // Validate mobile number
+            if (!/^\d{10}$/.test(mobile)) {
+                messageDiv.textContent = 'Please enter a valid 10-digit mobile number.';
+                return;
+            }
 
-      try {
-        // let url = `http://localhost:4300/api/auth/redeem/${qrCodeId}`
-        let url = `https://api.aultrapaints.com/api/auth/redeem/${qrCodeId}`
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mobile }),
-        });
+            try {
+                // let url = `http://localhost:4300/api/auth/redeem/${qrCodeId}`
+                let url = `https://api.aultrapaints.com/api/auth/redeem/${qrCodeId}`
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({mobile}),
+                });
 
-        if (response.ok) {
-          const data = await response.json();
-          const jsonData = data.data;
-          console.log(jsonData)
-          const popup = document.createElement('div');
-          popup.style.position = 'fixed';
-          popup.style.top = '50%';
-          popup.style.left = '50%';
-          popup.style.transform = 'translate(-50%, -50%)';
-          // popup.style.backgroundColor = 'white';
-          // popup.style.padding = '20px';
-          // popup.style.borderRadius = '5px';
-          // popup.style.boxShadow = '0 0 10px rgba(0,0,0,0.2)';
-          popup.innerHTML = `<div class="card mb-3 shadow-lg rounded-3" style="width: 100%;">
-                                        <div class="d-flex justify-content-around" style="padding: 20px; background-color: #218838; color: white">
-                                            <i class='bx bx-badge-check bx-tada' style="font-size: 150px;"></i>
-                                            <i class='bx bx-rupee' style="font-size: 150px;opacity: 0.2;"></i>
-                                        </div>
-                                        <div class="card-body">
-                                            <table class="table table-borderless">
-                                                <tbody>
-                                                <tr>
-                                                <th>Name</th>
-                                                    <td>${jsonData.userName}</td>
-                                                </tr>
-                                                <tr>
-                                                    <th>Mobile Number</th>
-                                                    <td>${jsonData.mobile}</td>
-                                                </tr>
-                                                <tr>
-                                                    <th>Redeemed Points</th>
-                                                    <td>${jsonData.redeemablePoints}</td>
-                                                </tr>
-                                                <tr>
-                                                    <th>Coupon</th>
-                                                    <td>${jsonData.couponCode}</td>
-                                                </tr>
-                                                <tr>
-                                                    <th>Cash</th>
-                                                    <td>${jsonData.cash} Rs.</td>
-                                                </tr>
-                                                <tr>
-                                                    <th>Batch Name</th>
-                                                    <td>${jsonData.batchName}</td>
-                                                </tr>
-                                                <tr>
-                                                    <th>Batch Number</th>
-                                                    <td>${jsonData.batchNumber}</td>
-                                                </tr>
-                                                <tr>
-                                                    <th>Status</th>
-                                                    <td>${jsonData.isProcessed? 'Processed' : 'Not Processed'}</td>
-                                                </tr>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>`;
-          document.body.appendChild(popup);
-          messageDiv.style.color = 'green';
-          messageDiv.textContent = 'Mobile number submitted successfully!';
-          form.reset();
-        } else {
-          const errorData = await response.json();
-          console.log(errorData)
-          // messageDiv.textContent = errorData.error || 'An error occurred. Please try again.';
-          const popup = document.createElement('div');
-          popup.style.position = 'fixed';
-          popup.style.top = '50%';
-          popup.style.left = '50%';
-          popup.style.transform = 'translate(-50%, -50%)';
-          popup.innerHTML = `<div class="card mb-3 shadow-lg rounded-3" style="width: 100%;">
+                if (response.ok) {
+                    const data = await response.json();
+                    const jsonData = data.data;
+                    console.log(jsonData)
+                    const popup = document.createElement('div');
+                    popup.style.position = 'fixed';
+                    popup.style.top = '50%';
+                    popup.style.left = '50%';
+                    popup.style.transform = 'translate(-50%, -50%)';
+                    popup.innerHTML = `<div class="shadow" style="border-radius: 20px">
+                    <div class=" " style="display: flex; flex-direction: column; align-items: center; padding: 30px 18px;background-color: #218838;color: white;border-radius: 12px;box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, .15) !important;">
+                        <div style="font-size: 80px; font-weight: bold; color: white; padding: 40px">
+                            ${jsonData.cash}<i class='bx bx-rupee'></i>
+                        </div>
+                        <div style="font-size: 16px; color: white;">
+                            Coupon Redeemed from Aultra Paints.
+                        </div>
+                        <div style="font-size: 20px; font-weight: bold; color: white;">
+                            Coupon: ${jsonData.couponCode}
+                        </div>
+                    </div>
+                </div>`;
+                    // popup.style.backgroundColor = 'white';
+                    // popup.style.padding = '20px';
+                    // popup.style.borderRadius = '5px';
+                    // popup.style.boxShadow = '0 0 10px rgba(0,0,0,0.2)';
+                    // popup.innerHTML = `<div class="card mb-3 shadow-lg rounded-3" style="width: 100%;">
+                    //                     <div class="d-flex justify-content-around" style="padding: 20px; background-color: #218838; color: white">
+                    //                         <i class='bx bx-badge-check bx-tada' style="font-size: 150px;"></i>
+                    //                         <i class='bx bx-rupee' style="font-size: 150px;opacity: 0.2;"></i>
+                    //                     </div>
+                    //                     <div class="card-body">
+                    //                         <table class="table table-borderless">
+                    //                             <tbody>
+                    //                             <tr>
+                    //                             <th>Name</th>
+                    //                                 <td>${jsonData.userName}</td>
+                    //                             </tr>
+                    //                             <tr>
+                    //                                 <th>Mobile Number</th>
+                    //                                 <td>${jsonData.mobile}</td>
+                    //                             </tr>
+                    //                             <tr>
+                    //                                 <th>Redeemed Points</th>
+                    //                                 <td>${jsonData.redeemablePoints}</td>
+                    //                             </tr>
+                    //                             <tr>
+                    //                                 <th>Coupon</th>
+                    //                                 <td>${jsonData.couponCode}</td>
+                    //                             </tr>
+                    //                             <tr>
+                    //                                 <th>Cash</th>
+                    //                                 <td>${jsonData.cash} Rs.</td>
+                    //                             </tr>
+                    //                             <tr>
+                    //                                 <th>Batch Name</th>
+                    //                                 <td>${jsonData.batchName}</td>
+                    //                             </tr>
+                    //                             <tr>
+                    //                                 <th>Batch Number</th>
+                    //                                 <td>${jsonData.batchNumber}</td>
+                    //                             </tr>
+                    //                             <tr>
+                    //                                 <th>Status</th>
+                    //                                 <td>${jsonData.isProcessed ? 'Processed' : 'Not Processed'}</td>
+                    //                             </tr>
+                    //                             </tbody>
+                    //                         </table>
+                    //                     </div>
+                    //                 </div>`;
+                    document.body.appendChild(popup);
+                    messageDiv.style.color = 'green';
+                    messageDiv.textContent = 'Mobile number submitted successfully!';
+                    form.reset();
+                } else {
+                    const errorData = await response.json();
+                    console.log(errorData)
+                    // messageDiv.textContent = errorData.error || 'An error occurred. Please try again.';
+                    const popup = document.createElement('div');
+                    popup.style.position = 'fixed';
+                    popup.style.top = '50%';
+                    popup.style.left = '50%';
+                    popup.style.transform = 'translate(-50%, -50%)';
+                    popup.innerHTML = `<div class="card mb-3 shadow-lg rounded-3" style="width: 100%;">
                                         <div class="d-flex justify-content-around" style="padding: 20px; background-color: red; color: white">
                                             <i class='bx bx-error-circle bx-tada' style="font-size: 150px;"></i>
                                             <i class='bx bx-rupee' style="font-size: 150px;opacity: 0.2;"></i>
@@ -206,17 +296,17 @@
                                         <p>${errorData.message}</p>
                                         </div>
                                     </div>`;
-          document.body.appendChild(popup);
-          messageDiv.style.color = 'green';
-          messageDiv.textContent = 'Mobile number submitted successfully!';
-          form.reset();
-        }
-      } catch (error) {
-        console.error('Error submitting mobile number:', error);
-        messageDiv.textContent = 'Failed to submit. Please try again later.';
-      }
+                    document.body.appendChild(popup);
+                    messageDiv.style.color = 'green';
+                    messageDiv.textContent = 'Mobile number submitted successfully!';
+                    form.reset();
+                }
+            } catch (error) {
+                console.error('Error submitting mobile number:', error);
+                messageDiv.textContent = 'Failed to submit. Please try again later.';
+            }
+        });
     });
-  });
 
 </script>
 </body>

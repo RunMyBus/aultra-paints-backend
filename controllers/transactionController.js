@@ -31,7 +31,12 @@ exports.getAllTransactionsForBatch = async (req, res) => {
             // { $addFields: { updatedBy: { $toObjectId: "$updatedBy" } } },
             { $addFields: { updatedBy: { $cond: { if: { $eq: ["$updatedBy", null] }, then: null, else: { $toObjectId: "$updatedBy" } } } } },
             { $lookup: { from: 'users', localField: 'updatedBy', foreignField: '_id', as: 'uploadData' } },
-            { $unwind: { path: '$uploadData', preserveNullAndEmptyArrays: true } }, // Allow null/empty `updatedBy`
+            { $unwind: { path: '$uploadData', preserveNullAndEmptyArrays: true } },
+
+            { $addFields: { redeemedBy: { $cond: { if: { $eq: ["$redeemedBy", null] }, then: null, else: { $toObjectId: "$redeemedBy" } } } } },
+            { $lookup: { from: 'users', localField: 'redeemedBy', foreignField: '_id', as: 'redeemedData' } },
+            { $unwind: { path: '$redeemedData', preserveNullAndEmptyArrays: true } },
+
             {
                 $project: {
                     _id: 1,
@@ -51,6 +56,7 @@ exports.getAllTransactionsForBatch = async (req, res) => {
                     couponValue: 1,
                     points: 1,
                     redeemedBy: 1,
+                    redeemedByName:  { $ifNull: ['$redeemedData.name', ''] },
                     redeemedByMobile: 1,
                     isProcessed: 1,
                     createdAt: 1,

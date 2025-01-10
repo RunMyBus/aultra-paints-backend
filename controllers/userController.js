@@ -243,6 +243,9 @@ exports.getUserDashboard = async (body, res) => {
                 { $addFields: { batchId: { $toObjectId: "$batchId" } } },
                 { $lookup: { from: 'batchnumbers', localField: 'batchId', foreignField: '_id', as: 'batchData' } },
                 { $unwind: '$batchData' },
+                { $addFields: { redeemedBy: { $cond: { if: { $eq: ["$redeemedBy", null] }, then: null, else: { $toObjectId: "$redeemedBy" } } } } },
+                { $lookup: { from: 'users', localField: 'redeemedBy', foreignField: '_id', as: 'redeemedData' } },
+                { $unwind: { path: '$redeemedData', preserveNullAndEmptyArrays: true } },
                 {
                     $project: {
                         _id: 1,
@@ -255,6 +258,7 @@ exports.getUserDashboard = async (body, res) => {
                         value: { $ifNull: ['$batchData.value', ''] },
                         couponValue: 1,
                         redeemedBy: 1,
+                        redeemedByName:  { $ifNull: ['$redeemedData.name', ''] },
                         redeemedByMobile: 1,
                         isProcessed: 1,
                         createdAt: 1,
