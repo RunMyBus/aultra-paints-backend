@@ -93,7 +93,7 @@ exports.markTransactionAsProcessed = async (req, res) => {
         } else {
             // Find the transaction and update isProcessed to true
             const updatedTransaction = await Transaction.findOneAndUpdate(
-                {qr_code_id: qr},  // Match the QR code
+                {couponCode: qr},  // Match the QR code
                 {isProcessed: true, updatedBy: req.user._id, redeemedBy: req.user._id.toString()},  // Update isProcessed to true
                 {new: true}  // Return the updated document
             );
