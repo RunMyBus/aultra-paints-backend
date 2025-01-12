@@ -7,7 +7,7 @@ const { decodeBase64Image } = require('../services/utils.service');
 exports.createProductOffer = async (req, res) => {
     const {productOfferDescription, productOfferTitle, productOfferValidation, productOfferStatus} = req.body;
     if (!req.body.productOfferImage) {
-        return res.status(400).json({message: 'Product offer image is required'});
+        return res.status(400).json({message: 'Image is required'});
     }
     const imageData = await decodeBase64Image(req.body.productOfferImage);
 
@@ -107,17 +107,19 @@ exports.updateProductOffer = async (req, res) => {
             return res.status(400).json({message: 'Product offer with the same title already exists.'});
         }
         if (req.body.productOfferImage) {
-            const s3 = new AWS.S3({
-                region: process.env.AWS_REGION,
-                accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-            });
-            let imgUrlSplit = req.body.productOfferImageUrl.split('/')[req.body.productOfferImageUrl.split('/').length - 1];
-            const paramsRemove = {
-                Bucket: process.env.AWS_BUCKET_PRODUCT_OFFER,
-                Key: imgUrlSplit,
-            };
-            await s3.deleteObject(paramsRemove).promise();
+            if (req.body.productOfferImageUrl) {
+                const s3 = new AWS.S3({
+                    region: process.env.AWS_REGION,
+                    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+                    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+                });
+                let imgUrlSplit = req.body.productOfferImageUrl.split('/')[req.body.productOfferImageUrl.split('/').length - 1];
+                const paramsRemove = {
+                    Bucket: process.env.AWS_BUCKET_PRODUCT_OFFER,
+                    Key: imgUrlSplit,
+                };
+                await s3.deleteObject(paramsRemove).promise();
+            }
 
             const imageData = await decodeBase64Image(req.body.productOfferImage);
             const params = {
