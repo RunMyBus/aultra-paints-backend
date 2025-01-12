@@ -5,6 +5,8 @@ const transactionRoutes = require('./transactionRoutes');
 const usersRoutes = require('./usersRoutes');
 const brandRoutes = require('./brandRoutes.js');
 const productRoutes = require('./productRoutes.js')
+const productOffersRoutes = require('./productOffers.route')
+const rewardSchemesRoutes = require('./rewardSchemes.route.js')
 
 
 const router = express.Router();
@@ -18,6 +20,8 @@ router.use('/transaction', transactionRoutes);
 router.use('/users', usersRoutes);
 router.use('/products', productRoutes);
 router.use('/brands', brandRoutes);
+router.use('/productOffers', productOffersRoutes);
+router.use('/rewardSchemes', rewardSchemesRoutes);
 
 
 module.exports = router;

@@ -150,29 +150,3 @@ exports.markTransactionAsProcessed = async (req, res) => {
         return res.status(500).json({ error: error.message });
     }
 };
-
-exports.scanQRCode = async (req, res) => {
-    try {
-        const { mobile } = req.body;
-        const user = await User.findOne({ mobile });
-        if (!user) {
-            return res.status(404).json({ message: 'User not found.' });
-        }
-        const transaction = await Transaction.findOne({ qr_code_id: req.query.qr });
-        if (!transaction) {
-            return res.status(404).json({ message: 'Transaction not found.' });
-        }
-        if (transaction.isProcessed) {
-            return res.status(400).json({ message: 'Coupon already redeemed.' });
-        }
-        const updatedTransaction = await Transaction.findOneAndUpdate(
-            { qr_code_id: req.query.qr },
-            { isProcessed: true, updatedBy: user._id, redeemedBy: user._id },
-            { new: true }
-        );
-        return res.status(200).json({ message: 'Coupon redeemed Successfully..!' });
-    } catch (error) {
-        console.log(error);
-        return res.status(500).json({ error: error.message });
-    }
-};
