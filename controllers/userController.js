@@ -3,6 +3,8 @@ const bcrypt = require("bcryptjs");
 const { ObjectId } = require('mongodb');
 const Transaction = require('../models/Transaction');
 const redeemedUserModel = require("../models/redeemedUser.model");
+const UserLoginSMSModel = require("../models/UserLoginSMS");
+const axios = require("axios");
 
 exports.getAll = async (body, res) => {
     try {
@@ -73,6 +75,11 @@ exports.addUser = async (body, res) => {
             if (!body.address) {
                 errorArray.push('Address is required for dealers');
             }
+        } else {
+            body.dealerCode = null;
+            body.primaryContactPerson = null;
+            body.primaryContactPersonMobile = null;
+            body.address = null;
         }
 
         if (errorArray.length) {
@@ -133,6 +140,11 @@ exports.userUpdate = async (id, body, res) => {
             if (!body.address) {
                 errorArray.push('Address is required for dealers');
             }
+        } else {
+            body.dealerCode = null;
+            body.primaryContactPerson = null;
+            body.primaryContactPersonMobile = null;
+            body.address = null;
         }
 
         if (errorArray.length > 0) {
@@ -158,6 +170,12 @@ exports.getUser = async (id, res) => {
         return res({status: 500, message: err})
     }
 }
+
+// max-width: 250px;
+// max-height: 250px;
+// height: auto;
+// width: 100%;
+// padding: 1.5rem;
 
 exports.deleteUser = async (id, res) => {
     try {
@@ -267,6 +285,79 @@ exports.getUserDashboard = async (body, res) => {
             data.userTotalRedeemablePointsList = await Transaction.aggregate(querySet);
         }
         return res({status: 200, data});
+    } catch (err) {
+        console.log(err)
+        return res({status: 500, message: "Something went wrong"});
+    }
+}
+
+const username = config.SMS_USERNAME;
+const apikey = config.SMS_APIKEY;
+const message = 'SMS MESSAGE';
+const sender = config.SMS_SENDER;
+const apirequest = 'Text';
+const route = config.SMS_ROUTE;
+const templateid = config.SMS_TEMPLATEID;
+
+function generateOTP() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+exports.getParentDealerCodeUser = async (body, res) => {
+    try {
+        let query = {};
+        if (body.dealerCode) {
+            query['$or'] = [
+                // {'dealerCode': {$regex: new RegExp(body.dealerCode.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}},
+                {'dealerCode': body.dealerCode.toString().trim()},
+            ]
+        }
+        let data = await userModel.findOne(query, {password: 0});
+
+        if (!data) {
+            return res({status: 400, message: "Dealer Code not found"});
+        }
+
+        let OTP = generateOTP();
+        const OTP_EXPIRY_MINUTES = 10;
+        const expiryTime = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+        await UserLoginSMSModel.create({mobile: data.mobile, otp: OTP, expiryTime });
+        // Sending OTP via SMS
+        const params = {
+            username: username,
+            apikey: apikey,
+            apirequest: "Text",
+            route: route,
+            sender: sender,
+            mobile: data.mobile,
+            TemplateID: templateid,
+            message: `Aultra Paints: Your OTP for login is ${OTP}. This code is valid for 10 minutes. Do not share this OTP with anyone`,
+            format: "JSON"
+        };
+        const queryParams = require('querystring').stringify(params);
+        const requestUrl = `http://sms.infrainfotech.com/sms-panel/api/http/index.php?${queryParams}`;
+        const response = await axios.get(requestUrl);
+        console.log("SMS Response:", response.data);
+        return res({status: 200, data});
+    } catch (err) {
+        console.log(err)
+        return res({status: 500, message: "Something went wrong"});
+    }
+}
+
+exports.verifyOtpUpdateUser = async (body, res) => {
+    try {
+        let userLoginSMS = await UserLoginSMSModel.findOne({mobile: body.mobile, otp: body.otp}).sort({createdAt: -1}).limit(1);
+        if (!userLoginSMS) {
+            return res({status: 400, error: 'OTP_NOT_FOUND'})
+        }
+        if (userLoginSMS.expiryTime < Date.now()) {
+            return res({status: 400, error: 'OTP_EXPIRED'})
+        }
+
+        // let user = await User.findOne({mobile: body.mobile});
+        let user = await userModel.findOneAndUpdate({mobile: body.painterMobile}, {parentDealerCode: body.dealerCode}, {new: true});
+        return res({status: 200, data: user});
     } catch (err) {
         console.log(err)
         return res({status: 500, message: "Something went wrong"});

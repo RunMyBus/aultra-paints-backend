@@ -5,7 +5,7 @@ const {decodeBase64Image} = require('../services/utils.service');
 exports.createRewardScheme = async (req, res) => {
     const {rewardSchemeStatus} = req.body;
     if (!req.body.rewardSchemeImage) {
-        return res.status(400).json({message: 'Reward scheme image is required'});
+        return res.status(400).json('Reward scheme image is required');
     }
     const imageData = await decodeBase64Image(req.body.rewardSchemeImage);
     if (imageData instanceof Error) {

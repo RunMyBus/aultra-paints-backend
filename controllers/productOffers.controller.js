@@ -5,7 +5,7 @@ const { decodeBase64Image } = require('../services/utils.service');
 
 // Create a new productOffer
 exports.createProductOffer = async (req, res) => {
-    const {productOfferDescription, productOfferTitle, productOfferValidation, productOfferStatus} = req.body;
+    const {productOfferDescription, productOfferTitle, validUntil, productOfferStatus} = req.body;
     if (!req.body.productOfferImage) {
         return res.status(400).json({message: 'Image is required'});
     }
@@ -18,7 +18,7 @@ exports.createProductOffer = async (req, res) => {
     const productOffer = new productOffersModel({
         productOfferDescription,
         productOfferTitle,
-        productOfferValidation,
+        validUntil,
         productOfferStatus,
     });
 
