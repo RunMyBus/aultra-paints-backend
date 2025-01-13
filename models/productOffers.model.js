@@ -4,7 +4,7 @@ const productOffersSchema = new mongoose.Schema({
     productOfferImageUrl: { type: String },
     productOfferDescription: { type: String, required: true },
     productOfferTitle: { type: String, required: true },
-    productOfferValidation: { type: Date, required: true},
+    validUntil: { type: Date, required: true},
     productOfferStatus: { type: String, required: true },
     updatedBy: { type: String },
     createdBy: { type: String },
