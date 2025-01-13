@@ -102,17 +102,18 @@ exports.getProductOfferById = async (req, res) => {
 // Update a productOffer by ID
 exports.updateProductOffer = async (req, res) => {
     try {
-        const existingProductOffer = await productOffersModel.findOne({productOfferTitle: req.body.productOfferTitle, _id: {$ne: req.params.id}});
+        /*const existingProductOffer = await productOffersModel.findOne({productOfferTitle: req.body.productOfferTitle, _id: {$ne: req.params.id}});
         if (existingProductOffer) {
             return res.status(400).json({message: 'Product offer with the same title already exists.'});
-        }
+        }*/
+        const s3 = new AWS.S3({
+            region: process.env.AWS_REGION,
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        });
         if (req.body.productOfferImage) {
+            //delete old productOfferImage if exists
             if (req.body.productOfferImageUrl) {
-                const s3 = new AWS.S3({
-                    region: process.env.AWS_REGION,
-                    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-                    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-                });
                 let imgUrlSplit = req.body.productOfferImageUrl.split('/')[req.body.productOfferImageUrl.split('/').length - 1];
                 const paramsRemove = {
                     Bucket: process.env.AWS_BUCKET_PRODUCT_OFFER,
