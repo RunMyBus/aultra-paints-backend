@@ -92,12 +92,14 @@ exports.updateRewardScheme = async (req, res) => {
                 accessKeyId: process.env.AWS_ACCESS_KEY_ID,
                 secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
             });
-            let imgUrlSplit = req.body.rewardSchemeImageUrl.split('/')[req.body.rewardSchemeImageUrl.split('/').length - 1];
-            const paramsRemove = {
-                Bucket: process.env.AWS_BUCKET_REWARD_SCHEME,
-                Key: imgUrlSplit,
-            };
-            await s3.deleteObject(paramsRemove).promise();
+            if (req.body.rewardSchemeImageUrl) {
+                let imgUrlSplit = req.body.rewardSchemeImageUrl.split('/')[req.body.rewardSchemeImageUrl.split('/').length - 1];
+                const paramsRemove = {
+                    Bucket: process.env.AWS_BUCKET_REWARD_SCHEME,
+                    Key: imgUrlSplit,
+                };
+                await s3.deleteObject(paramsRemove).promise();
+            }
 
             const imageData = await decodeBase64Image(req.body.rewardSchemeImage);
             const params = {
