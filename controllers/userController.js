@@ -268,7 +268,7 @@ exports.getUserDashboard = async (body, res) => {
                         _id: 1,
                         transactionId: 1,
                         batchId: 1,
-                        batchName: { $ifNull: ['$batchData.Branch', ''] },
+                        branchName: { $ifNull: ['$batchData.Branch', ''] },
                         batchNumber: { $ifNull: ['$batchData.BatchNumber', ''] },
                         couponCode: 1,
                         redeemablePoints: { $ifNull: ['$batchData.RedeemablePoints', ''] },

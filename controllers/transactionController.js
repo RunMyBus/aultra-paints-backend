@@ -42,7 +42,7 @@ exports.getAllTransactionsForBatch = async (req, res) => {
                     _id: 1,
                     transactionId: 1,
                     batchId: 1,
-                    batchName: { $ifNull: ['$batchData.Branch', ''] },
+                    branchName: { $ifNull: ['$batchData.Branch', ''] },
                     batchNumber: { $ifNull: ['$batchData.BatchNumber', ''] },
                     couponCode: 1,
                     redeemablePoints: { $ifNull: ['$batchData.RedeemablePoints', ''] },
@@ -139,7 +139,7 @@ exports.markTransactionAsProcessed = async (req, res) => {
                 redeemablePoints: updatedTransaction.redeemablePoints,
                 couponCode: document.couponCode,
                 cash: batch.value,
-                batchName: batch.Branch,
+                brachName: batch.Branch,
                 batchNumber: batch.BatchNumber,
             }
 

@@ -141,12 +141,10 @@ exports.redeem = async (req, next) => {
             const data = {
                 userName: user.name,
                 mobile: user.mobile,
-                // qr_code_id: updatedTransaction.qr_code_id,
-                isProcessed: updatedTransaction.isProcessed,
                 redeemablePoints: updatedTransaction.redeemablePoints,
                 couponCode: transaction.couponCode,
                 cash: batch.value,
-                batchName: batch.Branch,
+                branchName: batch.Branch,
                 batchNumber: batch.BatchNumber,
             }
 
@@ -182,12 +180,10 @@ exports.redeem = async (req, next) => {
             const data = {
                 userName: 'NA',
                 mobile: userData.mobile,
-                // qr_code_id: updatedTransaction.qr_code_id,
-                isProcessed: updatedTransaction.isProcessed,
                 redeemablePoints: updatedTransaction.redeemablePoints,
                 couponCode: transaction.couponCode,
                 cash: batch.value,
-                batchName: batch.Branch,
+                branchName: batch.Branch,
                 batchNumber: batch.BatchNumber,
             }
             return next({status: 200, message: "Coupon redeemed Successfully..!", data: data});
