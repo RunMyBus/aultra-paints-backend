@@ -85,9 +85,6 @@ exports.addUser = async (body, res) => {
         if (errorArray.length) {
             return res({ status: 400, errors: errorArray })
         }
-
-        body.password = await bcrypt.hash(body.password, 10);
-
         let userData = await userModel.insertMany(body);
         return res({status: 200, message: userData});
     } catch (err) {

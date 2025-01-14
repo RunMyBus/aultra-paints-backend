@@ -66,8 +66,6 @@ exports.register = async (req, next) => {
         // Create a new user instance
         user = new User({
             name,
-            // email,
-            password: hashedPassword,
             mobile, 
         });
 
