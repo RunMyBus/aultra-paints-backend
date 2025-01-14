@@ -34,6 +34,7 @@ exports.login = async (req, next) => {
             accountType: req.user.accountType,
             redeemablePoints: req.user.redeemablePoints,
             cash: req.user.cash,
+            parentDealerCode: req.user.parentDealerCode,
             message: "LOGGED_IN_SUCCESSFULLY"
         });
     });
@@ -229,9 +230,6 @@ exports.smsFunction = async (req, res) => {
         // Send the HTTP request
         await require('http').get(requestUrl, (response) => {
             let data = '';
-
-            console.log(response, '-----------------------------------------------------')
-
             // Collect the response data
             response.on('data', (chunk) => {
                 data += chunk;

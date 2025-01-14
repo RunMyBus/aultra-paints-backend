@@ -60,4 +60,16 @@ router.post('/userDashboard', async (req, res) => {
     })
 });
 
+router.post('/getParentDealerCodeUser', async (req, res) => {
+    userController.getParentDealerCodeUser(req.body, result => {
+        res.status(result.status).json(result);
+    })
+});
+
+router.post('/verifyOtpUpdateUser', async (req, res) => {
+    userController.verifyOtpUpdateUser(req.body, result => {
+        res.status(result.status).json(result);
+    })
+});
+
 module.exports = router;
