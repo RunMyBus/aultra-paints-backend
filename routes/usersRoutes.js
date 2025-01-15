@@ -66,4 +66,10 @@ router.post('/verifyOtpUpdateUser', async (req, res) => {
     })
 });
 
+router.get('userAccountSuspended/:mobile', async (req, res) => {
+    userController.accountSuspended(req.params, result => {
+        res.status(result.status).json(result)
+    })
+});
+
 module.exports = router;
