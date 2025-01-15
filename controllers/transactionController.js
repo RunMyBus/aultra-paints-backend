@@ -99,11 +99,11 @@ exports.markTransactionAsProcessed = async (req, res) => {
             );
             let batch = {};
             if (updatedTransaction.isProcessed) {
-                let getTransaction = await Transaction.findOne({couponCode: qr})
-                batch = await Batch.findOne({_id: getTransaction.batchId});
-                if (batch) {
-                    const redeemablePointsCount = batch.RedeemablePoints || 0;
-                    const cashCount = batch.value || 0;
+                // let getTransaction = await Transaction.findOne({couponCode: qr})
+                // batch = await Batch.findOne({_id: getTransaction.batchId});
+                // if (getTransaction) {
+                    const rewardPointsCount = updatedTransaction.redeemablePoints || 0;
+                    const cashCount = updatedTransaction.value || 0;
 
                     // Update the user fields safely
                     const userData = await User.findOneAndUpdate(
@@ -111,8 +111,8 @@ exports.markTransactionAsProcessed = async (req, res) => {
                         [
                             {
                                 $set: {
-                                    redeemablePoints: {
-                                        $add: [{ $ifNull: ["$redeemablePoints", 0] }, redeemablePointsCount],
+                                    rewardPoints: {
+                                        $add: [{ $ifNull: ["$rewardPoints", 0] }, rewardPointsCount],
                                     },
                                     cash: {
                                         $add: [{ $ifNull: ["$cash", 0] }, cashCount],
@@ -126,7 +126,7 @@ exports.markTransactionAsProcessed = async (req, res) => {
                     if (!userData) {
                         return res.status(404).json({ message: 'User not found for update.' });
                     }
-                }
+                // }
             }
 
             if (!updatedTransaction) {
@@ -135,12 +135,12 @@ exports.markTransactionAsProcessed = async (req, res) => {
 
             const data = {
                 // qr_code_id: updatedTransaction.qr_code_id,
-                isProcessed: updatedTransaction.isProcessed,
-                redeemablePoints: updatedTransaction.redeemablePoints,
+                // isProcessed: updatedTransaction.isProcessed,
+                rewardPoints: updatedTransaction.redeemablePoints,
                 couponCode: document.couponCode,
-                cash: batch.value,
-                brachName: batch.Branch,
-                batchNumber: batch.BatchNumber,
+                cash: updatedTransaction.value,
+                // brachName: batch.Branch,
+                // batchNumber: batch.BatchNumber,
             }
 
             return res.status(200).json({message: "Coupon redeemed Successfully..!", data: data});
