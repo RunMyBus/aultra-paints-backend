@@ -13,7 +13,8 @@ const userSchema = new mongoose.Schema({
     primaryContactPersonMobile: {type: String},
     dealerCode: {type: String}, // valid only for dealer user type
     parentDealerCode: { type: String },  // valid only for painter user type
-    accountType: { type: String, default: 'Painter'}
+    accountType: { type: String, default: 'Painter'},
+    accountStatus: { type: Boolean, default: true }
 }, {timestamps: true})
 
 const User = mongoose.model('User', userSchema);

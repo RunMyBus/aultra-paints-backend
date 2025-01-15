@@ -259,6 +259,8 @@ exports.loginWithOTP = async (req, res) => {
     let user = await User.findOne({mobile: mobile});
     if (!user) {
         return res({status: 400, error: 'MOBILE_NOT_FOUND'})
+    } else if (user && user.accountStatus === false) {
+        return res({status: 400, error: 'ACCOUNT_SUSPENDED'});
     }
 
     try {

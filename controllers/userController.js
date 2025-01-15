@@ -183,6 +183,15 @@ exports.deleteUser = async (id, res) => {
     }
 }
 
+exports.accountSuspended = async (mobile, res) => {
+    try {
+        const data = await userModel.updateOne({ mobile: mobile }, { $set: { accountStatus: false } });
+        return res({status: 200, data: data})
+    } catch (err) {
+        return res({status: 500, message: err})
+    }
+}
+
 exports.toggleUserStatus = async (userId, res) => {
     try {
         // Find the user by their ID
