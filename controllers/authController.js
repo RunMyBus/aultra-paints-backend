@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
-const User = require('../models/User'); 
+const User = require('../models/User');
+const StaticPhoneNumbers = require('../models/staticPhoneNumbers')
 const bcrypt = require('bcryptjs');
 const Transaction = require("../models/Transaction");
 const redeemedUserModel = require("../models/redeemedUser.model");
@@ -255,11 +256,18 @@ exports.loginWithOTP = async (req, res) => {
         return res({status: 400, error: 'ACCOUNT_SUSPENDED'});
     }
 
+    const staticPhoneNumbers = await StaticPhoneNumbers.find();
+    const mobileNumbers = staticPhoneNumbers.map(doc => doc.mobile);
+
     try {
         let OTP = generateOTP();
         const expiryTime = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
         if (mobile === config.STATIC_MOBILE_NUMBER) {
             OTP = config.STATIC_OTP;
+            await UserLoginSMSModel.create({mobile: mobile, otp: OTP, expiryTime });
+            return res({status: 200, message: 'OTP sent successfully.'});
+        }else if (mobileNumbers.includes(mobile)) {
+            OTP = 123456;
             await UserLoginSMSModel.create({mobile: mobile, otp: OTP, expiryTime });
             return res({status: 200, message: 'OTP sent successfully.'});
         }
