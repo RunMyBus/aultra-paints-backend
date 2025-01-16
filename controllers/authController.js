@@ -60,8 +60,8 @@ exports.register = async (req, next) => {
             return next({ status: 400, message: 'Mobile number is required' });
         }
 
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+        // const salt = await bcrypt.genSalt(10);
+        // const hashedPassword = await bcrypt.hash(password, salt);
 
         // Create a new user instance
         user = new User({
@@ -100,36 +100,32 @@ exports.redeem = async (req, next) => {
                 { isProcessed: true, updatedBy: user._id, redeemedBy: user._id.toString() },
                 { new: true }
             );
-            let batch = {};
             if (updatedTransaction.isProcessed) {
-                let getTransaction = await Transaction.findOne({couponCode: qr})
-                batch = await Batch.findOne({_id: getTransaction.batchId});
-                if (batch) {
-                    const redeemablePointsCount = batch.RedeemablePoints || 0;
-                    const cashCount = batch.value || 0;
+                const redeemablePointsCount = updatedTransaction.redeemablePoints || 0;
+                const cashCount = updatedTransaction.value || 0;
 
-                    // Update the user fields safely
-                    const userData = await User.findOneAndUpdate(
-                        { _id: updatedTransaction.updatedBy },
-                        [
-                            {
-                                $set: {
-                                    redeemablePoints: {
-                                        $add: [{ $ifNull: ["$redeemablePoints", 0] }, redeemablePointsCount],
-                                    },
-                                    cash: {
-                                        $add: [{ $ifNull: ["$cash", 0] }, cashCount],
-                                    }
+                // Update the user fields safely
+                const userData = await User.findOneAndUpdate(
+                    { _id: updatedTransaction.updatedBy },
+                    [
+                        {
+                            $set: {
+                                rewardPoints: {
+                                    $add: [{ $ifNull: ["$rewardPoints", 0] }, redeemablePointsCount],
+                                },
+                                cash: {
+                                    $add: [{ $ifNull: ["$cash", 0] }, cashCount],
                                 }
                             }
-                        ],
-                        { new: true } // Return the updated document
-                    );
+                        }
+                    ],
+                    { new: true } // Return the updated document
+                );
 
-                    if (!userData) {
-                        return next({status: 404, message: 'User not found for update.' });
-                    }
+                if (!userData) {
+                    return next({status: 404, message: 'User not found for update.' });
                 }
+                // }
             }
 
             if (!updatedTransaction) {
@@ -141,9 +137,9 @@ exports.redeem = async (req, next) => {
                 mobile: user.mobile,
                 redeemablePoints: updatedTransaction.redeemablePoints,
                 couponCode: transaction.couponCode,
-                cash: batch.value,
-                branchName: batch.Branch,
-                batchNumber: batch.BatchNumber,
+                cash: updatedTransaction.value,
+                // branchName: batch.Branch,
+                // batchNumber: batch.BatchNumber,
             }
 
             return next({status: 200, message: "Coupon redeemed Successfully..!", data: data});
@@ -153,26 +149,22 @@ exports.redeem = async (req, next) => {
                 { isProcessed: true, redeemedByMobile: mobile },
                 { new: true }
             );
-            let batch = {};
             let userData = {};
             if (updatedTransaction.isProcessed) {
-                let getTransaction = await Transaction.findOne({couponCode: qr})
-                batch = await Batch.findOne({_id: getTransaction.batchId});
-                if (batch) {
-                    const redeemablePointsCount = batch.RedeemablePoints || 0;
-                    const cashCount = batch.value || 0;
+                const redeemablePointsCount = updatedTransaction.redeemablePoints || 0;
+                const cashCount = updatedTransaction.value || 0;
 
-                    const userFind = await redeemedUserModel.findOne({mobile: mobile});
-                    if (userFind) {
-                        userData = await redeemedUserModel.findOneAndUpdate(
-                            { mobile: mobile },
-                            { $inc: { redeemedPoints: redeemablePointsCount, cash: cashCount } },
-                            { new: true }
-                        );
-                    } else {
-                        userData = new redeemedUserModel({mobile: mobile, redeemedPoints: redeemablePointsCount, cash: cashCount});
-                        userData = await userData.save();
-                    }
+                const userFind = await redeemedUserModel.findOne({mobile: mobile});
+                if (userFind) {
+                    userData = await redeemedUserModel.findOneAndUpdate(
+                        { mobile: mobile },
+                        { $inc: { rewardPoints: redeemablePointsCount, cash: cashCount } },
+                        { new: true }
+                    );
+
+                } else {
+                    userData = new redeemedUserModel({mobile: mobile, rewardPoints: redeemablePointsCount, cash: cashCount});
+                    userData = await userData.save();
                 }
             }
             const data = {
@@ -180,9 +172,9 @@ exports.redeem = async (req, next) => {
                 mobile: userData.mobile,
                 redeemablePoints: updatedTransaction.redeemablePoints,
                 couponCode: transaction.couponCode,
-                cash: batch.value,
-                branchName: batch.Branch,
-                batchNumber: batch.BatchNumber,
+                cash: updatedTransaction.value,
+                // branchName: batch.Branch,
+                // batchNumber: batch.BatchNumber,
             }
             return next({status: 200, message: "Coupon redeemed Successfully..!", data: data});
         }
@@ -259,7 +251,7 @@ exports.loginWithOTP = async (req, res) => {
     let user = await User.findOne({mobile: mobile});
     if (!user) {
         return res({status: 400, error: 'MOBILE_NOT_FOUND'})
-    } else if (user && user.accountStatus === false) {
+    } else if (user && user.status === 'inactive') {
         return res({status: 400, error: 'ACCOUNT_SUSPENDED'});
     }
 
