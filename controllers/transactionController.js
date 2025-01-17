@@ -4,6 +4,7 @@ const Batch = require("../models/batchnumber");
 const User = require('../models/User');
 const sequenceModel = require("../models/sequence.model");
 const {ObjectId} = require("mongodb");
+const userModel = require("../models/User");
 
 exports.getAllTransactionsForBatch = async (req, res) => {
     // console.log(req.body)
@@ -91,12 +92,26 @@ exports.markTransactionAsProcessed = async (req, res) => {
         if(document.isProcessed) {
             return res.status(404).json({ message: 'Coupon Redeemed already.' });
         } else {
-            // Find the transaction and update isProcessed to true
-            const updatedTransaction = await Transaction.findOneAndUpdate(
-                {couponCode: qr},  // Match the QR code
-                {isProcessed: true, updatedBy: req.user._id, redeemedBy: req.user._id.toString()},  // Update isProcessed to true
-                {new: true}  // Return the updated document
-            );
+            const userData = await userModel.findOne({mobile: '9999999998'});
+            let userId = req.user._id.toString();
+            let updatedTransaction = {};
+            if (userId === userData._id.toString()) {
+                updatedTransaction = await Transaction.findOneAndUpdate(
+                    {couponCode: qr},  // Match the QR code
+                    {updatedBy: req.user._id, redeemedBy: req.user._id.toString()},  // Update isProcessed to false
+                    {new: true}  // Return the updated document
+                );
+                console.log('Before updating - ', updatedTransaction);
+                updatedTransaction.isProcessed = true;
+                console.log('After updating - ', updatedTransaction);
+            }else {
+                // Find the transaction and update isProcessed to true
+                updatedTransaction = await Transaction.findOneAndUpdate(
+                    {couponCode: qr},  // Match the QR code
+                    {isProcessed: true, updatedBy: req.user._id, redeemedBy: req.user._id.toString()},  // Update isProcessed to true
+                    {new: true}  // Return the updated document
+                );
+            }
             let batch = {};
             if (updatedTransaction.isProcessed) {
                 // let getTransaction = await Transaction.findOne({couponCode: qr})
