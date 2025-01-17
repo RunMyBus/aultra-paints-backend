@@ -60,7 +60,7 @@ exports.searchRewardSchemes = async (req, res) => {
 
 exports.getRewardSchemes = async (req, res) => {
     try {
-        const rewardSchemes = await rewardSchemesModel.find().sort({createdAt: -1});
+        const rewardSchemes = await rewardSchemesModel.find({"rewardSchemeStatus" : "Active"}).sort({createdAt: -1});
         res.status(200).json(rewardSchemes);
     } catch (error) {
         console.error(error);
