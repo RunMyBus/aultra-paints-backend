@@ -55,7 +55,12 @@ exports.createProductOffer = async (req, res) => {
 // Get all productOffers
 exports.getProductOffers = async (req, res) => {
     try {
-        const productOffers = await productOffersModel.find({productOfferStatus: 'Active'}).sort({createdAt: -1});
+        let page = req.body.page || 1;
+        let limit = req.body.limit || 10;
+        const productOffers = await productOffersModel.find({productOfferStatus: 'Active'})
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .sort({createdAt: -1});
         res.status(200).json(productOffers);
     } catch (error) {
         res.status(500).json({message: error.message});

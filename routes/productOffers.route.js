@@ -10,8 +10,8 @@ router.use(passport.authenticate('jwt', { session: false }));
 
 router.post('/create', upload.none(), productOffersController.createProductOffer);
 router.post('/searchProductOffers', productOffersController.searchProductOffers);
-router.get('/getProductOffers', productOffersController.getProductOffers);
-router.get('/getProductOfferById/:id', productOffersController.getProductOfferById);
+router.post('/getProductOffers', productOffersController.getProductOffers);
+router.get('/getProductOfferById:id', productOffersController.getProductOfferById);
 // router.put('/update:id', upload.none(), productOffersController.updateProductOffer);
 router.put('/update/:id', upload.none(), async (req, res) => {
     productOffersController.updateProductOffer(req, result => {
