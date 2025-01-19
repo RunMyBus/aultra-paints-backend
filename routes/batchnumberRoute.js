@@ -13,7 +13,8 @@ router.post('/', batchnumberController.getAllBatchNumbers);
 router.get('batch/:BatchNumber', batchnumberController.getBranchByBatchNumber);
 
 // POST to create a new branch with products
-router.post('/add', batchnumberController.createBatchNumber);
+//router.post('/add', batchnumberController.createBatchNumber);
+router.post('/add', batchnumberController.createBatchNumberWithCouponCheck);
 
 // PUT to update a branch by BatchNumber
 router.put('/update/:id', batchnumberController.updateBatchNumber);

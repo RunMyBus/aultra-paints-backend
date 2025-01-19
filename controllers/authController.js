@@ -87,7 +87,7 @@ exports.redeem = async (req, next) => {
         // if (!user) {
         //     return next({status: 404, message: 'User not found.' });
         // }
-        const transaction = await Transaction.findOne({ couponCode: qr });
+        const transaction = await Transaction.findOne({ UDID: qr });
         if (!transaction) {
             return next({status: 404, message: 'Transaction not found.' });
         }
@@ -97,7 +97,7 @@ exports.redeem = async (req, next) => {
 
         if (user) {
             const updatedTransaction = await Transaction.findOneAndUpdate(
-                { couponCode: qr },
+                { UDID: qr },
                 { isProcessed: true, updatedBy: user._id, redeemedBy: user._id.toString() },
                 { new: true }
             );
@@ -146,7 +146,7 @@ exports.redeem = async (req, next) => {
             return next({status: 200, message: "Coupon redeemed Successfully..!", data: data});
         } else {
             const updatedTransaction = await Transaction.findOneAndUpdate(
-                { couponCode: qr },
+                { UDID: qr },
                 { isProcessed: true, redeemedByMobile: mobile },
                 { new: true }
             );

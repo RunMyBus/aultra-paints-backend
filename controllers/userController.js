@@ -360,3 +360,27 @@ exports.verifyOtpUpdateUser = async (body, res) => {
         return res({status: 500, message: "Something went wrong"});
     }
 }
+
+exports.getMyPainters = async (req, res) => {
+    try {
+        // Fetch the logged-in user's details by ID
+        const dealer = await userModel.findById(req.user._id.toString());
+        if (!dealer) {
+            throw new Error('Dealer not found');
+        }
+        // Check if the logged-in user is a dealer
+        if (dealer.accountType !== 'Dealer') {
+            throw new Error('User is not a dealer');
+        }
+        // Fetch all painter users whose parentDealerCode matches the dealer's dealerCode
+        const painters = await userModel.find({
+            accountType: 'Painter',
+            parentDealerCode: dealer.dealerCode,
+        }).select('name mobile rewardPoints');
+        return res({status: 200, data: painters})
+    } catch (error) {
+        console.error('Error fetching painters:', error.message);
+        //throw error;
+        return res({status: 200, data: error.message})
+    }
+}
