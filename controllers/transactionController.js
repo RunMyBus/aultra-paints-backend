@@ -58,7 +58,7 @@ exports.getAllTransactionsForBatch = async (req, res) => {
                     points: 1,
                     redeemedBy: 1,
                     redeemedByName:  { $ifNull: ['$redeemedData.name', ''] },
-                    redeemedByMobile: 1,
+                    redeemedByMobile: { $ifNull: ['$redeemedData.mobile', ''] },
                     isProcessed: 1,
                     createdAt: 1,
                     updatedAt: 1,
