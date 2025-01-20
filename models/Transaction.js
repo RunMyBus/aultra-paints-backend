@@ -12,7 +12,7 @@ const transactionSchema = new mongoose.Schema({
     points: { type: Number },
     redeemablePoints: { type: Number },
     value: { type: Number },
-    couponCode: { type: Number },
+    couponCode: { type: String },
     redeemedBy: { type: String },// user who redeemed this coupon
     redeemedByMobile: { type: String },
     UDID: { type: String },

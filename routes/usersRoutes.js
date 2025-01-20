@@ -72,4 +72,10 @@ router.get('userAccountSuspended/:mobile', async (req, res) => {
     })
 });
 
+router.get('/getMyPainters', async (req, res) => {
+    userController.getMyPainters(req, result => {
+        res.status(result.status).json(result);
+    })
+});
+
 module.exports = router;
