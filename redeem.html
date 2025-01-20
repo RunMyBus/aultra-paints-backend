@@ -20,8 +20,9 @@
             background-color: #f9f9f9;
         }
 
-        h1 {
+        h2 {
             color: #333;
+            margin-bottom: 30px; 
         }
 
         form {
@@ -32,7 +33,7 @@
         }
 
         input[type="text"] {
-            width: 250px;
+            width: 260px;
             padding: 10px;
             border: 1px solid #ccc;
             border-radius: 5px;
@@ -72,7 +73,7 @@
 
             position: relative;
             background-color: #7B1FA2;
-            padding: 10px;
+            padding: 30px;
             width: 400px;
             border: none;
 
@@ -136,27 +137,35 @@
     </style>
 </head>
 <body>
-<div class="container" style="height: 85vh">
-    <div class="row">
-        <div class="col-sm-4"></div>
-        <div class="col-sm-4 my-5">
-            <h1 style="text-align: center;">Enter Mobile Number</h1>
-            <form id="mobileForm">
-                <div class="input-group mb-3">
-                    <span class="input-group-text" id="basic-addon1">+91</span>
-                    <input class="form-control" type="text" id="mobileNumber" placeholder="Enter 10-digit mobile number"
-                           required
-                           maxlength="10" oninput="this.mobile = this.mobile.replace(/[^0-9]/g, '').slice(0, 10);"/>
+    <div class="container" style="height: 85vh">
+        <div class="row">
+            <div class="col-sm-4"></div>
+            <div class="col-sm-4 my-5">
+                <div class="card shadow-lg p-4">
+                    <h2 style="text-align: center; margin-bottom: 20px;">Redeemed Form</h2>
+                    <form id="mobileForm">
+                        <div class="mb-3">
+                            <label for="mobileNumber" class="form-label">Mobile Number</label>
+                            <div class="input-group">
+                                <span class="input-group-text" id="basic-addon1">+91</span>
+                                <input class="form-control" type="text" id="mobileNumber" placeholder="Enter 10-digit mobile number"
+                                       required maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 10);"/>
+                            </div>
+                        </div>
+    
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Name</label>
+                            <input class="form-control" type="text" id="name" placeholder="Enter your name" />
+                        </div>
+    
+                        <button class="btn btn-success" type="submit">Submit</button>
+                        <div id="message"></div>
+                    </form>
                 </div>
-                <!--                <input class="form-control" type="text" id="mobileNumber" value="9030989698" placeholder="Enter 10-digit mobile number" required-->
-                <!--                       maxlength="10" oninput="this.mobile = this.mobile.replace(/[^0-9]/g, '').slice(0, 10);" />-->
-                <button class="btn btn-success" type="submit">Submit</button>
-                <div id="message"></div>
-            </form>
+            </div>
+            <div class="col-sm-4"></div>
         </div>
-        <div class="col-sm-4"></div>
-    </div>
-</div>
+    </div>    
 
 <div class="container-fluid">
     <div class="row">
@@ -173,6 +182,7 @@
     document.addEventListener('DOMContentLoaded', () => {
         const form = document.getElementById('mobileForm');
         const mobileNumberInput = document.getElementById('mobileNumber');
+        const nameInput = document.getElementById('name');
         const messageDiv = document.getElementById('message');
 
         // Extract QR Code ID from URL
@@ -188,6 +198,7 @@
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
             const mobile = mobileNumberInput.value.trim();
+            const name = nameInput.value.trim();
 
             // Validate mobile number
             if (!/^\d{10}$/.test(mobile)) {
@@ -196,12 +207,12 @@
             }
 
             try {
-                // let url = `http://localhost:4300/api/auth/redeem/${qrCodeId}`
-                let url = `https://api.aultrapaints.com/api/auth/redeem/${qrCodeId}`
+                let url = `http://localhost:4300/api/auth/redeem/${qrCodeId}`
+                // let url = `https://api.aultrapaints.com/api/auth/redeem/${qrCodeId}`
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({mobile}),
+                    body: JSON.stringify({mobile, name}),
                 });
 
                 if (response.ok) {
@@ -276,7 +287,7 @@
                     //                 </div>`;
                     document.body.appendChild(popup);
                     messageDiv.style.color = 'green';
-                    messageDiv.textContent = 'Mobile number submitted successfully!';
+                    messageDiv.textContent = 'submitted successfully!';
                     form.reset();
                 } else {
                     const errorData = await response.json();
@@ -298,11 +309,11 @@
                                     </div>`;
                     document.body.appendChild(popup);
                     messageDiv.style.color = 'green';
-                    messageDiv.textContent = 'Mobile number submitted successfully!';
+                    messageDiv.textContent = 'Failed to submit. Please try again later.';
                     form.reset();
                 }
             } catch (error) {
-                console.error('Error submitting mobile number:', error);
+                console.error('Error submitting data:', error);
                 messageDiv.textContent = 'Failed to submit. Please try again later.';
             }
         });

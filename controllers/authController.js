@@ -81,110 +81,99 @@ exports.register = async (req, next) => {
 
 exports.redeem = async (req, next) => {
     try {
-        const { mobile } = req.body;
-        const qr = req.params.qrCodeID
-        const user = await User.findOne({ mobile });
-        // if (!user) {
-        //     return next({status: 404, message: 'User not found.' });
-        // }
+        const { mobile, name } = req.body;
+        const qr = req.params.qrCodeID;
+
+        // Find the user by mobile number
+        let user = await User.findOne({ mobile });
+
+        // Find the transaction by the QR code
         const transaction = await Transaction.findOne({ UDID: qr });
         if (!transaction) {
             return next({status: 404, message: 'Transaction not found.' });
         }
+
         if (transaction.isProcessed) {
             return next({status: 400, message: 'Coupon already redeemed.' });
         }
 
+        // If the user is found, update the transaction and user
         if (user) {
             const updatedTransaction = await Transaction.findOneAndUpdate(
                 { UDID: qr },
                 { isProcessed: true, updatedBy: user._id, redeemedBy: user._id.toString() },
                 { new: true }
             );
-            if (updatedTransaction.isProcessed) {
-                const redeemablePointsCount = updatedTransaction.redeemablePoints || 0;
-                const cashCount = updatedTransaction.value || 0;
-
-                // Update the user fields safely
-                const userData = await User.findOneAndUpdate(
-                    { _id: updatedTransaction.updatedBy },
-                    [
-                        {
-                            $set: {
-                                rewardPoints: {
-                                    $add: [{ $ifNull: ["$rewardPoints", 0] }, redeemablePointsCount],
-                                },
-                                cash: {
-                                    $add: [{ $ifNull: ["$cash", 0] }, cashCount],
-                                }
-                            }
-                        }
-                    ],
-                    { new: true } // Return the updated document
-                );
-
-                if (!userData) {
-                    return next({status: 404, message: 'User not found for update.' });
-                }
-                // }
-            }
 
             if (!updatedTransaction) {
-                return next({status: 404, message: 'Transaction not found.'});
+                return next({status: 404, message: 'Transaction not found after update.' });
             }
 
-            const data = {
-                userName: user.name,
-                mobile: user.mobile,
-                redeemablePoints: updatedTransaction.redeemablePoints,
-                couponCode: transaction.couponCode,
-                cash: updatedTransaction.value,
-                // branchName: batch.Branch,
-                // batchNumber: batch.BatchNumber,
-            }
+            const redeemablePointsCount = updatedTransaction.redeemablePoints || 0;
+            const cashCount = updatedTransaction.value || 0;
 
-            return next({status: 200, message: "Coupon redeemed Successfully..!", data: data});
-        } else {
-            const updatedTransaction = await Transaction.findOneAndUpdate(
-                { UDID: qr },
-                { isProcessed: true, redeemedByMobile: mobile },
+            const userData = await User.findOneAndUpdate(
+                { _id: updatedTransaction.updatedBy },
+                {
+                    $inc: {
+                        rewardPoints: redeemablePointsCount,
+                        cash: cashCount,
+                    }
+                },
                 { new: true }
             );
-            let userData = {};
-            if (updatedTransaction.isProcessed) {
-                const redeemablePointsCount = updatedTransaction.redeemablePoints || 0;
-                const cashCount = updatedTransaction.value || 0;
 
-                const userFind = await redeemedUserModel.findOne({mobile: mobile});
-                if (userFind) {
-                    userData = await redeemedUserModel.findOneAndUpdate(
-                        { mobile: mobile },
-                        { $inc: { rewardPoints: redeemablePointsCount, cash: cashCount } },
-                        { new: true }
-                    );
-
-                } else {
-                    userData = new redeemedUserModel({mobile: mobile, rewardPoints: redeemablePointsCount, cash: cashCount});
-                    userData = await userData.save();
-                }
+            if (!userData) {
+                return next({status: 404, message: 'User not found for update.' });
             }
+
             const data = {
-                userName: 'NA',
+                name: userData.name || name,
                 mobile: userData.mobile,
                 redeemablePoints: updatedTransaction.redeemablePoints,
-                couponCode: transaction.couponCode,
+                couponCode: updatedTransaction.couponCode,
                 cash: updatedTransaction.value,
-                // branchName: batch.Branch,
-                // batchNumber: batch.BatchNumber,
-            }
-            return next({status: 200, message: "Coupon redeemed Successfully..!", data: data});
+            };
+
+            return next({ status: 200, message: "Coupon redeemed Successfully..!", data: data });
+
+        } else {
+            // If the user does not exist, create a new user and save the redeemed points and cash
+            const redeemablePointsCount = transaction.redeemablePoints || 0;
+            const cashCount = transaction.value || 0;
+
+            const newUser = new User({
+                name: name || 'NA',  // Name is optional; default to 'NA' if not provided
+                mobile: mobile,
+                rewardPoints: redeemablePointsCount,
+                cash: cashCount,
+            });
+
+            const userData = await newUser.save();
+
+            // Update the transaction to mark it as processed with the new user's information
+            const updatedTransaction = await Transaction.findOneAndUpdate(
+                { UDID: qr },
+                { isProcessed: true, updatedBy: userData._id, redeemedBy: userData._id.toString() },
+                { new: true }
+            );
+
+            const data = {
+                mobile: userData.mobile,
+                name: userData.name || 'NA',
+                redeemablePoints: updatedTransaction.redeemablePoints,
+                couponCode: updatedTransaction.couponCode,
+                cash: updatedTransaction.value,
+            };
+
+            return next({ status: 200, message: "Coupon redeemed Successfully..!", data: data });
         }
 
     } catch (err) {
         console.error(err);
         return next({ status: 500, message: 'Server error' });
     }
-}
+};
 
 const username = config.SMS_USERNAME;
 const apikey = config.SMS_APIKEY;
