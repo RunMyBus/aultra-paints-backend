@@ -7,6 +7,7 @@ const brandRoutes = require('./brandRoutes.js');
 const productRoutes = require('./productRoutes.js')
 const productOffersRoutes = require('./productOffers.route')
 const rewardSchemesRoutes = require('./rewardSchemes.route.js')
+const transferRoutes = require('./transfer.route.js')
 
 
 const router = express.Router();
@@ -22,6 +23,6 @@ router.use('/products', productRoutes);
 router.use('/brands', brandRoutes);
 router.use('/productOffers', productOffersRoutes);
 router.use('/rewardSchemes', rewardSchemesRoutes);
-
+router.use('/transfer', transferRoutes);
 
 module.exports = router;

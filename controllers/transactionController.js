@@ -88,7 +88,7 @@ exports.markTransactionAsProcessed = async (req, res) => {
     const { qr } = req.params;  // Assuming qr is passed as a URL parameter
 
     try {
-        const document = await Transaction.findOne({ couponCode:  qr });
+        const document = await Transaction.findOne({ UDID:  qr });
         if(document.isProcessed) {
             return res.status(404).json({ message: 'Coupon Redeemed already.' });
         } else {
@@ -107,7 +107,7 @@ exports.markTransactionAsProcessed = async (req, res) => {
             }else {
                 // Find the transaction and update isProcessed to true
                 updatedTransaction = await Transaction.findOneAndUpdate(
-                    {couponCode: qr},  // Match the QR code
+                    {UDID: qr},  // Match the QR code
                     {isProcessed: true, updatedBy: req.user._id, redeemedBy: req.user._id.toString()},  // Update isProcessed to true
                     {new: true}  // Return the updated document
                 );
