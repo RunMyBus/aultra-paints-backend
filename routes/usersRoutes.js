@@ -72,8 +72,14 @@ router.get('userAccountSuspended/:mobile', async (req, res) => {
     })
 });
 
-router.get('/getMyPainters', async (req, res) => {
+router.post('/getMyPainters', async (req, res) => {
     userController.getMyPainters(req, result => {
+        res.status(result.status).json(result);
+    })
+});
+
+router.get('/getUserDealer/:dealerCode', async (req, res) => {
+    userController.getUserDealer(req.params.dealerCode, result => {
         res.status(result.status).json(result);
     })
 });

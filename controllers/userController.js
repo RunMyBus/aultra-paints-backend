@@ -363,6 +363,8 @@ exports.verifyOtpUpdateUser = async (body, res) => {
 
 exports.getMyPainters = async (req, res) => {
     try {
+        let page = parseInt(req.body.page || 1);
+        let limit = parseInt(req.body.limit || 10);
         // Fetch the logged-in user's details by ID
         const dealer = await userModel.findById(req.user._id.toString());
         if (!dealer) {
@@ -376,11 +378,24 @@ exports.getMyPainters = async (req, res) => {
         const painters = await userModel.find({
             accountType: 'Painter',
             parentDealerCode: dealer.dealerCode,
-        }).select('name mobile rewardPoints');
+        }).skip((page - 1) * limit).limit(parseInt(limit));
         return res({status: 200, data: painters})
     } catch (error) {
         console.error('Error fetching painters:', error.message);
         //throw error;
         return res({status: 200, data: error.message})
+    }
+}
+
+exports.getUserDealer = async (dealerCode, res) => {
+    try {
+        const dealer = await userModel.findOne({dealerCode: dealerCode });
+        if (!dealer) {
+            return res({status: 400, data: dealer})
+        }
+        return res({status: 200, data: dealer});
+    } catch (err) {
+        console.error('Error fetching dealer:', err.message);
+        return res({status: 500, error: err});
     }
 }
