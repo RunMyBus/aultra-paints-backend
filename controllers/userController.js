@@ -363,6 +363,11 @@ exports.getParentDealerCodeUser = async (body, res) => {
         let OTP = generateOTP();
         const OTP_EXPIRY_MINUTES = 10;
         const expiryTime = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+        if (data.mobile === config.STATIC_TEST_MOBILE_NUMBER) {
+            OTP = config.STATIC_OTP;
+            await UserLoginSMSModel.create({mobile: data.mobile, otp: OTP, expiryTime });
+            return res({status: 200, message: 'OTP sent successfully.'});
+        }
         await UserLoginSMSModel.create({mobile: data.mobile, otp: OTP, expiryTime });
         // Sending OTP via SMS
         const params = {
@@ -389,13 +394,16 @@ exports.getParentDealerCodeUser = async (body, res) => {
 
 exports.verifyOtpUpdateUser = async (body, res) => {
     try {
-        let userLoginSMS = await UserLoginSMSModel.findOne({mobile: body.mobile, otp: body.otp}).sort({createdAt: -1}).limit(1);
+        let userLoginSMS = await UserLoginSMSModel.findOne({mobile: body.mobile, otp: body.otp, active: true}).sort({createdAt: -1}).limit(1);
         if (!userLoginSMS) {
-            return res({status: 400, error: 'OTP_NOT_FOUND'})
+            return res({status: 400, error: 'OTP_NOT_FOUND_OR_ALREADY_USED'})
         }
         if (userLoginSMS.expiryTime < Date.now()) {
             return res({status: 400, error: 'OTP_EXPIRED'})
         }
+        if (userLoginSMS.otp !== body.otp) return done({status: 400, message: 'INVALID_OTP',});
+        userLoginSMS.active = false;
+        await userLoginSMS.save();
 
         // let user = await User.findOne({mobile: body.mobile});
         let user = await userModel.findOneAndUpdate({mobile: body.painterMobile}, {parentDealerCode: body.dealerCode.toString().trim()}, {new: true});
