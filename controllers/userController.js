@@ -366,7 +366,7 @@ exports.getParentDealerCodeUser = async (body, res) => {
         if (data.mobile === config.STATIC_TEST_MOBILE_NUMBER) {
             OTP = config.STATIC_OTP;
             await UserLoginSMSModel.create({mobile: data.mobile, otp: OTP, expiryTime });
-            return res({status: 200, message: 'OTP sent successfully.'});
+            return res({status: 200, data: data});
         }
         await UserLoginSMSModel.create({mobile: data.mobile, otp: OTP, expiryTime });
         // Sending OTP via SMS
