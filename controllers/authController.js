@@ -90,7 +90,7 @@ exports.redeem = async (req, next) => {
         // Find the transaction by the QR code
         const transaction = await Transaction.findOne({ UDID: qr });
         if (!transaction) {
-            return next({status: 404, message: 'Transaction not found.' });
+            return next({status: 404, message: `Transaction not found for QR code: ${qr}` });
         }
 
         if (transaction.isProcessed) {
@@ -106,7 +106,7 @@ exports.redeem = async (req, next) => {
             );
 
             if (!updatedTransaction) {
-                return next({status: 404, message: 'Transaction not found after update.' });
+                return next({status: 404, message: `Transaction with QR code ${qr} not found after update.` });
             }
 
             const redeemablePointsCount = updatedTransaction.redeemablePoints || 0;
@@ -124,7 +124,7 @@ exports.redeem = async (req, next) => {
             );
 
             if (!userData) {
-                return next({status: 404, message: 'User not found for update.' });
+                return next({status: 404, message: 'User not found for the transaction update.' });
             }
 
             const data = {
@@ -143,7 +143,7 @@ exports.redeem = async (req, next) => {
             const cashCount = transaction.value || 0;
 
             const newUser = new User({
-                name: name || 'NA',  // Name is optional; default to 'NA' if not provided
+                name: name || 'NA',  
                 mobile: mobile,
                 rewardPoints: redeemablePointsCount,
                 cash: cashCount,
@@ -157,6 +157,10 @@ exports.redeem = async (req, next) => {
                 { isProcessed: true, updatedBy: userData._id, redeemedBy: userData._id.toString() },
                 { new: true }
             );
+
+            if (!updatedTransaction) {
+                return next({ status: 404, message: `Transaction with QR code ${qr} not found after creating new user.` });
+            }
 
             const data = {
                 mobile: userData.mobile,

@@ -20,6 +20,8 @@ exports.searchUser = async (body, res) => {
         let page = parseInt(body.page || 1);
         let limit = parseInt(body.limit || 10);
         let query = {};
+
+        // Filter by search query
         if (body.searchQuery) {
             query['$or'] = [
                 {'name': {$regex: new RegExp(body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}},
@@ -27,14 +29,23 @@ exports.searchUser = async (body, res) => {
                 {'email': {$regex: new RegExp(body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}},
             ]
         }
+
+        if (body.accountType && ['All', 'Dealer', 'Contractor', 'Painter', 'SuperUser'].includes(body.accountType)) {
+            if (body.accountType !== 'All') {
+                query.accountType = body.accountType;  
+            }
+        }
+
+        // Fetch the filtered data
         let data = await userModel.find(query, {password: 0}).skip((page - 1) * limit).limit(parseInt(limit));
         const totalUsers = await userModel.countDocuments(query);
         return res({status: 200, data, total: totalUsers, pages: Math.ceil(totalUsers / limit), currentPage: page});
-        // return res({status: 200, data});
     } catch (err) {
-        return res({status: 500, message: "Something went wrong"});
+        return res({status: 500, message: `Something went wrong: ${err.message}`});
     }
 }
+
+
 
 exports.addUser = async (body, res) => {
     try {
@@ -287,6 +298,40 @@ exports.getUserDashboard = async (body, res) => {
         return res({status: 500, message: "Something went wrong"});
     }
 }
+
+exports.getUnverifiedUsers = async (body, res) => {
+    try {
+        let page = parseInt(body.page || 1);
+        let limit = parseInt(body.limit || 10);
+        let query = { 
+            accountType: 'Painter',
+            parentDealerCode: null,
+            
+        };
+
+        // Add search query if provided for mobile number
+        if (body.searchQuery) {
+            query['mobile'] = { 
+                $regex: new RegExp(body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")
+            };
+        }
+
+        let data = await userModel.find(query) 
+                                   .skip((page - 1) * limit)   
+                                   .limit(limit);              
+
+        const totalUsers = await userModel.countDocuments(query); 
+        return res({ status: 200, data, total: totalUsers, pages: Math.ceil(totalUsers / limit), currentPage: page });
+        
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({
+            status: 500,
+            message: `Something went wrong. Error: ${err.message}`
+        });
+    }
+};
+
 
 const username = config.SMS_USERNAME;
 const apikey = config.SMS_APIKEY;
