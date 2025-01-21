@@ -401,7 +401,7 @@ exports.verifyOtpUpdateUser = async (body, res) => {
         if (userLoginSMS.expiryTime < Date.now()) {
             return res({status: 400, error: 'OTP_EXPIRED'})
         }
-        if (userLoginSMS.otp !== body.otp) return done({status: 400, message: 'INVALID_OTP',});
+        if (userLoginSMS.otp.toString() !== body.otp) return res({status: 400, error: 'INVALID_OTP',});
         userLoginSMS.active = false;
         await userLoginSMS.save();
 
