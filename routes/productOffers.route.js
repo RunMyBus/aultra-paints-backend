@@ -3,7 +3,9 @@ const router = express.Router();
 const productOffersController = require('../controllers/productOffers.controller');
 const passport = require("passport");
 const multer = require('multer');
-const upload = multer();
+const upload = multer({
+    limits: { fieldSize: 4 * 1024 * 1024 }, // Maximum size of a single form field (2 MB)
+});
 
 
 router.use(passport.authenticate('jwt', { session: false }));
