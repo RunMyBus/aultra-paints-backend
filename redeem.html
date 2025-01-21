@@ -304,18 +304,35 @@
                                             <i class='bx bx-rupee' style="font-size: 150px;opacity: 0.2;"></i>
                                         </div>
                                         <div class="card-body">
-                                        <p>${errorData.message}</p>
-                                        </div>
+                            <p>${errorData.message || 'An error occurred. Please check your data and try again.'}</p>
+                            </div>
                                     </div>`;
                     document.body.appendChild(popup);
-                    messageDiv.style.color = 'green';
-                    messageDiv.textContent = 'Failed to submit. Please try again later.';
-                    form.reset();
-                }
-            } catch (error) {
-                console.error('Error submitting data:', error);
-                messageDiv.textContent = 'Failed to submit. Please try again later.';
-            }
+                   // Display specific error message for the user
+                   if (errorData.message) {
+            messageDiv.style.color = 'red';
+            messageDiv.textContent = `Error: ${errorData.message}`;
+        } else if (errorData.errors && errorData.errors.length > 0) {
+            // If there are specific validation errors
+            const fieldErrors = errorData.errors.map(error => `Please check the field: ${error.field}`).join(', ');
+            messageDiv.style.color = 'red';
+            messageDiv.textContent = `Error: ${fieldErrors}`;
+        }
+        form.reset();
+    }
+} catch (error) {
+    console.error('Error submitting data:', error);
+
+    // Handle network errors with specific message
+    if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+        messageDiv.style.color = 'red';
+        messageDiv.textContent = 'Network error: Please check your internet connection.';
+    }  
+    else {
+        messageDiv.style.color = 'red';
+        messageDiv.textContent = `Unexpected error: ${error.message}.`;
+    }
+}
         });
     });
 
