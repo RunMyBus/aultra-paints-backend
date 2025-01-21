@@ -398,7 +398,7 @@ exports.verifyOtpUpdateUser = async (body, res) => {
         }
 
         // let user = await User.findOne({mobile: body.mobile});
-        let user = await userModel.findOneAndUpdate({mobile: body.painterMobile}, {parentDealerCode: body.dealerCode}, {new: true});
+        let user = await userModel.findOneAndUpdate({mobile: body.painterMobile}, {parentDealerCode: body.dealerCode.toString().trim()}, {new: true});
         return res({status: 200, data: user});
     } catch (err) {
         console.log(err)
