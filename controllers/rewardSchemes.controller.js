@@ -1,6 +1,7 @@
 const rewardSchemesModel = require('../models/rewardSchemes.model');
 const AWS = require('aws-sdk');
 const {decodeBase64Image} = require('../services/utils.service');
+const multer = require("multer");
 
 exports.createRewardScheme = async (req, res) => {
     const {rewardSchemeStatus} = req.body;
@@ -34,7 +35,14 @@ exports.createRewardScheme = async (req, res) => {
         res.status(201).json(savedRewardScheme);
     } catch (error) {
         console.error(error);
-        res.status(500).json({error: error.message});
+        if (error instanceof multer.MulterError) {
+            // Handle Multer-specific errors
+            if (error.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({ error: 'File size exceeds 4 MB!' });
+            }
+        } else {
+            res.status(500).json({error: error.message});
+        }
     }
 }
 
@@ -117,7 +125,14 @@ exports.updateRewardScheme = async (req, res) => {
         res.status(200).json(updatedRewardScheme);
     } catch (error) {
         console.error(error);
-        res.status(500).json({error: error.message});
+        if (error instanceof multer.MulterError) {
+            // Handle Multer-specific errors
+            if (error.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({ error: 'File size exceeds 4 MB!' });
+            }
+        } else {
+            res.status(500).json({error: error.message});
+        }
     }
 };
 
