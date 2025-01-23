@@ -9,6 +9,7 @@ const {ObjectId} = require("mongodb");
 const sms = require('../services/sms.service');
 const axios = require("axios");
 const UserLoginSMSModel = require('../models/UserLoginSMS')
+const transactionLedger = require("../models/TransactionLedger");
 
 async function generateToken(user, next) {
     try {
@@ -101,7 +102,7 @@ exports.redeem = async (req, next) => {
         if (user) {
             const updatedTransaction = await Transaction.findOneAndUpdate(
                 { UDID: qr },
-                { isProcessed: true, updatedBy: user._id, redeemedBy: user._id.toString() },
+                { isProcessed: true, updatedBy: user._id, redeemedBy: user._id.toString(), cashRedeemedBy: req.body.mobile },
                 { new: true }
             );
 
@@ -109,14 +110,14 @@ exports.redeem = async (req, next) => {
                 return next({status: 404, message: `Transaction with QR code ${qr} not found after update.` });
             }
 
-            const redeemablePointsCount = updatedTransaction.redeemablePoints || 0;
+            // const redeemablePointsCount = updatedTransaction.redeemablePoints || 0;
             const cashCount = updatedTransaction.value || 0;
 
             const userData = await User.findOneAndUpdate(
                 { _id: updatedTransaction.updatedBy },
                 {
                     $inc: {
-                        rewardPoints: redeemablePointsCount,
+                        // rewardPoints: redeemablePointsCount,
                         cash: cashCount,
                     }
                 },
@@ -130,22 +131,29 @@ exports.redeem = async (req, next) => {
             const data = {
                 name: userData.name || name,
                 mobile: userData.mobile,
-                redeemablePoints: updatedTransaction.redeemablePoints,
+                // redeemablePoints: updatedTransaction.redeemablePoints,
                 couponCode: updatedTransaction.couponCode,
                 cash: updatedTransaction.value,
             };
+
+            await transactionLedger.create({
+                narration: 'Scanned QR and redeemed cash.',
+                amount: updatedTransaction.value,
+                balance: userData.cash,
+                userId: userData._id
+            });
 
             return next({ status: 200, message: "Coupon redeemed Successfully..!", data: data });
 
         } else {
             // If the user does not exist, create a new user and save the redeemed points and cash
-            const redeemablePointsCount = transaction.redeemablePoints || 0;
+            // const redeemablePointsCount = transaction.redeemablePoints || 0;
             const cashCount = transaction.value || 0;
 
             const newUser = new User({
                 name: name || 'NA',  
                 mobile: mobile,
-                rewardPoints: redeemablePointsCount,
+                // rewardPoints: redeemablePointsCount,
                 cash: cashCount,
             });
 
@@ -154,7 +162,7 @@ exports.redeem = async (req, next) => {
             // Update the transaction to mark it as processed with the new user's information
             const updatedTransaction = await Transaction.findOneAndUpdate(
                 { UDID: qr },
-                { isProcessed: true, updatedBy: userData._id, redeemedBy: userData._id.toString() },
+                { isProcessed: true, updatedBy: userData._id, redeemedBy: userData._id.toString(), cashRedeemedBy: req.body.mobile },
                 { new: true }
             );
 
@@ -165,10 +173,17 @@ exports.redeem = async (req, next) => {
             const data = {
                 mobile: userData.mobile,
                 name: userData.name || 'NA',
-                redeemablePoints: updatedTransaction.redeemablePoints,
+                // redeemablePoints: updatedTransaction.redeemablePoints,
                 couponCode: updatedTransaction.couponCode,
                 cash: updatedTransaction.value,
             };
+
+            await transactionLedger.create({
+                narration: 'Scanned QR and redeemed cash.',
+                amount: updatedTransaction.value,
+                balance: userData.cash,
+                userId: userData._id
+            });
 
             return next({ status: 200, message: "Coupon redeemed Successfully..!", data: data });
         }

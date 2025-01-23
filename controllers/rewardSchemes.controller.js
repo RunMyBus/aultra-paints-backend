@@ -1,6 +1,7 @@
 const rewardSchemesModel = require('../models/rewardSchemes.model');
 const AWS = require('aws-sdk');
 const {decodeBase64Image} = require('../services/utils.service');
+const s3 = require("../config/aws");
 const multer = require("multer");
 
 exports.createRewardScheme = async (req, res) => {
@@ -17,17 +18,18 @@ exports.createRewardScheme = async (req, res) => {
     try {
         let savedRewardScheme = await newRewardScheme.save();
 
-        const s3 = new AWS.S3({
+        /*const s3 = new AWS.S3({
             region: process.env.AWS_REGION,
             accessKeyId: process.env.AWS_ACCESS_KEY_ID,
             secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-        });
+        });*/
 
         const params = {
             Bucket: process.env.AWS_BUCKET_REWARD_SCHEME,
             Key: `${savedRewardScheme._id}.png`,
             Body: imageData.data,
             ContentType: imageData.type,
+            ACL: 'public-read'
         };
 
         const data = await s3.upload(params).promise();
@@ -95,11 +97,11 @@ exports.updateRewardScheme = async (req, res) => {
     const { rewardSchemeStatus } = req.body;
     try {
         if (req.body.rewardSchemeImage) {
-            const s3 = new AWS.S3({
+            /*const s3 = new AWS.S3({
                 region: process.env.AWS_REGION,
                 accessKeyId: process.env.AWS_ACCESS_KEY_ID,
                 secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-            });
+            });*/
             if (req.body.rewardSchemeImageUrl) {
                 let imgUrlSplit = req.body.rewardSchemeImageUrl.split('/')[req.body.rewardSchemeImageUrl.split('/').length - 1];
                 const paramsRemove = {
@@ -115,6 +117,7 @@ exports.updateRewardScheme = async (req, res) => {
                 Key: `${id}.png`,
                 Body: imageData.data,
                 ContentType: imageData.type,
+                ACL: 'public-read'
             };
 
             const data = await s3.upload(params).promise();

@@ -16,7 +16,9 @@ const transactionSchema = new mongoose.Schema({
     redeemedBy: { type: String },// user who redeemed this coupon
     redeemedByMobile: { type: String },
     UDID: { type: String },
-    isProcessed: { type: Boolean, default: false }  // Default set to false
+    isProcessed: { type: Boolean, default: false },  // Default set to false
+    pointsRedeemedBy: { type: String },
+    cashRedeemedBy: { type: String }
 }, { timestamps: true });
 
 const Transaction = mongoose.model('Transaction', transactionSchema);

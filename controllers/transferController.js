@@ -1,4 +1,5 @@
 const userModel = require("../models/User");
+const transactionLedger = require("../models/TransactionLedger");
 
 exports.transferPoints = async (req, res) => {
     const { rewardPoints } = req.body;
@@ -24,15 +25,44 @@ exports.transferPoints = async (req, res) => {
         // Perform the transfer: deduct from painter and add to dealer
         try {
             // Deduct points from painter
-            await userModel.updateOne(
+            const savedUserData = await userModel.findOneAndUpdate(
                 { _id: loggedInUser._id },
-                { $inc: { rewardPoints: -rewardPoints } }
-            );
+                [
+                    {
+                        $set: {
+                            rewardPoints: {
+                                $subtract: [{ $ifNull: ["$rewardPoints", 0] }, rewardPoints],
+                            }
+                        }
+                    }
+                ]
+            ,{ new: true });
             // Add points to dealer
-            await userModel.updateOne(
+            const savedDealerData = await userModel.findOneAndUpdate(
                 { _id: dealer._id },
-                { $inc: { rewardPoints: rewardPoints } }
-            );
+                [
+                    {
+                        $set: {
+                            rewardPoints: {
+                                $add: [{ $ifNull: ["$rewardPoints", 0] }, rewardPoints],
+                            }
+                        }
+                    }
+                ]
+            ,{ new: true });
+            // Add transactions to the ledger
+            await transactionLedger.create({
+                narration: 'Transferred reward points to dealer',
+                amount: rewardPoints,
+                balance: savedUserData.rewardPoints,
+                userId: savedUserData._id
+            });
+            await transactionLedger.create({
+                narration: 'Received reward points from painter',
+                amount: rewardPoints,
+                balance: savedDealerData.rewardPoints,
+                userId: savedDealerData._id
+            });
             return res({status: 200, message: 'Reward points transferred successfully'});
         } catch (transactionError) {
             throw transactionError;
