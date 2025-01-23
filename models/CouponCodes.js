@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const couponCodesSchema = new mongoose.Schema({
-    couponSeries: { type: String },
+    couponSeries: { type: Number },
     udid: { type: String },
     consumed: {type: Boolean, default: false}
 });

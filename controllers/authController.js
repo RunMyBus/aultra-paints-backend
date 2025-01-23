@@ -94,7 +94,7 @@ exports.redeem = async (req, next) => {
             return next({status: 404, message: `Transaction not found for QR code: ${qr}` });
         }
 
-        if (transaction.isProcessed) {
+        if (transaction.cashRedeemedBy !== undefined) {
             return next({status: 400, message: 'Coupon already redeemed.' });
         }
 
@@ -102,7 +102,7 @@ exports.redeem = async (req, next) => {
         if (user) {
             const updatedTransaction = await Transaction.findOneAndUpdate(
                 { UDID: qr },
-                { isProcessed: true, updatedBy: user._id, redeemedBy: user._id.toString(), cashRedeemedBy: req.body.mobile },
+                { updatedBy: user._id, cashRedeemedBy: req.body.mobile },
                 { new: true }
             );
 
@@ -162,7 +162,7 @@ exports.redeem = async (req, next) => {
             // Update the transaction to mark it as processed with the new user's information
             const updatedTransaction = await Transaction.findOneAndUpdate(
                 { UDID: qr },
-                { isProcessed: true, updatedBy: userData._id, redeemedBy: userData._id.toString(), cashRedeemedBy: req.body.mobile },
+                { updatedBy: userData._id, cashRedeemedBy: req.body.mobile },
                 { new: true }
             );
 
@@ -179,7 +179,7 @@ exports.redeem = async (req, next) => {
             };
 
             await transactionLedger.create({
-                narration: 'Scanned QR and redeemed cash.',
+                narration: `Scanned coupon ${updatedTransaction.couponCode} and redeemed cash.`,
                 amount: updatedTransaction.value,
                 balance: userData.cash,
                 userId: userData._id
