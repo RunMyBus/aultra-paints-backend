@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema({
     token: {type: String}, //user login token
     rewardPoints: {type: Number, default: 0},
     cash: {type: Number, default: 0},
-    status: { type: String, default: 'inactive' },
+    status: { type: String, default: 'active' },
     primaryContactPerson: {type: String},
     primaryContactPersonMobile: {type: String},
     dealerCode: {type: String}, // valid only for dealer user type

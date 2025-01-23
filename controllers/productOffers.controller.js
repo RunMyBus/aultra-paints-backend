@@ -2,6 +2,7 @@ const productOffersModel = require('../models/productOffers.model');
 const AWS = require('aws-sdk');
 const { decodeBase64Image } = require('../services/utils.service');
 const s3 = require("../config/aws");
+const multer = require("multer");
 
 // Create a new productOffer
 exports.createProductOffer = async (req, res) => {
@@ -48,8 +49,15 @@ exports.createProductOffer = async (req, res) => {
         savedProductOffer = await productOffersModel.updateOne({_id: savedProductOffer._id}, {$set: {productOfferImageUrl: data.Location}});
         return res.status(201).json(savedProductOffer);
     } catch (error) {
-        console.log(error);
-        return res.status(500).json({message: error.message});
+        console.log(error, '==============================');
+        if (error instanceof multer.MulterError) {
+            // Handle Multer-specific errors
+            if (error.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({ error: 'File size exceeds 4 MB!' });
+            }
+        } else {
+            return res.status(500).json({message: error.message});
+        }
     }
 };
 
@@ -147,7 +155,14 @@ exports.updateProductOffer = async (req, res) => {
         return res({status: 200, data: productOffer});
     } catch (error) {
         console.log(error);
-        return res({status: 500, message: error.message});
+        if (error instanceof multer.MulterError) {
+            // Handle Multer-specific errors
+            if (error.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({ error: 'File size exceeds 4 MB!' });
+            }
+        } else {
+            return res({status: 500, message: error.message});
+        }
     }
 }
 
