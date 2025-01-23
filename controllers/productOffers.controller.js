@@ -1,7 +1,7 @@
 const productOffersModel = require('../models/productOffers.model');
 const AWS = require('aws-sdk');
 const { decodeBase64Image } = require('../services/utils.service');
-
+const s3 = require("../config/aws");
 
 // Create a new productOffer
 exports.createProductOffer = async (req, res) => {
@@ -30,17 +30,18 @@ exports.createProductOffer = async (req, res) => {
         }
         let savedProductOffer = await productOffer.save();
 
-        const s3 = new AWS.S3({
+        /*const s3 = new AWS.S3({
             region: process.env.AWS_REGION,
             accessKeyId: process.env.AWS_ACCESS_KEY_ID,
             secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-        });
+        });*/
 
         const params = {
             Bucket: process.env.AWS_BUCKET_PRODUCT_OFFER,
             Key: `${savedProductOffer._id}.png`,
             Body: imageData.data,
             ContentType: imageData.type,
+            ACL: 'public-read'
         };
 
         const data = await s3.upload(params).promise();
@@ -111,11 +112,11 @@ exports.updateProductOffer = async (req, res) => {
         if (existingProductOffer) {
             return res.status(400).json({message: 'Product offer with the same title already exists.'});
         }*/
-        const s3 = new AWS.S3({
+        /*const s3 = new AWS.S3({
             region: process.env.AWS_REGION,
             accessKeyId: process.env.AWS_ACCESS_KEY_ID,
             secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-        });
+        });*/
         if (req.body.productOfferImage) {
             //delete old productOfferImage if exists
             if (req.body.productOfferImageUrl) {
@@ -133,6 +134,7 @@ exports.updateProductOffer = async (req, res) => {
                 Key: `${req.params.id}.png`,
                 Body: imageData.data,
                 ContentType: imageData.type,
+                ACL: 'public-read'
             };
 
             const data = await s3.upload(params).promise();

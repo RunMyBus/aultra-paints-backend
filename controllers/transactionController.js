@@ -5,6 +5,7 @@ const User = require('../models/User');
 const sequenceModel = require("../models/sequence.model");
 const {ObjectId} = require("mongodb");
 const userModel = require("../models/User");
+const transactionLedger = require("../models/TransactionLedger");
 
 exports.getAllTransactionsForBatch = async (req, res) => {
     // console.log(req.body)
@@ -89,49 +90,50 @@ exports.markTransactionAsProcessed = async (req, res) => {
 
     try {
         const document = await Transaction.findOne({ UDID:  qr });
+        if (!document) {
+            return res.status(404).json({ message: 'Coupon not found.' })
+        }
         if(document.isProcessed) {
             return res.status(404).json({ message: 'Coupon Redeemed already.' });
         } else {
-            const userData = await userModel.findOne({mobile: '9999999998'});
+            const staticUserData = await userModel.findOne({mobile: '9999999998'});
             let userId = req.user._id.toString();
             let updatedTransaction = {};
-            if (userId === userData._id.toString()) {
+            if (userId === staticUserData._id.toString()) {
                 updatedTransaction = await Transaction.findOneAndUpdate(
                     {couponCode: qr},  // Match the QR code
-                    {updatedBy: req.user._id, redeemedBy: req.user._id.toString()},  // Update isProcessed to false
+                    {updatedBy: req.user._id, redeemedBy: req.user._id.toString(), pointsRedeemedBy: userData.mobile },  // Update isProcessed to false
                     {new: true}  // Return the updated document
                 );
-                console.log('Before updating - ', updatedTransaction);
                 updatedTransaction.isProcessed = true;
-                console.log('After updating - ', updatedTransaction);
             }else {
                 // Find the transaction and update isProcessed to true
                 updatedTransaction = await Transaction.findOneAndUpdate(
                     {UDID: qr},  // Match the QR code
-                    {isProcessed: true, updatedBy: req.user._id, redeemedBy: req.user._id.toString()},  // Update isProcessed to true
+                    {isProcessed: true, updatedBy: req.user._id, redeemedBy: req.user._id.toString(), pointsRedeemedBy: req.user.mobile },  // Update isProcessed to true
                     {new: true}  // Return the updated document
                 );
             }
-            let batch = {};
+            let userData = {};
             if (updatedTransaction.isProcessed) {
                 // let getTransaction = await Transaction.findOne({couponCode: qr})
                 // batch = await Batch.findOne({_id: getTransaction.batchId});
                 // if (getTransaction) {
                     const rewardPointsCount = updatedTransaction.redeemablePoints || 0;
-                    const cashCount = updatedTransaction.value || 0;
+                    // const cashCount = updatedTransaction.value || 0;
 
                     // Update the user fields safely
-                    const userData = await User.findOneAndUpdate(
+                    userData = await User.findOneAndUpdate(
                         { _id: updatedTransaction.updatedBy },
                         [
                             {
                                 $set: {
                                     rewardPoints: {
                                         $add: [{ $ifNull: ["$rewardPoints", 0] }, rewardPointsCount],
-                                    },
+                                    }/*,
                                     cash: {
                                         $add: [{ $ifNull: ["$cash", 0] }, cashCount],
-                                    }
+                                    }*/
                                 }
                             }
                         ],
@@ -153,10 +155,17 @@ exports.markTransactionAsProcessed = async (req, res) => {
                 // isProcessed: updatedTransaction.isProcessed,
                 rewardPoints: updatedTransaction.redeemablePoints,
                 couponCode: document.couponCode,
-                cash: updatedTransaction.value,
+                // cash: updatedTransaction.value,
                 // brachName: batch.Branch,
                 // batchNumber: batch.BatchNumber,
             }
+
+            await transactionLedger.create({
+                narration: 'Scanned QR and redeemed points.',
+                amount: updatedTransaction.redeemablePoints,
+                balance: userData.rewardPoints,
+                userId: userData._id
+            });
 
             return res.status(200).json({message: "Coupon redeemed Successfully..!", data: data});
         }

@@ -8,14 +8,15 @@ const QRCode = require('qrcode');
 const {ObjectId} = require("mongodb");
 // const {config} = require("dotenv");
 const CouponCodes = require('../models/CouponCodes');
+const s3 = require("../config/aws");
 
-AWS.config.update({
+/*AWS.config.update({
     accessKeyId: config.AWS_ACCESS_KEY_Id,  // Replace with your access key
     secretAccessKey: config.AWS_SECRETACCESSKEY,  // Replace with your secret key
     region: config.REGION  // Replace with your AWS region
-});
+});*/
 
-const s3 = new AWS.S3();
+//const s3 = new AWS.S3();
 
 async function uploadQRCodeToS3(qrCodeData, key) {
     const params = {
@@ -23,12 +24,15 @@ async function uploadQRCodeToS3(qrCodeData, key) {
         Key: key,
         Body: qrCodeData,
         ContentType: 'image/png',
+        ACL: 'public-read'
     };
 
     try {
-        await s3.putObject(params).promise();
+        const response = await s3.putObject(params).promise();
+        console.log(response);
         console.log('QR code uploaded to S3 successfully.');
-        return `https://aultra-paints.s3.amazonaws.com/${key}`; // Return the S3 URL
+        return `${config.bucket_endpoint}/${key}`; // Return the S3 URL
+        //return response.location;
     } catch (error) {
         console.error('Error uploading QR code to S3:', error);
         throw error;
