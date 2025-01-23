@@ -93,7 +93,7 @@ exports.markTransactionAsProcessed = async (req, res) => {
         if (!document) {
             return res.status(404).json({ message: 'Coupon not found.' })
         }
-        if(document.isProcessed) {
+        if(document.pointsRedeemedBy !== undefined) {
             return res.status(404).json({ message: 'Coupon Redeemed already.' });
         } else {
             const staticUserData = await userModel.findOne({mobile: '9999999998'});
@@ -101,21 +101,21 @@ exports.markTransactionAsProcessed = async (req, res) => {
             let updatedTransaction = {};
             if (userId === staticUserData._id.toString()) {
                 updatedTransaction = await Transaction.findOneAndUpdate(
-                    {couponCode: qr},  // Match the QR code
-                    {updatedBy: req.user._id, redeemedBy: req.user._id.toString(), pointsRedeemedBy: userData.mobile },  // Update isProcessed to false
+                    {UDID: qr},  // Match the QR code
+                    {updatedBy: req.user._id },
                     {new: true}  // Return the updated document
                 );
-                updatedTransaction.isProcessed = true;
+                updatedTransaction.pointsRedeemedBy = staticUserData.mobile;
             }else {
                 // Find the transaction and update isProcessed to true
                 updatedTransaction = await Transaction.findOneAndUpdate(
                     {UDID: qr},  // Match the QR code
-                    {isProcessed: true, updatedBy: req.user._id, redeemedBy: req.user._id.toString(), pointsRedeemedBy: req.user.mobile },  // Update isProcessed to true
+                    {updatedBy: req.user._id, pointsRedeemedBy: req.user.mobile },
                     {new: true}  // Return the updated document
                 );
             }
             let userData = {};
-            if (updatedTransaction.isProcessed) {
+            if (updatedTransaction.pointsRedeemedBy !== undefined) {
                 // let getTransaction = await Transaction.findOne({couponCode: qr})
                 // batch = await Batch.findOne({_id: getTransaction.batchId});
                 // if (getTransaction) {
@@ -161,7 +161,7 @@ exports.markTransactionAsProcessed = async (req, res) => {
             }
 
             await transactionLedger.create({
-                narration: 'Scanned QR and redeemed points.',
+                narration: `Scanned coupon ${updatedTransaction.couponCode} and redeemed points.`,
                 amount: updatedTransaction.redeemablePoints,
                 balance: userData.rewardPoints,
                 userId: userData._id
