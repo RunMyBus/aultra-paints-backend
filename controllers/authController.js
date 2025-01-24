@@ -10,6 +10,7 @@ const sms = require('../services/sms.service');
 const axios = require("axios");
 const UserLoginSMSModel = require('../models/UserLoginSMS')
 const transactionLedger = require("../models/TransactionLedger");
+const cashFreePaymentService = require('../services/cashFreePaymentService');
 
 async function generateToken(user, next) {
     try {
@@ -98,6 +99,11 @@ exports.redeem = async (req, next) => {
             return next({status: 400, message: 'Coupon already redeemed.' });
         }
 
+        const paymentResult = await cashFreePaymentService.pay2Phone(mobile, name, transaction.value);
+        if (!paymentResult.success) {
+            return next({ status: 400, message: paymentResult.message });
+        }
+
         // If the user is found, update the transaction and user
         if (user) {
             const updatedTransaction = await Transaction.findOneAndUpdate(
@@ -137,13 +143,13 @@ exports.redeem = async (req, next) => {
             };
 
             await transactionLedger.create({
-                narration: 'Scanned QR and redeemed cash.',
+                narration: `Scanned coupon code ${updatedTransaction.couponCode} and redeemed cash.`,
                 amount: updatedTransaction.value,
                 balance: userData.cash,
                 userId: userData._id
             });
 
-            return next({ status: 200, message: "Coupon redeemed Successfully..!", data: data });
+            return next({ status: 200, message: "Coupon redeemed and payment initiated successfully!", data: data });
 
         } else {
             // If the user does not exist, create a new user and save the redeemed points and cash
@@ -185,7 +191,7 @@ exports.redeem = async (req, next) => {
                 userId: userData._id
             });
 
-            return next({ status: 200, message: "Coupon redeemed Successfully..!", data: data });
+            return next({ status: 200, message: "Coupon redeemed and payment initiated successfully!", data: data });
         }
 
     } catch (err) {
