@@ -170,7 +170,7 @@ exports.getUser = async (id, res) => {
     try {
         const data = await userModel.findOne({_id: new ObjectId(id)}, {password: 0, token: 0});
         data.rewards = [
-            {"title": "Redeemed Points", "description": "Redeemed Points Confirmation", "count": data.redeemedPoints},
+            {"title": "Redeemed Points", "description": "Redeemed Points Confirmation", "count": data.rewardPoints},
             {"title": "Earned Cash Reward", "description": "Earned Cash Reward Confirmation", "count": data.cash},
         ];
         return res({status: 200, data: data})
