@@ -81,7 +81,7 @@ exports.register = async (req, next) => {
     }
 }
 
-exports.redeem = async (req, next) => {
+exports.redeemCash = async (req, next) => {
     try {
         const { mobile, name } = req.body;
         const qr = req.params.qrCodeID;
@@ -117,14 +117,14 @@ exports.redeem = async (req, next) => {
             }
 
             // const redeemablePointsCount = updatedTransaction.redeemablePoints || 0;
-            const cashCount = updatedTransaction.value || 0;
+            const cashValue = updatedTransaction.value || 0;
 
             const userData = await User.findOneAndUpdate(
                 { _id: updatedTransaction.updatedBy },
                 {
                     $inc: {
                         // rewardPoints: redeemablePointsCount,
-                        cash: cashCount,
+                        cash: cashValue,
                     }
                 },
                 { new: true }
@@ -134,7 +134,7 @@ exports.redeem = async (req, next) => {
                 return next({status: 404, message: 'User not found for the transaction update.' });
             }
 
-            const data = {
+            const ledgerEntry = {
                 name: userData.name || name,
                 mobile: userData.mobile,
                 // redeemablePoints: updatedTransaction.redeemablePoints,
@@ -149,18 +149,18 @@ exports.redeem = async (req, next) => {
                 userId: userData._id
             });
 
-            return next({ status: 200, message: "Coupon redeemed and payment initiated successfully!", data: data });
+            return next({ status: 200, message: "Coupon redeemed and payment initiated successfully!", data: ledgerEntry });
 
         } else {
             // If the user does not exist, create a new user and save the redeemed points and cash
             // const redeemablePointsCount = transaction.redeemablePoints || 0;
-            const cashCount = transaction.value || 0;
+            const cashValue = transaction.value || 0;
 
             const newUser = new User({
                 name: name || 'NA',  
                 mobile: mobile,
                 // rewardPoints: redeemablePointsCount,
-                cash: cashCount,
+                cash: cashValue,
             });
 
             const userData = await newUser.save();
