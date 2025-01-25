@@ -1,17 +1,24 @@
 const Product = require('../models/Product');
 
-// Create a new product
 const createProduct = async (req, res) => {
-  const { name } = req.body;  
+  const { name } = req.body;
 
   try {
+    const existingProduct = await Product.findOne({ name });
+
+    if (existingProduct) {
+      return res.status(400).json({ error: 'This product name already exists.' });
+    }
+
     const newProduct = new Product({ name });
-    await newProduct.save();  
-    res.status(201).json(newProduct); 
+    await newProduct.save();
+    res.status(201).json(newProduct);
+
   } catch (error) {
     res.status(400).json({ error: 'Error creating product' });
   }
 };
+
 
 // Controller function to get all products with pagination
 const getProducts = async (req, res) => {
@@ -31,7 +38,7 @@ const getProducts = async (req, res) => {
         currentPage: page,  
         totalPages,  
         totalProducts,  
-      },
+      }, 
     });
   } catch (error) {
     res.status(400).json({ error: 'Error fetching products' });
