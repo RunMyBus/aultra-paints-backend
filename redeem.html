@@ -157,9 +157,11 @@
                             <label for="name" class="form-label">Name</label>
                             <input class="form-control" type="text" id="name" placeholder="Enter your name" />
                         </div>
+
+                        <div id="message"></div>
     
                         <button class="btn btn-success" type="submit">Submit</button>
-                        <div id="message"></div>
+                        
                     </form>
                 </div>
             </div>
@@ -190,9 +192,11 @@
         const qrCodeId = params.get('tx');
 
         if (!qrCodeId) {
-            messageDiv.textContent = 'Invalid QR Code. Please try again.';
-            return;
-        }
+        messageDiv.textContent = 'Invalid QR Code. Please try again.';
+        messageDiv.style.color = 'red';
+        console.log('Error: QR Code ID is missing from the URL.');
+        return;
+    }
 
         // Form submission handler
         form.addEventListener('submit', async (event) => {
@@ -200,9 +204,17 @@
             const mobile = mobileNumberInput.value.trim();
             const name = nameInput.value.trim();
 
-            // Validate mobile number
-            if (!/^\d{10}$/.test(mobile)) {
+              // Validate name field
+              if (!name) {
+                messageDiv.textContent = 'Name is required.';
+                messageDiv.style.color = 'red';
+                return;
+            }
+
+             // Validate mobile number
+             if (!/^\d{10}$/.test(mobile)) {
                 messageDiv.textContent = 'Please enter a valid 10-digit mobile number.';
+                messageDiv.style.color = 'red';
                 return;
             }
 
@@ -215,28 +227,16 @@
                     body: JSON.stringify({mobile, name}),
                 });
 
-                if (response.ok) {
-                    const data = await response.json();
-                    const jsonData = data.data;
-                    console.log(jsonData)
-                    const popup = document.createElement('div');
-                    popup.style.position = 'fixed';
-                    popup.style.top = '50%';
-                    popup.style.left = '50%';
-                    popup.style.transform = 'translate(-50%, -50%)';
-                    popup.innerHTML = `<div class="shadow" style="border-radius: 20px">
-                    <div class=" " style="display: flex; flex-direction: column; align-items: center; padding: 30px 18px;background-color: #218838;color: white;border-radius: 12px;box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, .15) !important;">
-                        <div style="font-size: 80px; font-weight: bold; color: white; padding: 40px">
-                            ${jsonData.cash}<i class='bx bx-rupee'></i>
-                        </div>
-                        <div style="font-size: 16px; color: white;">
-                            Coupon Redeemed from Aultra Paints.
-                        </div>
-                        <div style="font-size: 20px; font-weight: bold; color: white;">
-                            Coupon: ${jsonData.couponCode}
-                        </div>
-                    </div>
-                </div>`;
+                const responseData = await response.json();
+            console.log('API Response:', responseData); // Log the full API response
+
+            // Check if response status is OK (200-299 range)
+            if (response.ok) {
+                const jsonData = responseData.data;
+                messageDiv.style.color = 'green';
+                messageDiv.textContent = responseData.message;
+                console.log('Success: Coupon redeemed successfully.');
+                form.reset();
                     // popup.style.backgroundColor = 'white';
                     // popup.style.padding = '20px';
                     // popup.style.borderRadius = '5px';
@@ -285,54 +285,31 @@
                     //                         </table>
                     //                     </div>
                     //                 </div>`;
-                    document.body.appendChild(popup);
-                    messageDiv.style.color = 'green';
-                    messageDiv.textContent = 'submitted successfully!';
-                    form.reset();
-                } else {
-                    const errorData = await response.json();
-                    console.log(errorData)
-                    // messageDiv.textContent = errorData.error || 'An error occurred. Please try again.';
-                    const popup = document.createElement('div');
-                    popup.style.position = 'fixed';
-                    popup.style.top = '50%';
-                    popup.style.left = '50%';
-                    popup.style.transform = 'translate(-50%, -50%)';
-                    popup.innerHTML = `<div class="card mb-3 shadow-lg rounded-3" style="width: 100%;">
-                                        <div class="d-flex justify-content-around" style="padding: 20px; background-color: red; color: white">
-                                            <i class='bx bx-error-circle bx-tada' style="font-size: 150px;"></i>
-                                            <i class='bx bx-rupee' style="font-size: 150px;opacity: 0.2;"></i>
-                                        </div>
-                                        <div class="card-body">
-                            <p>${errorData.message || 'An error occurred. Please check your data and try again.'}</p>
-                            </div>
-                                    </div>`;
-                    document.body.appendChild(popup);
-                   // Display specific error message for the user
-                   if (errorData.message) {
-            messageDiv.style.color = 'red';
-            messageDiv.textContent = `Error: ${errorData.message}`;
-        } else if (errorData.errors && errorData.errors.length > 0) {
-            // If there are specific validation errors
-            const fieldErrors = errorData.errors.map(error => `Please check the field: ${error.field}`).join(', ');
-            messageDiv.style.color = 'red';
-            messageDiv.textContent = `Error: ${fieldErrors}`;
-        }
-        form.reset();
-    }
+                   
+                }else {
+                // Handle error response from backend (non-OK status)
+                messageDiv.style.color = 'red';
+                messageDiv.textContent = responseData.message || 'An error occurred. Please check your data and try again.';
+                console.log('API Error:', responseData.message || 'An error occurred.');
+                form.reset();
+            }
 } catch (error) {
-    console.error('Error submitting data:', error);
+            console.error('Error submitting data:', error);
+            console.log('Catch block error:', error.message); // Log the error message
 
-    // Handle network errors with specific message
-    if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
-        messageDiv.style.color = 'red';
-        messageDiv.textContent = 'Network error: Please check your internet connection.';
-    }  
-    else {
-        messageDiv.style.color = 'red';
-        messageDiv.textContent = `Unexpected error: ${error.message}.`;
-    }
-}
+            // Handle network errors or any fetch-related issues
+            if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+                messageDiv.style.color = 'red';
+                messageDiv.textContent = 'Network error: Please check your internet connection.';
+                console.log('Network Error: Please check your internet connection.');
+            } else {
+                // If any other unexpected errors happen, display it
+                messageDiv.style.color = 'red';
+                messageDiv.textContent = `Unexpected error: ${error.message}.`;
+                console.log('Unexpected Error:', error.message);
+            }
+            form.reset();
+        }
         });
     });
 

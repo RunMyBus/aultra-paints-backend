@@ -10,6 +10,7 @@ const sms = require('../services/sms.service');
 const axios = require("axios");
 const UserLoginSMSModel = require('../models/UserLoginSMS')
 const transactionLedger = require("../models/TransactionLedger");
+const cashFreePaymentService = require('../services/cashFreePaymentService');
 
 async function generateToken(user, next) {
     try {
@@ -80,7 +81,7 @@ exports.register = async (req, next) => {
     }
 }
 
-exports.redeem = async (req, next) => {
+exports.redeemCash = async (req, next) => {
     try {
         const { mobile, name } = req.body;
         const qr = req.params.qrCodeID;
@@ -94,15 +95,20 @@ exports.redeem = async (req, next) => {
             return next({status: 404, message: `Transaction not found for QR code: ${qr}` });
         }
 
-        if (transaction.isProcessed) {
+        if (transaction.cashRedeemedBy !== undefined) {
             return next({status: 400, message: 'Coupon already redeemed.' });
+        }
+
+        const paymentResult = await cashFreePaymentService.pay2Phone(mobile, name, transaction.value);
+        if (!paymentResult.success) {
+            return next({ status: 400, message: paymentResult.message });
         }
 
         // If the user is found, update the transaction and user
         if (user) {
             const updatedTransaction = await Transaction.findOneAndUpdate(
                 { UDID: qr },
-                { isProcessed: true, updatedBy: user._id, redeemedBy: user._id.toString(), cashRedeemedBy: req.body.mobile },
+                { updatedBy: user._id, cashRedeemedBy: req.body.mobile },
                 { new: true }
             );
 
@@ -111,14 +117,14 @@ exports.redeem = async (req, next) => {
             }
 
             // const redeemablePointsCount = updatedTransaction.redeemablePoints || 0;
-            const cashCount = updatedTransaction.value || 0;
+            const cashValue = updatedTransaction.value || 0;
 
             const userData = await User.findOneAndUpdate(
                 { _id: updatedTransaction.updatedBy },
                 {
                     $inc: {
                         // rewardPoints: redeemablePointsCount,
-                        cash: cashCount,
+                        cash: cashValue,
                     }
                 },
                 { new: true }
@@ -128,7 +134,7 @@ exports.redeem = async (req, next) => {
                 return next({status: 404, message: 'User not found for the transaction update.' });
             }
 
-            const data = {
+            const ledgerEntry = {
                 name: userData.name || name,
                 mobile: userData.mobile,
                 // redeemablePoints: updatedTransaction.redeemablePoints,
@@ -137,24 +143,24 @@ exports.redeem = async (req, next) => {
             };
 
             await transactionLedger.create({
-                narration: 'Scanned QR and redeemed cash.',
+                narration: `Scanned coupon code ${updatedTransaction.couponCode} and redeemed cash.`,
                 amount: updatedTransaction.value,
                 balance: userData.cash,
                 userId: userData._id
             });
 
-            return next({ status: 200, message: "Coupon redeemed Successfully..!", data: data });
+            return next({ status: 200, message: "Coupon redeemed and payment initiated successfully!", data: ledgerEntry });
 
         } else {
             // If the user does not exist, create a new user and save the redeemed points and cash
             // const redeemablePointsCount = transaction.redeemablePoints || 0;
-            const cashCount = transaction.value || 0;
+            const cashValue = transaction.value || 0;
 
             const newUser = new User({
                 name: name || 'NA',  
                 mobile: mobile,
                 // rewardPoints: redeemablePointsCount,
-                cash: cashCount,
+                cash: cashValue,
             });
 
             const userData = await newUser.save();
@@ -162,7 +168,7 @@ exports.redeem = async (req, next) => {
             // Update the transaction to mark it as processed with the new user's information
             const updatedTransaction = await Transaction.findOneAndUpdate(
                 { UDID: qr },
-                { isProcessed: true, updatedBy: userData._id, redeemedBy: userData._id.toString(), cashRedeemedBy: req.body.mobile },
+                { updatedBy: userData._id, cashRedeemedBy: req.body.mobile },
                 { new: true }
             );
 
@@ -179,13 +185,13 @@ exports.redeem = async (req, next) => {
             };
 
             await transactionLedger.create({
-                narration: 'Scanned QR and redeemed cash.',
+                narration: `Scanned coupon ${updatedTransaction.couponCode} and redeemed cash.`,
                 amount: updatedTransaction.value,
                 balance: userData.cash,
                 userId: userData._id
             });
 
-            return next({ status: 200, message: "Coupon redeemed Successfully..!", data: data });
+            return next({ status: 200, message: "Coupon redeemed and payment initiated successfully!", data: data });
         }
 
     } catch (err) {

@@ -28,11 +28,9 @@ async function uploadQRCodeToS3(qrCodeData, key) {
     };
 
     try {
-        const response = await s3.putObject(params).promise();
-        console.log(response);
+        const response = await s3.upload(params).promise();
         console.log('QR code uploaded to S3 successfully.');
-        return `${config.bucket_endpoint}/${key}`; // Return the S3 URL
-        //return response.location;
+        return response.Location; // Return the S3 URL
     } catch (error) {
         console.error('Error uploading QR code to S3:', error);
         throw error;
@@ -120,37 +118,26 @@ exports.createBatchNumberWithCouponCheck = async (req, res) => {
         for (let batchNumber of BatchNumbers) {
             const { CouponSeries, Brand, redeemablePoints, value, Volume, Quantity } = batchNumber;
 
+            const startCouponSeries = parseInt(CouponSeries, 10);
+            const endCouponSeries = startCouponSeries + Quantity - 1;
+
             try {
-                // Check if the given CouponSeries is already consumed
-                const consumedCoupon = await CouponCodes.findOne({ couponSeries: CouponSeries, consumed: true });
-
-                if (consumedCoupon) {
-                    // Find the next available coupon
-                    const nextAvailableCoupon = await CouponCodes.findOne({ consumed: false }).sort({ couponSeries: 1 });
-                    if (nextAvailableCoupon) {
-                        return res.status(400).json({
-                            error: `Given coupon series ${CouponSeries} is already in use. You can use this next available coupon: ${nextAvailableCoupon.couponSeries}`,
-                        });
-                    } else {
-                        return res.status(400).json({
-                            error: `Given coupon series ${CouponSeries} is already in use, and no available coupons are found.`,
-                        });
-                    }
-                }
-
-                // Fetch the required number of coupons including the searched one
-                const requiredCoupons = await CouponCodes.find({
-                    //couponSeries: { $regex: `^${CouponSeries}` },
-                    consumed: false,
-                }).sort({ couponSeries: 1 })
-                    .limit(Quantity);
-
-                if (requiredCoupons.length < Quantity) {
-                    errorArray.push({
-                        batchNumber,
-                        error: `Not enough available coupons for the requested quantity (${Quantity}). Only ${requiredCoupons.length} available.`,
+                // Fetch all coupons in the specified range
+                const couponsInRange = await CouponCodes.find({
+                    couponSeries: { $gte: startCouponSeries, $lte: endCouponSeries },
+                });
+                // Check if any coupon in the range is consumed
+                const consumedCoupons = couponsInRange.filter(coupon => coupon.consumed === true);
+                if (consumedCoupons.length > 0) {
+                    return res.status(400).json({
+                        error: `${CouponSeries} series already consumed.`,
                     });
-                    continue;
+                }
+                // Ensure the requested quantity of coupons is available
+                if (couponsInRange.length < Quantity) {
+                    return res.status(400).json({
+                        error: 'Not enough coupons are available.',
+                    });
                 }
 
                 // Create the batch
@@ -171,8 +158,8 @@ exports.createBatchNumberWithCouponCheck = async (req, res) => {
                 let batchResult = await batch.save();
                 let transactions = [];
 
-                for (let i = 0; i < requiredCoupons.length; i++) {
-                    const coupon = requiredCoupons[i];
+                for (let i = 0; i < couponsInRange.length; i++) {
+                    const coupon = couponsInRange[i];
                     const customUrl = `${config.redeemUrl}/redeem.html?tx=${coupon.udid}`;
                     const qrCodeData = await QRCode.toBuffer(customUrl);
                     const qrCodeKey = `${batchResult._id}-${coupon.udid}.png`;
