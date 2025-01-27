@@ -2,10 +2,21 @@ const axios = require('axios');
 const CashFreeTransaction = require('../models/CashFreeTransaction');
 
 const API_VERSION = '2024-01-01'
-const CLIENT_ID = config.X_CLIENT_ID;
-const CLIENT_SECRET = config.X_CLIENT_SECRET;
-const BASE_URL = config.BASE_URL;
-const GET_TRANSFER = config.GET_TRANSFERS;
+let CLIENT_ID = null;
+let CLIENT_SECRET = null;
+let BASE_URL = null;
+let GET_TRANSFER = null;
+if (config.ACTIVATE_CASHFREE === 'true') {
+    CLIENT_ID = config.X_CLIENT_ID;
+    CLIENT_SECRET = config.X_CLIENT_SECRET;
+    BASE_URL = config.BASE_URL;
+    GET_TRANSFER = config.GET_TRANSFERS;
+}else {
+    CLIENT_ID = config.X_CLIENT_ID_QA;
+    CLIENT_SECRET = config.X_CLIENT_SECRET_QA;
+    BASE_URL = config.BASE_URL_QA;
+    GET_TRANSFER = config.GET_TRANSFERS_QA;
+}
 
 const getToken = async () => {
     try {
