@@ -116,10 +116,10 @@ exports.getProductOfferById = async (req, res) => {
 // Update a productOffer by ID
 exports.updateProductOffer = async (req, res) => {
     try {
-        /*const existingProductOffer = await productOffersModel.findOne({productOfferTitle: req.body.productOfferTitle, _id: {$ne: req.params.id}});
+        const existingProductOffer = await productOffersModel.findOne({productOfferTitle: req.body.productOfferTitle, _id: {$ne: req.params.id}});
         if (existingProductOffer) {
-            return res.status(400).json({message: 'Product offer with the same title already exists.'});
-        }*/
+            return res({status: 400, message: 'Product offer with the same title already exists.'});
+        }
         /*const s3 = new AWS.S3({
             region: process.env.AWS_REGION,
             accessKeyId: process.env.AWS_ACCESS_KEY_ID,

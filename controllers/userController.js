@@ -21,7 +21,7 @@ exports.searchUser = async (body, res) => {
         let limit = parseInt(body.limit || 10);
         let query = {};
 
-        // Filter by search query
+        // Filter by search query (name, mobile, email)
         if (body.searchQuery) {
             query['$or'] = [
                 {'name': {$regex: new RegExp(body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}},
@@ -30,20 +30,36 @@ exports.searchUser = async (body, res) => {
             ]
         }
 
+        // Account Type filter
         if (body.accountType && ['All', 'Dealer', 'Contractor', 'Painter', 'SuperUser'].includes(body.accountType)) {
             if (body.accountType !== 'All') {
-                query.accountType = body.accountType;  
+                query.accountType = body.accountType;
             }
         }
 
+        // Apply the condition for painters and non-painters
+        query['$or'] = query['$or'] || []; 
+        
+        // Condition: Get all users who are NOT painters
+        query['$or'].push({ accountType: { $ne: 'Painter' } });
+        
+        query['$or'].push({
+            accountType: 'Painter',
+            parentDealerCode: { $nin: [null] }
+        });
+
         // Fetch the filtered data
-        let data = await userModel.find(query, {password: 0}).skip((page - 1) * limit).limit(parseInt(limit));
+        let data = await userModel.find(query, { password: 0 })
+            .skip((page - 1) * limit)
+            .limit(parseInt(limit));
+        
         const totalUsers = await userModel.countDocuments(query);
-        return res({status: 200, data, total: totalUsers, pages: Math.ceil(totalUsers / limit), currentPage: page});
+        return res({ status: 200, data, total: totalUsers, pages: Math.ceil(totalUsers / limit), currentPage: page });
     } catch (err) {
-        return res({status: 500, message: `Something went wrong: ${err.message}`});
+        return res({ status: 500, message: `Something went wrong: ${err.message}` });
     }
-}
+};
+
 
 
 
@@ -60,32 +76,28 @@ exports.addUser = async (body, res) => {
             errorArray.push('Enter mobile number');
         }
 
+        // Dealer-specific checks
         if (body.accountType && body.accountType.toLowerCase() === 'dealer') {
-            if (!body.primaryContactPerson) {
-                errorArray.push('Primary contact person is required for dealers');
-            }
-            if (!body.primaryContactPersonMobile) {
-                errorArray.push('Primary contact person mobile is required for dealers');
-            }
-            if (!body.dealerCode) {
-                errorArray.push('Dealer code is required for dealers');
-            } else {
+            if (!body.primaryContactPerson) errorArray.push('Primary contact person is required for dealers');
+            if (!body.primaryContactPersonMobile) errorArray.push('Primary contact person mobile is required for dealers');
+            if (!body.dealerCode) errorArray.push('Dealer code is required for dealers');
+            
+            if (body.dealerCode) {
+                // Check if the dealer code already exists
                 const oldDealerCode = await userModel.findOne({
-                    dealerCode: {
+                    dealerCode: { 
                         $regex: new RegExp(`^${body.dealerCode.trim()}$`),
                         "$options": "i"
                     }
                 });
-                if (body.dealerCode!== undefined && oldDealerCode!== null && oldDealerCode._id.toString()!== id) {
-                    errorArray.push('Dealer code already exists');
+
+                if (oldDealerCode) {
+                    if (oldDealerCode._id.toString() !== body.id) {
+                        errorArray.push('Dealer code already exists');
+                    }
                 }
             }
-            // if (!body.parentDealer) {
-            //     errorArray.push('Parent dealer is required for dealers');
-            // }
-            if (!body.address) {
-                errorArray.push('Address is required for dealers');
-            }
+            if (!body.address) errorArray.push('Address is required for dealers');
         } else {
             body.dealerCode = null;
             body.primaryContactPerson = null;
@@ -155,9 +167,28 @@ exports.userUpdate = async (id, body, res) => {
             body.address = null;
         }
 
+         // Check and set parentDealerCode to null if empty or undefined
+         if (body.parentDealerCode === "" || body.parentDealerCode === undefined) {
+            body.parentDealerCode = null;
+        }
+
+        // Check if parentDealerCode is provided and not already taken
+        if (body.parentDealerCode) {
+            const oldParentDealerCode = await userModel.findOne({
+                parentDealerCode: {
+                    $regex: new RegExp(`^${body.parentDealerCode.trim()}$`),
+                    "$options": "i"
+                }
+            });
+            if (body.parentDealerCode !== undefined && oldParentDealerCode !== null && oldParentDealerCode._id.toString() !== id) {
+                errorArray.push('Parent Dealer Code already exists');
+            }
+        }
+
         if (errorArray.length > 0) {
             return res({ status: 400, errors: errorArray, })
         }
+        
         let user = await userModel.updateOne({ _id: new ObjectId(id) }, { $set: body });
         return res({ status: 200, message: user });
     } catch (err) {
