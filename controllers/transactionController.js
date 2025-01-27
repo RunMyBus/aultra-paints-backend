@@ -63,6 +63,8 @@ exports.getAllTransactionsForBatch = async (req, res) => {
                     isProcessed: 1,
                     createdAt: 1,
                     updatedAt: 1,
+                    pointsRedeemedBy: 1,
+                    cashRedeemedBy: 1
                 }
             },
             { $sort: { createdAt: -1, _id: -1 } },

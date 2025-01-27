@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const cashFreePaymentService = require('../services/cashFreePaymentService');
+const { getAllTransactions } = require('../controllers/cashFreeController');
 
 // Test Payment Processing Endpoint
 router.post('/testPayment', async (req, res) => {
@@ -16,5 +17,7 @@ router.post('/testPayment', async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 });
+// Get all cash free transactions
+router.get('/getTransactions', getAllTransactions);
 
 module.exports = router;
