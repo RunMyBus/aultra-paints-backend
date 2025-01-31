@@ -13,12 +13,37 @@ exports.getAllTransactionsForBatch = async (req, res) => {
         let page = parseInt(req.body.page || 1);
         let limit = parseInt(req.body.limit || 10);
 
-        const { batchId, userId } = req.body;
+        const { userId, search, pointsRedeemedBy, cashRedeemedBy, couponCode } = req.body;
+
+        // Base query object
         let query = {};
-        if (batchId)
-            query.batchId = new ObjectId(batchId);
-        if (userId)
-            query.redeemedBy = userId;
+
+        if (userId) query.redeemedBy = userId;
+
+        // If search term is provided, match against multiple fields
+        if (search) {
+            query = {
+                ...query,
+                $or: [
+                    { couponCode: parseInt(search) }, 
+                    { pointsRedeemedBy: { $regex: search, $options: 'i' } }, 
+                    { cashRedeemedBy: { $regex: search, $options: 'i' } } 
+                ]
+            };
+        }
+
+        // Additional filters
+        if (pointsRedeemedBy) {
+            query.pointsRedeemedBy = { $regex: pointsRedeemedBy, $options: 'i' };
+        }
+
+        if (cashRedeemedBy) {
+            query.cashRedeemedBy = { $regex: cashRedeemedBy, $options: 'i' };
+        }
+
+        if (couponCode) {
+            query.couponCode = parseInt(couponCode);
+        }
 
         let querySet = [
             { $match: query },
