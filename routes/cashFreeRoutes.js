@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const cashFreePaymentService = require('../services/cashFreePaymentService');
 const { getAllTransactions } = require('../controllers/cashFreeController');
+const passport = require("../middleware/passport");
 
 // Test Payment Processing Endpoint
 router.post('/testPayment', async (req, res) => {
@@ -17,6 +18,9 @@ router.post('/testPayment', async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 });
+
+router.use(passport.authenticate('jwt', { session: false }));
+
 // Get all cash free transactions
 router.get('/getTransactions', getAllTransactions);
 
