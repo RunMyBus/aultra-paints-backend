@@ -6,7 +6,7 @@ const multer = require("multer");
 
 // Create a new productOffer
 exports.createProductOffer = async (req, res) => {
-    const {productOfferDescription, productOfferTitle, validUntil, productOfferStatus} = req.body;
+    const {productOfferDescription, validUntil, productOfferStatus, cashback, redeemPoints} = req.body;
     if (!req.body.productOfferImage) {
         return res.status(400).json({message: 'Image is required'});
     }
@@ -18,16 +18,17 @@ exports.createProductOffer = async (req, res) => {
 
     const productOffer = new productOffersModel({
         productOfferDescription,
-        productOfferTitle,
         validUntil,
         productOfferStatus,
+        cashback,
+        redeemPoints
     });
 
     try {
-        // Check if the productOfferTitle already exists
-        const existingProductOffer = await productOffersModel.findOne({productOfferTitle});
+        // Check if the productOfferDescription already exists
+        const existingProductOffer = await productOffersModel.findOne({productOfferDescription});
         if (existingProductOffer) {
-            return res.status(400).json({message: 'Product offer with the same title already exists.'});
+            return res.status(400).json({message: 'Product offer text with  same title already exists.'});
         }
         let savedProductOffer = await productOffer.save();
 
@@ -83,7 +84,7 @@ exports.searchProductOffers = async (req, res) => {
         let query = {};
         if (req.body.searchQuery) {
             query['$or'] = [
-                {'productOfferTitle': {$regex: new RegExp(req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}},
+                // {'productOfferTitle': {$regex: new RegExp(req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}},
                 {'productOfferDescription': {$regex: new RegExp(req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}},
             ];
         }
@@ -116,9 +117,9 @@ exports.getProductOfferById = async (req, res) => {
 // Update a productOffer by ID
 exports.updateProductOffer = async (req, res) => {
     try {
-        const existingProductOffer = await productOffersModel.findOne({productOfferTitle: req.body.productOfferTitle, _id: {$ne: req.params.id}});
+        const existingProductOffer = await productOffersModel.findOne({productOfferDescription: req.body.productOfferDescription, _id: {$ne: req.params.id}});
         if (existingProductOffer) {
-            return res({status: 400, message: 'Product offer with the same title already exists.'});
+            return res({status: 400, message: 'Product offer text with  same title already exists.'});
         }
         /*const s3 = new AWS.S3({
             region: process.env.AWS_REGION,
@@ -148,7 +149,19 @@ exports.updateProductOffer = async (req, res) => {
             const data = await s3.upload(params).promise();
             req.body.productOfferImageUrl = data.Location;
         }
-        const productOffer = await productOffersModel.findByIdAndUpdate(req.params.id, req.body, {new: true});
+
+        const productOfferData = {
+            productOfferDescription: req.body.productOfferDescription,
+            // productOfferTitle: req.body.productOfferTitle,
+            validUntil: req.body.validUntil,
+            productOfferStatus: req.body.productOfferStatus,
+            cashback: req.body.cashback,        
+            redeemPoints: req.body.redeemPoints, 
+            productOfferImageUrl: req.body.productOfferImageUrl,
+            updatedBy: req.body.updatedBy,       
+        };
+
+        const productOffer = await productOffersModel.findByIdAndUpdate(req.params.id,  productOfferData, {new: true});
         if (!productOffer) {
             return res({status: 400, message: 'ProductOffer not found'});
         }

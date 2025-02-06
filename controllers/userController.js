@@ -21,15 +21,22 @@ exports.searchUser = async (body, res) => {
         let limit = parseInt(body.limit || 10);
         let query = {};
 
-        // Filter by search query (name, mobile, email)
+         // Initialize the $or condition
+          query['$or'] = [];
+
+// Filter by search query (name, mobile,)
         if (body.searchQuery) {
             query['$or'] = [
-                {'name': {$regex: new RegExp(body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}},
-                {'mobile': {$regex: new RegExp(body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}},
-                {'email': {$regex: new RegExp(body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}},
-            ]
+                { 'name': { $regex: new RegExp(body.searchQuery.trim(), "i") } },
+                { 'mobile': { $regex: new RegExp(body.searchQuery.trim(), "i") } }
+            ];
+            
+            // Filter out painters with no parentDealerCode
+            query['$nor'] = [
+                { accountType: 'Painter', parentDealerCode: { $in: [null, ''] } }
+            ];
         }
-
+    
         // Account Type filter
         if (body.accountType && ['All', 'Dealer', 'Contractor', 'Painter', 'SuperUser'].includes(body.accountType)) {
             if (body.accountType !== 'All') {
@@ -38,15 +45,14 @@ exports.searchUser = async (body, res) => {
         }
 
         // Apply the condition for painters and non-painters
-        query['$or'] = query['$or'] || []; 
-        
-        // Condition: Get all users who are NOT painters
-        query['$or'].push({ accountType: { $ne: 'Painter' } });
-        
-        query['$or'].push({
-            accountType: 'Painter',
-            parentDealerCode: { $nin: [null] }
-        });
+        if (query['$or'].length === 0) {
+            // If no $or condition from search query, only apply the painter condition
+            query['$or'].push({ accountType: { $ne: 'Painter' } });
+            query['$or'].push({
+                accountType: 'Painter',
+                parentDealerCode: { $nin: [null] }
+            });
+        }
 
         // Fetch the filtered data
         let data = await userModel.find(query, { password: 0 })
@@ -59,7 +65,6 @@ exports.searchUser = async (body, res) => {
         return res({ status: 500, message: `Something went wrong: ${err.message}` });
     }
 };
-
 
 
 
