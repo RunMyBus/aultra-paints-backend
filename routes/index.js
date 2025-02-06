@@ -9,6 +9,7 @@ const productOffersRoutes = require('./productOffers.route')
 const rewardSchemesRoutes = require('./rewardSchemes.route.js')
 const transferRoutes = require('./transfer.route.js')
 const cashFreeRoutes = require('./cashFreeRoutes')
+const transactionLedgerRoutes = require('./transactionLedgerRoute')
 
 const router = express.Router();
 
@@ -25,5 +26,6 @@ router.use('/productOffers', productOffersRoutes);
 router.use('/rewardSchemes', rewardSchemesRoutes);
 router.use('/transfer', transferRoutes);
 router.use('/cashFree', cashFreeRoutes);
+router.use('/transactionLedger', transactionLedgerRoutes);
 
 module.exports = router;
