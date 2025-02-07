@@ -490,14 +490,14 @@ exports.getUserDealer = async (dealerCode, res) => {
 }
 
 exports.getDealers = async (body, res) => {
-    const { name , mobile } = body;
     try {
-        const query = { accountType: 'Dealer' };
-        if (name) {
-            query.name = name;
-        }
-        if (mobile) {
-            query.mobile = mobile;
+        let query = { accountType: 'Dealer' };
+        query['$or'] = [];
+        if (body.searchQuery) {
+            query['$or'] = [
+                { 'name': { $regex: new RegExp(body.searchQuery.trim(), "i") } },
+                { 'mobile': { $regex: new RegExp(body.searchQuery.trim(), "i") } }
+            ];
         }
         const dealers = await userModel.find(query);
         return res({ status: 200, data: dealers });
