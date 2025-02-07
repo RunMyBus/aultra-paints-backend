@@ -181,6 +181,10 @@
     <!-- Images/Logo in the navbar -->
 </div>
 <script>
+    const url = window.location.hostname;
+    console.log( 'url --- ' , url);
+    const subdomain = url.split("//")[1].split(".")[0];
+    console.log( 'subdomain --- ' , subdomain);
     document.addEventListener('DOMContentLoaded', () => {
         const form = document.getElementById('mobileForm');
         const mobileNumberInput = document.getElementById('mobileNumber');
@@ -219,8 +223,14 @@
             }
 
             try {
-                let url = `http://localhost:4300/api/auth/redeem/${qrCodeId}`
-                // let url = `https://api.aultrapaints.com/api/auth/redeem/${qrCodeId}`
+                 let url;
+                 if (subdomain === 'mob') {
+                     url = `https://mapp.aultrapaints.com/api/auth/redeem/${qrCodeId}`
+                 }else if (subdomain === 'redeem') {
+                     url = `https://api.aultrapaints.com/api/auth/redeem/${qrCodeId}`
+                 }else {
+                     url = `http://localhost:4300/api/auth/redeem/${qrCodeId}`
+                 }
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
