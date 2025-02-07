@@ -488,3 +488,21 @@ exports.getUserDealer = async (dealerCode, res) => {
         return res({status: 500, error: err});
     }
 }
+
+exports.getDealers = async (body, res) => {
+    const { name , mobile } = body;
+    try {
+        const query = { accountType: 'Dealer' };
+        if (name) {
+            query.name = name;
+        }
+        if (mobile) {
+            query.mobile = mobile;
+        }
+        const dealers = await userModel.find(query);
+        return res({ status: 200, data: dealers });
+    } catch (err) {
+        console.error('Error fetching dealers: ', err.message);
+        return res({ status: 500, error: err });
+    }
+}
