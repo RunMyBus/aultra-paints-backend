@@ -6,6 +6,6 @@ const passport = require("../middleware/passport");
 router.use(passport.authenticate('jwt', { session: false }));
 
 // Get transactions from ledger
-router.get('/getTransactions', getAllTransactions);
+router.post('/getTransactions', getAllTransactions);
 
 module.exports = router;

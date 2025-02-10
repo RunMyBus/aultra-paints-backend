@@ -3,12 +3,6 @@ const router = express.Router();
 const userController = require('../controllers/userController')
 const passport = require("passport");
 
-router.get('/allUsers', async (req, res) => {
-	userController.getAll(req.body, result => {
-		res.status(result.status).json(result.data);
-	})
-});
-
 router.use(passport.authenticate('jwt', {session: false}));
 
 // Get all users
