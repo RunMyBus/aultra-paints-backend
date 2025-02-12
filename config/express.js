@@ -11,6 +11,8 @@ const helmet = require('helmet');
 const routes = require('../routes/index');
 const passport = require('../middleware/passport');
 
+const requestContext = require('../utils/requestContext');
+
 const app = express();
 
 app.use(session({
@@ -67,6 +69,7 @@ app.use(cors(corsOptions));
 
 app.use(passport.initialize());
 
+app.use(requestContext.middleware());
 // app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // API router

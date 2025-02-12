@@ -1,5 +1,6 @@
 const winston = require('winston');
 const path = require('path');
+const requestContext = require('./requestContext');
 
 // Ensure logs directory exists
 const fs = require('fs');
@@ -13,10 +14,13 @@ const logger = winston.createLogger({
         winston.format.timestamp(),
         winston.format.printf(({ level, message, timestamp, ...metadata }) => {
             const pid = process.pid;
+            const context = requestContext.get();
+            const requestId = context.requestId;
             return JSON.stringify({
                 timestamp,
                 level,
                 pid,
+                requestId: requestId,
                 message,
                 ...metadata
             });

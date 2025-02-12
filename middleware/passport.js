@@ -8,33 +8,6 @@ const bcrypt = require('bcryptjs');
 const UserLoginSMSModel = require("../models/UserLoginSMS");
 
 
-// const localLogin = new LocalStrategy({usernameField: 'mobile', passwordField: 'password'}, async (mobile, password, done) => {
-//     try {
-//         // Check if the user exists in the database
-//         let user = await User.findOne({mobile: mobile});
-//         if (!user) {
-//             return done( {
-//                 status: 400,
-//                 message: 'MOBILE_NOT_FOUND',
-//             });
-//         } else {
-//             const isMatch = await bcrypt.compareSync(password, user.password);
-//             if (!isMatch) {
-//                 return done({
-//                     status: 400,
-//                     message: 'Invalid Password',
-//                 });
-//             }
-//             return done(null, user);
-//         }
-//
-//     } catch (err) {
-//         console.log(err);
-//         return done({status: 400, message: 'Internal Server Error'});
-//     }
-//
-// });
-
 const localLogin = new LocalStrategy({usernameField: 'mobile', passwordField: 'otp'}, async (mobile, otp, done) => {
     if (!mobile || !otp) return done.status(400).json({ error: 'Mobile number and OTP are required' });
     try {
