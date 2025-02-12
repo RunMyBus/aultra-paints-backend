@@ -9,14 +9,7 @@ const {ObjectId} = require("mongodb");
 // const {config} = require("dotenv");
 const CouponCodes = require('../models/CouponCodes');
 const s3 = require("../config/aws");
-
-/*AWS.config.update({
-    accessKeyId: config.AWS_ACCESS_KEY_Id,  // Replace with your access key
-    secretAccessKey: config.AWS_SECRETACCESSKEY,  // Replace with your secret key
-    region: config.REGION  // Replace with your AWS region
-});*/
-
-//const s3 = new AWS.S3();
+const logger = require('../utils/logger'); // Import the configured logger
 
 async function uploadQRCodeToS3(qrCodeData, key) {
     const params = {
@@ -199,107 +192,12 @@ exports.createBatchNumberWithCouponCheck = async (req, res) => {
     }
 };
 
-// exports.createBatchNumber = async (req, res) => {
-//     try {
-//         let userId = req.user.id.toString();
-//
-//         const date = new Date();
-//         const curMonth = date.getMonth() + 1;
-//         const curYear = date.getFullYear();
-//         const curYearMonth = `${curYear}-${curMonth.toString().padStart(2, "0")}`;
-//
-//         // Validate inputs
-//         if (!req.body.BatchNumbers || !Array.isArray(req.body.BatchNumbers)) {
-//             return res.status(400).json({error: "BatchNumbers must be an array."});
-//         }
-//
-//         // Process each batch number in the request
-//         const BatchNumberPromises = req.body.BatchNumbers.map(async (product, index) => {
-//             const startOfMonth = new Date(req.body.CreationDate);
-//             startOfMonth.setDate(1);
-//             const endOfMonth = new Date(startOfMonth);
-//             endOfMonth.setMonth(endOfMonth.getMonth() + 1);
-//
-//             // Check for existing batch
-//             const existingBatch = await Batch.findOne({
-//                 Branch: req.body.branchName,
-//                 BatchNumber: product.BatchNumber,
-//                 CreationDate: {$gte: startOfMonth, $lt: endOfMonth},
-//             });
-//
-//             if (existingBatch) {
-//                 throw new Error(
-//                     `Batch number ${product.BatchNumber} already exists for branch ${req.body.branchName} within the current month`
-//                 );
-//             }
-//
-//             // Create and save batch
-//             const newBatchNumber = new Batch({
-//                 Branch: req.body.Branch,
-//                 CreationDate: req.body.CreationDate,
-//                 ProductName: req.body.ProductName,
-//                 ExpiryDate: req.body.ExpiryDate,
-//                 BatchNumber: product.BatchNumber,
-//                 Brand: product.Brand,
-//                 value: product.value,
-//                 Volume: product.Volume,
-//                 Quantity: product.Quantity,
-//                 RedeemablePoints: product.redeemablePoints,
-//                 CouponSeries: product.CouponSeries,
-//             });
-//
-//             const savedBatchNumber = await newBatchNumber.save();
-//
-//             // Generate transactions
-//             const transactionPromises = Array.from({length: product.Quantity}, async (_, i) => {
-//                 const couponCode = product.CouponSeries + i;
-//                 const qrCodeId = uuidv4();
-//                 const customUrl = `${config.redeemUrl}/redeem.html?qrCodeId=${qrCodeId}`;
-//                 const qrCodeData = await QRCode.toBuffer(customUrl);
-//                 const qrCodeKey = `${savedBatchNumber._id}-${qrCodeId}.png`;
-//                 const qrCodeUrl = await uploadQRCodeToS3(qrCodeData, qrCodeKey);
-//
-//                 const transaction = new Transaction({
-//                     transactionId: uuidv4(),
-//                     batchId: savedBatchNumber._id,
-//                     redeemablePoints: product.redeemablePoints,
-//                     value: product.value,
-//                     qr_code: qrCodeUrl,
-//                     qr_code_id: qrCodeId,
-//                     couponCode: couponCode,
-//                     isProcessed: false,
-//                     createdBy: userId,
-//                 });
-//
-//                 await transaction.save();
-//             });
-//
-//             await Promise.all(transactionPromises);
-//             return savedBatchNumber;
-//         });
-//
-//         const savedBatchNumbers = await Promise.all(BatchNumberPromises);
-//
-//         // Respond with success
-//         return res.status(200).json({
-//             message: "Branch and batches created successfully",
-//             batches: savedBatchNumbers,
-//         });
-//     } catch (error) {
-//         console.error(error);
-//
-//         // Handle duplicate batch number error
-//         if (error.code === 11000 && error.keyPattern?.BatchNumber) {
-//             return res.status(409).json({
-//                 message: "Duplicate BatchNumber encountered. Please retry.",
-//             });
-//         }
-//
-//         return res.status(500).json({error: error.message});
-//     }
-// };
-
 exports.getAllBatchNumbers = async (req, res) => {
+    logger.info('Starting getAllBatchNumbers request', {
+        page: req.body.page,
+        limit: req.body.limit,
+        searchQuery: req.body.searchQuery
+    });
     try {
         const page = parseInt(req.body.page) || 1;
         const limit = parseInt(req.body.limit) || 10;

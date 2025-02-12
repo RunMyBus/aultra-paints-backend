@@ -6,15 +6,34 @@ const sequenceModel = require("../models/sequence.model");
 const {ObjectId} = require("mongodb");
 const userModel = require("../models/User");
 const transactionLedger = require("../models/TransactionLedger");
+const logger = require('../utils/logger'); // Import the configured logger
+const transactionService = require('../services/transactionService');
 
 exports.getAllTransactionsForBatch = async (req, res) => {
-    // console.log(req.body)
+    const requestId = new mongoose.Types.ObjectId(); // Generate unique request ID for tracking
+
+    logger.info('Starting getAllTransactionsForBatch request', {
+        requestId,
+        page: req.body.page,
+        limit: req.body.limit,
+        userId: req.body.userId,
+        pid: process.pid
+    });
     try {
         let page = parseInt(req.body.page || 1);
         let limit = parseInt(req.body.limit || 10);
 
         const { userId, search, pointsRedeemedBy, cashRedeemedBy, couponCode } = req.body;
-
+        logger.debug('Query parameters processed', {
+            requestId,
+            page,
+            limit,
+            search,
+            pointsRedeemedBy,
+            cashRedeemedBy,
+            couponCode,
+            pid: process.pid
+        });
         // Base query object
         let query = {};
 
@@ -25,9 +44,9 @@ exports.getAllTransactionsForBatch = async (req, res) => {
             query = {
                 ...query,
                 $or: [
-                    { couponCode: parseInt(search) }, 
-                    { pointsRedeemedBy: { $regex: search, $options: 'i' } }, 
-                    { cashRedeemedBy: { $regex: search, $options: 'i' } } 
+                    { couponCode: parseInt(search) },
+                    { pointsRedeemedBy: { $regex: search, $options: 'i' } },
+                    { cashRedeemedBy: { $regex: search, $options: 'i' } }
                 ]
             };
         }
@@ -107,8 +126,18 @@ exports.getAllTransactionsForBatch = async (req, res) => {
 
         // res.status(200).json(transactionsData);
     } catch  (error) {
-        console.log(error)
-        return res.status(500).json({ error: error.message });  // Handle any errors that occur
+        logger.error('Error in getAllTransactionsForBatch', {
+            requestId,
+            error: error.message,
+            stack: error.stack,
+            pid: process.pid
+        });
+
+        return res.status(500).json({
+            status: 'error',
+            message: 'An error occurred while fetching transactions',
+            error: error.message
+        });
     }
 };
 

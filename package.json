@@ -4,8 +4,15 @@
   "main": "app.js",
   "scripts": {
     "start": "nodemon server",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
+    "test:watch": "jest --watch",
     "build": "echo 'No build steps defined'"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coveragePathIgnorePatterns": [
+      "/node_modules/"
+    ]
   },
   "author": "",
   "license": "ISC",
@@ -36,6 +43,10 @@
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
     "pg": "^8.13.1",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
   }
 }
