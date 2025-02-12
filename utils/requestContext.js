@@ -18,7 +18,7 @@ class RequestContext {
     middleware() {
         return (req, res, next) => {
             const context = {
-                requestId: new mongoose.Types.ObjectId(),
+                requestId: `${new mongoose.Types.ObjectId()} - ${req.originalUrl}`,
                 timestamp: new Date(),
                 pid: process.pid,
                 userId: req.user?.id // if you have user info in request
