@@ -10,9 +10,20 @@ exports.getAllTransactions = async (req, res) => {
         let query = { userId };
         // Apply coupon code filter if provided
         if (req.body.couponCode) {
-            const transaction = await Transaction.findOne({ couponCode: req.body.couponCode });
-            if (transaction) {
-                query.couponId = transaction._id;
+            // Aggregation pipeline to convert number to string and apply regex
+            const pipeline = [
+                {
+                    $match: {
+                        $expr: {
+                            $regexMatch: { input: { $toString: "$couponCode" }, regex: req.body.couponCode.toString() }
+                        }
+                    }
+                }
+            ];
+            const transaction = await Transaction.aggregate(pipeline);
+            //const transaction = await Transaction.findOne({ couponCode: req.body.couponCode });
+            if (transaction.length > 0) {
+                query.couponId = {$in: transaction.map(i => i._id)};
             }else {
                 return res.status(400).json({ error: 'Invalid coupon code.' });
             }
