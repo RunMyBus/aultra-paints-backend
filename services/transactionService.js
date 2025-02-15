@@ -183,23 +183,23 @@ class TransactionService {
 
         const qr = await this.extractValueFromUrl(qrCodeUrl);
 
-        logger.info('Successfully extracted udid from qr code', {
+        logger.debug('Successfully extracted udid from qr code', {
             udid: qr,
         });
 
         try {
             const document = await Transaction.findOne({ UDID:  qr });
             if (!document) {
-                logger.info('Coupon not found', {
+                logger.warn('Coupon not found', {
                     udid: qr,
                 });
                 return res.status(404).json({ message: 'Coupon not found.' })
             }
-            logger.info('Successfully retrieved coupon based on udid', {
+            logger.debug('Successfully retrieved coupon based on udid', {
                 couponCode: document.couponCode,
             });
             if(document.pointsRedeemedBy !== undefined) {
-                logger.info('Coupon Redeemed already', {
+                logger.warn('Coupon Redeemed already', {
                     couponCode: document.couponCode,
                 });
                 return res.status(404).json({ message: 'Coupon Redeemed already.' });
@@ -255,7 +255,7 @@ class TransactionService {
                     );
 
                     if (!userData) {
-                        logger.info('User not found for updating points', {
+                        logger.warn('User not found for updating points', {
                             userId: userData._id
                         });
                         return res.status(404).json({ message: 'User not found for update.' });
@@ -301,7 +301,7 @@ class TransactionService {
             //console.log(error);
             return res.status(500).json({ error: error.message });
         }
-}
+    }
 }
 
 module.exports = new TransactionService();
