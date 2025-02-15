@@ -402,7 +402,7 @@ exports.getParentDealerCodeUser = async (body, res) => {
             sender: sender,
             mobile: data.mobile,
             TemplateID: templateid,
-            message: `Dear ${data.name}}, to add the painter to your network please share this OTP ${OTP} with him/her. AULTRA`,
+            message: `Dear ${data.name}, to add the painter to your network please share this OTP ${OTP} with him/her. AULTRA`,
             format: "JSON"
         };
         const queryParams = require('querystring').stringify(params);
