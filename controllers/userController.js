@@ -177,19 +177,6 @@ exports.userUpdate = async (id, body, res) => {
             body.parentDealerCode = null;
         }
 
-        // Check if parentDealerCode is provided and not already taken
-        if (body.parentDealerCode) {
-            const oldParentDealerCode = await userModel.findOne({
-                parentDealerCode: {
-                    $regex: new RegExp(`^${body.parentDealerCode.trim()}$`),
-                    "$options": "i"
-                }
-            });
-            if (body.parentDealerCode !== undefined && oldParentDealerCode !== null && oldParentDealerCode._id.toString() !== id) {
-                errorArray.push('Parent Dealer Code already exists');
-            }
-        }
-
         if (errorArray.length > 0) {
             return res({ status: 400, errors: errorArray, })
         }
@@ -375,7 +362,7 @@ const message = 'SMS MESSAGE';
 const sender = config.SMS_SENDER;
 const apirequest = 'Text';
 const route = config.SMS_ROUTE;
-const templateid = config.SMS_TEMPLATEID;
+const templateid = config.SMS_TEMPLATEID_AULTRA_OPT;
 
 function generateOTP() {
     return Math.floor(100000 + Math.random() * 900000).toString();
@@ -388,6 +375,7 @@ exports.getParentDealerCodeUser = async (body, res) => {
             query['$or'] = [
                 // {'dealerCode': {$regex: new RegExp(body.dealerCode.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}},
                 {'dealerCode': body.dealerCode.toString().trim()},
+                {'mobile': body.dealerCode.toString().trim()}
             ]
         }
         let data = await userModel.findOne(query, {password: 0});
@@ -414,7 +402,7 @@ exports.getParentDealerCodeUser = async (body, res) => {
             sender: sender,
             mobile: data.mobile,
             TemplateID: templateid,
-            message: `Aultra Paints: Your OTP for login is ${OTP}. This code is valid for 10 minutes. Do not share this OTP with anyone`,
+            message: `Dear ${data.name}}, to add the painter to your network please share this OTP ${OTP} with him/her. AULTRA`,
             format: "JSON"
         };
         const queryParams = require('querystring').stringify(params);
