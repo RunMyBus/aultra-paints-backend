@@ -53,13 +53,13 @@ exports.transferPoints = async (req, res) => {
             // Add transactions to the ledger
             await transactionLedger.create({
                 narration: 'Transferred reward points to dealer',
-                amount: rewardPoints,
+                amount: `- ${rewardPoints}`,
                 balance: savedUserData.rewardPoints,
                 userId: savedUserData._id
             });
             await transactionLedger.create({
                 narration: 'Received reward points from painter',
-                amount: rewardPoints,
+                amount: `+ ${rewardPoints}`,
                 balance: savedDealerData.rewardPoints,
                 userId: savedDealerData._id
             });

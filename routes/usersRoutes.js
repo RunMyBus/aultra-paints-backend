@@ -90,5 +90,11 @@ router.post('/unverified-users', async (req, res) => {
 	});
 });
 
+router.post('/getDealers', async (req, res) => {
+	userController.getDealers(req.body, result => {
+		res.status(result.status).json(result);
+	})
+});
+
 
 module.exports = router;

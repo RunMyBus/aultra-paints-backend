@@ -1,4 +1,6 @@
 const winston = require('winston');
+const readline = require('readline');
+const pmx = require('pmx')
 const path = require('path');
 const requestContext = require('./requestContext');
 
@@ -41,6 +43,37 @@ const logger = winston.createLogger({
             maxFiles: 5
         })
     ]
+});
+
+console.log(`Logger initialized with level: ${logger.level} --- ${new Date().toISOString()}`);
+
+/** NOTE: To be used in local **/
+// Create a CLI interface for real-time log level changes
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
+rl.on('line', (input) => {
+    const validLevels = ['error', 'warn', 'info', 'debug'];
+    if (validLevels.includes(input.trim())) {
+        logger.level = input.trim();
+        console.log(`Log level changed to: ${input.trim()}`);
+    } else {
+        console.log('Invalid log level. Use one of:', validLevels.join(', '));
+    }
+});
+
+/** NOTE: To be used in production **/
+// Listen for PM2 trigger to update log level at runtime
+pmx.action('set-log-level', (level, reply) => {
+    if (['error', 'warn', 'info', 'debug'].includes(level)) {
+        logger.level = level;
+        logger.info(`Log level changed to: ${level}`);
+        reply({ success: true, newLevel: level });
+    } else {
+        reply({ success: false, message: 'Invalid log level' });
+    }
 });
 
 // Add console transport for non-production environments
