@@ -48,7 +48,7 @@ exports.getAllTransactions = async (req, res) => {
 
         const totalTransactions = await TransactionLedger.countDocuments(query);
         if (totalTransactions === 0) {
-            return res.status(400).json({ error: 'No transactions found.' });
+            return res.json({ transactions: [], pagination: { currentPage: page, totalPages: 0, totalTransactions: 0 } });
         }
         const totalPages = Math.ceil(totalTransactions / limit);
         res.json({
