@@ -420,12 +420,11 @@ exports.verifyOtpUpdateUser = async (body, res) => {
     try {
         let userLoginSMS = await UserLoginSMSModel.findOne({mobile: body.mobile, otp: body.otp, active: true}).sort({createdAt: -1}).limit(1);
         if (!userLoginSMS) {
-            return res({status: 400, error: 'OTP_NOT_FOUND_OR_ALREADY_USED'})
+            return res({status: 400, error: 'INVALID OTP'})
         }
         if (userLoginSMS.expiryTime < Date.now()) {
-            return res({status: 400, error: 'OTP_EXPIRED'})
+            return res({status: 400, error: 'OTP EXPIRED'})
         }
-        if (userLoginSMS.otp.toString() !== body.otp) return res({status: 400, error: 'INVALID_OTP',});
         userLoginSMS.active = false;
         await userLoginSMS.save();
 
