@@ -49,24 +49,34 @@ exports.createRewardScheme = async (req, res) => {
 }
 
 exports.searchRewardSchemes = async (req, res) => {
-    const {page, limit, searchQuery } = req.query;
+    const { page = 1, limit = 10, searchQuery = '' } = req.body;
+    
     try {
-        const data = await rewardSchemesModel.find()
-           .skip((parseInt(page) - 1) * parseInt(limit))
-           .limit(parseInt(limit))
-           .sort({createdAt: -1});
-        const totalSchemes = await rewardSchemesModel.find().countDocuments();
-        return res.status(200).json({
+        const skip = (page - 1) * limit;
+        const query = searchQuery ? { name: { $regex: searchQuery, $options: 'i' } } : {};
+
+        const data = await rewardSchemesModel.find(query)
+            .skip(skip)
+            .limit(Number(limit))
+            .sort({ createdAt: -1 });
+
+        const totalSchemes = await rewardSchemesModel.countDocuments(query);
+
+        res.status(200).json({
             data,
-            total: totalSchemes,
-            pages: Math.ceil(totalSchemes / limit),
-            currentPage: page
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalSchemes / limit),
+                totalSchemes,
+                limit,
+            },
         });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({error: error.message});
+        res.status(500).json({ error: error.message });
     }
-}
+};
+
+
 
 exports.getRewardSchemes = async (req, res) => {
     try {
