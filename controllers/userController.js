@@ -5,6 +5,7 @@ const Transaction = require('../models/Transaction');
 const redeemedUserModel = require("../models/redeemedUser.model");
 const UserLoginSMSModel = require("../models/UserLoginSMS");
 const axios = require("axios");
+const { validateAndCreateOTP } = require('../services/user.service');
 
 exports.getAll = async (body, res) => {
     try {
@@ -364,10 +365,6 @@ const apirequest = 'Text';
 const route = config.SMS_ROUTE;
 const templateid = config.SMS_TEMPLATEID_AULTRA_OPT;
 
-function generateOTP() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
 exports.getParentDealerCodeUser = async (body, res) => {
     try {
         let query = {};
@@ -384,31 +381,25 @@ exports.getParentDealerCodeUser = async (body, res) => {
             return res({status: 400, message: "Dealer Code not found"});
         }
 
-        let OTP = generateOTP();
-        const OTP_EXPIRY_MINUTES = 10;
-        const expiryTime = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
-        if (data.mobile === config.STATIC_TEST_MOBILE_NUMBER) {
-            OTP = config.STATIC_OTP;
-            await UserLoginSMSModel.create({mobile: data.mobile, otp: OTP, expiryTime });
-            return res({status: 200, data: data});
+        const { OTP, isStatic } = await validateAndCreateOTP(data.mobile);
+        if (!isStatic) {
+            // Sending OTP via SMS
+            const params = {
+                username: username,
+                apikey: apikey,
+                apirequest: "Text",
+                route: route,
+                sender: sender,
+                mobile: data.mobile,
+                TemplateID: templateid,
+                message: `Dear ${data.name}, to add the painter to your network please share this OTP ${OTP} with him/her. AULTRA`,
+                format: "JSON"
+            };
+            const queryParams = require('querystring').stringify(params);
+            const requestUrl = `http://sms.infrainfotech.com/sms-panel/api/http/index.php?${queryParams}`;
+            const response = await axios.get(requestUrl);
+            console.log("SMS Response:", response.data);
         }
-        await UserLoginSMSModel.create({mobile: data.mobile, otp: OTP, expiryTime });
-        // Sending OTP via SMS
-        const params = {
-            username: username,
-            apikey: apikey,
-            apirequest: "Text",
-            route: route,
-            sender: sender,
-            mobile: data.mobile,
-            TemplateID: templateid,
-            message: `Dear ${data.name}, to add the painter to your network please share this OTP ${OTP} with him/her. AULTRA`,
-            format: "JSON"
-        };
-        const queryParams = require('querystring').stringify(params);
-        const requestUrl = `http://sms.infrainfotech.com/sms-panel/api/http/index.php?${queryParams}`;
-        const response = await axios.get(requestUrl);
-        console.log("SMS Response:", response.data);
         return res({status: 200, data});
     } catch (err) {
         console.log(err)

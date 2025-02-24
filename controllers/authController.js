@@ -1,6 +1,5 @@
 const jwt = require("jsonwebtoken");
 const User = require('../models/User');
-const StaticPhoneNumbers = require('../models/staticPhoneNumbers')
 const bcrypt = require('bcryptjs');
 const Transaction = require("../models/Transaction");
 const redeemedUserModel = require("../models/redeemedUser.model");
@@ -8,9 +7,9 @@ const Batch = require("../models/batchnumber");
 const {ObjectId} = require("mongodb");
 const sms = require('../services/sms.service');
 const axios = require("axios");
-const UserLoginSMSModel = require('../models/UserLoginSMS')
 const transactionLedger = require("../models/TransactionLedger");
 const cashFreePaymentService = require('../services/cashFreePaymentService');
+const { validateAndCreateOTP } = require('../services/user.service');
 
 async function generateToken(user, next) {
     try {
@@ -253,11 +252,6 @@ exports.smsFunction = async (req, res) => {
     }
 }
 
-// Helper function to generate a random 6-digit OTP
-function generateOTP() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
 exports.loginWithOTP = async (req, res) => {
     const { mobile } = req.body;
     const OTP_EXPIRY_MINUTES = 10;
@@ -271,44 +265,30 @@ exports.loginWithOTP = async (req, res) => {
         return res({status: 400, error: 'ACCOUNT_SUSPENDED'});
     }
 
-    const staticPhoneNumbers = await StaticPhoneNumbers.find();
-    const mobileNumbers = staticPhoneNumbers.map(doc => doc.mobile);
-
     try {
-        let OTP = generateOTP();
-        const expiryTime = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
-        if (mobile === config.STATIC_MOBILE_NUMBER) {
-            OTP = config.STATIC_OTP;
-            await UserLoginSMSModel.create({mobile: mobile, otp: OTP, expiryTime });
-            return res({status: 200, message: 'OTP sent successfully.'});
-        }else if (mobileNumbers.includes(mobile)) {
-            OTP = 123456;
-            await UserLoginSMSModel.create({mobile: mobile, otp: OTP, expiryTime });
-            return res({status: 200, message: 'OTP sent successfully.'});
-        }
+        const { OTP, isStatic } = await validateAndCreateOTP(mobile);
 
-        await UserLoginSMSModel.create({mobile: mobile, otp: OTP, expiryTime });
-        // Sending OTP via SMS
-        const params = {
-            username: username,
-            apikey: apikey,
-            apirequest: "Text",
-            route: route,
-            sender: sender,
-            mobile: mobile,
-            TemplateID: templateid,
-            message: `Aultra Paints: Your OTP for login is ${OTP}. This code is valid for 10 minutes. Do not share this OTP with anyone`,
-            format: "JSON"
-        };
-        const queryParams = require('querystring').stringify(params);
-        const requestUrl = `http://sms.infrainfotech.com/sms-panel/api/http/index.php?${queryParams}`;
-        const response = await axios.get(requestUrl);
-        console.log("SMS Response:", response.data);
-        return res({status: 200, message: 'OTP sent successfully.'})
-        //return res.status(200).json({ message: 'OTP sent successfully' });
+        if (!isStatic) {
+            // Sending OTP via SMS
+            const params = {
+                username: username,
+                apikey: apikey,
+                apirequest: "Text",
+                route: route,
+                sender: sender,
+                mobile: mobile,
+                TemplateID: templateid,
+                message: `Aultra Paints: Your OTP for login is ${OTP}. This code is valid for 10 minutes. Do not share this OTP with anyone`,
+                format: "JSON"
+            };
+            const queryParams = require('querystring').stringify(params);
+            const requestUrl = `http://sms.infrainfotech.com/sms-panel/api/http/index.php?${queryParams}`;
+            const response = await axios.get(requestUrl);
+            console.log("SMS Response:", response.data);
+        }
+        return res({status: 200, message: 'OTP sent successfully.'});
     } catch (error) {
         console.error("Error sending OTP:", error);
         return res({status: 500, message: 'Failed to send OTP.'})
-        //return res.status(500).json({ error: 'Failed to send OTP' });
     }
 };
