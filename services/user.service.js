@@ -15,7 +15,7 @@ const validateAndCreateOTP = async (mobile) => {
         const expiryTime = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
         // Check if mobile is app store user
-        if (mobile === config.STATIC_MOBILE_NUMBER) {
+        if (mobile === config.STATIC_MOBILE_NUMBER || mobile === config.STATIC_TEST_MOBILE_NUMBER) {
             OTP = config.STATIC_OTP;
             isStatic = true;
         }
