@@ -111,10 +111,18 @@ exports.createBatchNumberWithCouponCheck = async (req, res) => {
         for (let batchNumber of BatchNumbers) {
             const { CouponSeries, Brand, redeemablePoints, value, Volume, Quantity } = batchNumber;
 
-            const startCouponSeries = parseInt(CouponSeries, 10);
-            const endCouponSeries = startCouponSeries + Quantity - 1;
+            let startCouponSeries = parseInt(CouponSeries, 10);
+            let endCouponSeries = startCouponSeries + Quantity - 1;
 
             try {
+
+                // Check if the batch number already exists
+                const existingBatch = await Batch.findOne({ BatchNumber });
+                if (existingBatch) {
+                    return res.status(400).json({
+                        error: `Batch number ${BatchNumber} already exists.`,
+                    });
+                }
                 // Fetch all coupons in the specified range
                 const couponsInRange = await CouponCodes.find({
                     couponSeries: { $gte: startCouponSeries, $lte: endCouponSeries },
@@ -133,13 +141,17 @@ exports.createBatchNumberWithCouponCheck = async (req, res) => {
                     });
                 }
 
+                startCouponSeries = startCouponSeries.toString();
+                endCouponSeries = endCouponSeries.toString();
+
                 // Create the batch
                 const batch = new Batch({
                     Branch,
                     ProductName,
                     CreationDate,
                     ExpiryDate,
-                    CouponSeries,
+                    startCouponSeries,
+                    endCouponSeries,
                     Brand,
                     RedeemablePoints: redeemablePoints,
                     value,
@@ -318,7 +330,8 @@ exports.getAllBatchNumbers = async (req, res) => {
                     Volume: 1,
                     Quantity: 1,
                     RedeemablePoints: 1,
-                    CouponSeries: 1,
+                    startCouponSeries: 1, 
+                    endCouponSeries: 1,   
                 }
             },
             { $sort: { createdAt: -1, _id: -1 } },

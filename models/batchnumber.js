@@ -13,7 +13,8 @@ const BatchNumberSchema = new Schema({
     Volume: {type: String, required: true},
     Quantity: {type: Number, required: true},
     RedeemablePoints: {type: Number, default: 0, required: true},
-    CouponSeries: {type: String, required: true, unique: true},
+    startCouponSeries: { type: String, required: true },
+    endCouponSeries: { type: String, required: true },
 }, {timestamps: true});
 
 // Add index to enforce unique batch numbers within a month at a branch
