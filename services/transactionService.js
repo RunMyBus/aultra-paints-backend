@@ -31,6 +31,8 @@ class TransactionService {
 
             // Build query
             let query = {};
+            // fixed check to display only activated coupons
+            query.batchId = { $exists: true }
 
             if (userId) {
                 query.redeemedBy = userId;
