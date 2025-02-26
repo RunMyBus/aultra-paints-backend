@@ -111,11 +111,10 @@ exports.createBatchNumberWithCouponCheck = async (req, res) => {
         for (let batchNumber of BatchNumbers) {
             const { CouponSeries, Brand, redeemablePoints, value, Volume, Quantity } = batchNumber;
 
-            let startCouponSeries = parseInt(CouponSeries, 10);
-            let endCouponSeries = startCouponSeries + Quantity - 1;
+            const startCouponSeries = CouponSeries;
+            const endCouponSeries = String(Number(CouponSeries) + Quantity - 1).padStart(CouponSeries.length, '0');
 
             try {
-
                 // Check if the batch number already exists
                 const existingBatch = await Batch.findOne({ BatchNumber });
                 if (existingBatch) {
@@ -124,11 +123,14 @@ exports.createBatchNumberWithCouponCheck = async (req, res) => {
                     });
                 }
                 // Fetch all coupons in the specified range
-                const couponsInRange = await CouponCodes.find({
-                    couponSeries: { $gte: startCouponSeries, $lte: endCouponSeries },
+                const couponsInRange = await Transaction.find({
+                    couponCode: { $gte: startCouponSeries, $lte: endCouponSeries },
                 });
                 // Check if any coupon in the range is consumed
-                const consumedCoupons = couponsInRange.filter(coupon => coupon.consumed === true);
+                const consumedCoupons = couponsInRange.filter(coupon =>
+                    coupon.pointsRedeemedBy != null ||
+                    coupon.cashRedeemedBy != null
+                );
                 if (consumedCoupons.length > 0) {
                     return res.status(400).json({
                         error: `${CouponSeries} series already consumed.`,
@@ -137,12 +139,9 @@ exports.createBatchNumberWithCouponCheck = async (req, res) => {
                 // Ensure the requested quantity of coupons is available
                 if (couponsInRange.length < Quantity) {
                     return res.status(400).json({
-                        error: 'Not enough coupons are available.',
+                        error: `Not enough coupons are available for this ${CouponSeries} series.`,
                     });
                 }
-
-                startCouponSeries = startCouponSeries.toString();
-                endCouponSeries = endCouponSeries.toString();
 
                 // Create the batch
                 const batch = new Batch({
@@ -161,35 +160,25 @@ exports.createBatchNumberWithCouponCheck = async (req, res) => {
                 });
 
                 let batchResult = await batch.save();
-                let transactions = [];
+                let updatedCoupons = [];
 
                 for (let i = 0; i < couponsInRange.length; i++) {
-                    const coupon = couponsInRange[i];
-                    const customUrl = `${config.redeemUrl}/redeem.html?tx=${coupon.udid}`;
+                    let coupon = couponsInRange[i];
+                    const customUrl = `${config.redeemUrl}/redeem.html?tx=${coupon.UDID}`;
                     const qrCodeData = await QRCode.toBuffer(customUrl);
-                    const qrCodeKey = `${batchResult._id}-${coupon.udid}.png`;
+                    const qrCodeKey = `${batchResult._id}-${coupon.UDID}.png`;
                     const qrCodeUrl = await uploadQRCodeToS3(qrCodeData, qrCodeKey);
-
-                    const transaction = new Transaction({
-                        transactionId: uuidv4(),
-                        batchId: batchResult._id,
-                        redeemablePoints: batchResult.RedeemablePoints,
-                        value: batchResult.value,
-                        qr_code: qrCodeUrl,
-                        couponCode: coupon.couponSeries,
-                        UDID: coupon.udid,
-                        isProcessed: false,
-                        createdBy: userId,
-                    });
-
-                    const savedTransaction = await transaction.save();
-                    transactions.push(savedTransaction);
-
-                    // Mark the coupon as consumed
-                    await CouponCodes.updateOne({ _id: coupon._id }, { $set: { consumed: true } });
+                    // update the coupon
+                    coupon.transactionId = uuidv4();
+                    coupon.batchId = batchResult._id;
+                    coupon.redeemablePoints = batchResult.RedeemablePoints;
+                    coupon.value = batchResult.value;
+                    coupon.qr_code = qrCodeUrl;
+                    coupon.createdBy = userId;
+                    coupon = await coupon.save();
+                    updatedCoupons.push(coupon);
                 }
-
-                batchResult.transactions = transactions;
+                batchResult.transactions = updatedCoupons;
                 successArray.push(batchResult);
             } catch (error) {
                 console.error(error);

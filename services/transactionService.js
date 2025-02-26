@@ -42,7 +42,7 @@ class TransactionService {
 
             if (search) {
                 query.$or = [
-                    { couponCode: parseInt(search) },
+                    { couponCode: { $regex: search, $options: 'i' } },
                     { pointsRedeemedBy: { $regex: search, $options: 'i' } },
                     { cashRedeemedBy: { $regex: search, $options: 'i' } }
                 ];
@@ -61,7 +61,7 @@ class TransactionService {
             }
 
             if (couponCode) {
-                query.couponCode = parseInt(couponCode);
+                query.couponCode = couponCode;
             }
 
             let querySet = [
