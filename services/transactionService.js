@@ -44,7 +44,7 @@ class TransactionService {
 
             if (search) {
                 query.$or = [
-                    { couponCode: { $regex: search, $options: 'i' } },
+                    { couponCode: parseInt(search) },
                     { pointsRedeemedBy: { $regex: search, $options: 'i' } },
                     { cashRedeemedBy: { $regex: search, $options: 'i' } }
                 ];

@@ -111,8 +111,8 @@ exports.createBatchNumberWithCouponCheck = async (req, res) => {
         for (let batchNumber of BatchNumbers) {
             const { CouponSeries, Brand, redeemablePoints, value, Volume, Quantity } = batchNumber;
 
-            const startCouponSeries = CouponSeries;
-            const endCouponSeries = String(Number(CouponSeries) + Quantity - 1).padStart(CouponSeries.length, '0');
+            const startCouponSeries = parseInt(CouponSeries);
+            const endCouponSeries = parseInt(CouponSeries) + Quantity - 1;
 
             try {
                 // Check if the batch number already exists
