@@ -314,9 +314,9 @@ const createBeneficiary = async (upi, mobile) => {
             logger.error(`Error while creating beneficiary.`);
             logger.debug(`Error while creating beneficiary.`, {
                 beneficiaryId: beneficiaryId,
-                beneficiaryResponse: beneficiaryResponse.data
+                beneficiaryResponse: beneficiaryResponse.data ? beneficiaryResponse.data : beneficiaryResponse.toString()
             });
-            console.error(`Error while creating beneficiary (${beneficiaryId}) ----- `, JSON.stringify(beneficiaryResponse.data));
+            //console.error(`Error while creating beneficiary (${beneficiaryId}) ----- `, JSON.stringify(beneficiaryResponse.data));
             return null;
         }
     } catch (error) {
@@ -369,7 +369,7 @@ const makeUPIPayment = async (upi, mobile, cash) => {
             if (upiPaymentResponse.status === 200) {
                 if (upiPaymentResponse.data.status === 'FAILED' && ( upiPaymentResponse.data.status_code === 'INVALID_BENE_VPA' || upiPaymentResponse.data.status_code === 'INVALID_ACCOUNT_FAIL')) {
                     logger.error(`Error while making payment to ${upi}, ${mobile}, amount: ${cash}`, {
-                        error: upiPaymentResponse.data
+                        error: upiPaymentResponse.data ? upiPaymentResponse.data : upiPaymentResponse.toString()
                     });
                     return { status: 400, message: 'Invalid UPI ID. Please enter correct UPI ID.' }
                 }
@@ -377,7 +377,7 @@ const makeUPIPayment = async (upi, mobile, cash) => {
 
             if (upiPaymentResponse.status !== 200) {
                 logger.error(`Error while making payment to ${upi}, ${mobile}, amount: ${cash}`, {
-                    error: upiPaymentResponse.data
+                    error: upiPaymentResponse.data ? upiPaymentResponse.data : upiPaymentResponse.toString()
                 });
                 return { status: 400, message: 'Error while making payment.' }
             } else {
@@ -448,15 +448,15 @@ const upiPayment = async (upi, mobile, cash) => {
             const upiPaymentResult = await makeUPIPayment(upi, mobile, cash);
             if (upiPaymentResult.status === 400) {
                 logger.error('Error while making upi payment.', {
-                    error: upiPaymentResult.data()
+                    error: upiPaymentResult
                 });
-                return { success: false, message: upiPaymentResult.message, data: upiPaymentResult.data };
+                return { success: false, message: upiPaymentResult.message };
             }else if (upiPaymentResult.status === 200) {
                 logger.info('UPI payment successful.');
                 return { success: true, message: upiPaymentResult.message };
             }else {
                 logger.error('Error while making upi payment.', {
-                    error: upiPaymentResult.data()
+                    error: upiPaymentResult
                 });
                 return { success: false, message: upiPaymentResult.message };
             }
