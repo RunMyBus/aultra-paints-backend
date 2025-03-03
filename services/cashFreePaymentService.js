@@ -271,18 +271,18 @@ async function sanitize(input) {
     return sanitized.slice(0, 50); // Ensure max length of 50 characters
 }
 
-const createBeneficiary = async (upi, name) => {
+const createBeneficiary = async (upi, mobile) => {
     let beneficiaryId = await sanitize(upi);
     try {
         logger.info('Creating beneficiary details.');
         logger.debug('Creating beneficiary details.', {
-            body: { upi, name }
+            body: { upi, mobile }
         });
         const beneficiaryResponse = await axios.post(
             `${UPI_BASE_URL}/beneficiary`,
             {
                 beneficiary_id: beneficiaryId,
-                beneficiary_name: name,
+                beneficiary_name: mobile.toString(),
                 beneficiary_instrument_details: {
                     vpa: upi
                 }
@@ -327,9 +327,9 @@ const createBeneficiary = async (upi, name) => {
     }
 }
 
-const makeUPIPayment = async (upi, name, cash) => {
+const makeUPIPayment = async (upi, mobile, cash) => {
     try {
-        let beneficiaryId = await createBeneficiary(upi, name);
+        let beneficiaryId = await createBeneficiary(upi, mobile);
 
         if (beneficiaryId === null || beneficiaryId === undefined) {
             logger.error('Error while creating beneficiary.');
@@ -367,21 +367,17 @@ const makeUPIPayment = async (upi, name, cash) => {
             );
 
             if (upiPaymentResponse.status === 200) {
-                logger.error('UPI transfer failed due to invalid UPI.');
-                logger.debug('UPI transfer failed due to invalid UPI.', {
-                    response: upiPaymentResponse.toString()
-                });
                 if (upiPaymentResponse.data.status === 'FAILED' && ( upiPaymentResponse.data.status_code === 'INVALID_BENE_VPA' || upiPaymentResponse.data.status_code === 'INVALID_ACCOUNT_FAIL')) {
-                    logger.error(`Error while making payment to ${upi}, ${name}, amount: ${cash}`, {
-                        error: upiPaymentResponse.toString()
+                    logger.error(`Error while making payment to ${upi}, ${mobile}, amount: ${cash}`, {
+                        error: upiPaymentResponse.data
                     });
                     return { status: 400, message: 'Invalid UPI ID. Please enter correct UPI ID.' }
                 }
             }
 
             if (upiPaymentResponse.status !== 200) {
-                logger.error(`Error while making payment to ${upi}, ${name}, amount: ${cash}`, {
-                    error: upiPaymentResponse.toString()
+                logger.error(`Error while making payment to ${upi}, ${mobile}, amount: ${cash}`, {
+                    error: upiPaymentResponse.data
                 });
                 return { status: 400, message: 'Error while making payment.' }
             } else {
@@ -431,7 +427,7 @@ const makeUPIPayment = async (upi, name, cash) => {
     }
 };
 
-const upiPayment = async (upi, name, cash) => {
+const upiPayment = async (upi, mobile, cash) => {
     try {
         // Get auth token
         const token = await getToken();
@@ -449,7 +445,7 @@ const upiPayment = async (upi, name, cash) => {
         const balance = await getBalance(token);
         if (balance > cash) {
             // Make upi payment
-            const upiPaymentResult = await makeUPIPayment(upi, name, cash);
+            const upiPaymentResult = await makeUPIPayment(upi, mobile, cash);
             if (upiPaymentResult.status === 400) {
                 logger.error('Error while making upi payment.', {
                     error: upiPaymentResult.toString()
