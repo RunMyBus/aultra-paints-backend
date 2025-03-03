@@ -314,9 +314,9 @@ const createBeneficiary = async (upi, mobile) => {
             logger.error(`Error while creating beneficiary.`);
             logger.debug(`Error while creating beneficiary.`, {
                 beneficiaryId: beneficiaryId,
-                beneficiaryResponse: beneficiaryResponse
+                beneficiaryResponse: beneficiaryResponse.data
             });
-            console.error(`Error while creating beneficiary (${beneficiaryId}) ----- `, JSON.stringify(beneficiaryResponse));
+            console.error(`Error while creating beneficiary (${beneficiaryId}) ----- `, JSON.stringify(beneficiaryResponse.data));
             return null;
         }
     } catch (error) {
@@ -448,7 +448,7 @@ const upiPayment = async (upi, mobile, cash) => {
             const upiPaymentResult = await makeUPIPayment(upi, mobile, cash);
             if (upiPaymentResult.status === 400) {
                 logger.error('Error while making upi payment.', {
-                    error: upiPaymentResult.toString()
+                    error: upiPaymentResult.data()
                 });
                 return { success: false, message: upiPaymentResult.message, data: upiPaymentResult.data };
             }else if (upiPaymentResult.status === 200) {
@@ -456,7 +456,7 @@ const upiPayment = async (upi, mobile, cash) => {
                 return { success: true, message: upiPaymentResult.message };
             }else {
                 logger.error('Error while making upi payment.', {
-                    error: upiPaymentResult.toString()
+                    error: upiPaymentResult.data()
                 });
                 return { success: false, message: upiPaymentResult.message };
             }
