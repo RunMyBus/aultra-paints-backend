@@ -369,11 +369,11 @@ const makeUPIPayment = async (upi, name, cash) => {
             if (upiPaymentResponse.status === 200) {
                 logger.error('UPI transfer failed due to invalid UPI.');
                 logger.debug('UPI transfer failed due to invalid UPI.', {
-                    response: upiPaymentResponse
+                    response: upiPaymentResponse.toString()
                 });
                 if (upiPaymentResponse.data.status === 'FAILED' && ( upiPaymentResponse.data.status_code === 'INVALID_BENE_VPA' || upiPaymentResponse.data.status_code === 'INVALID_ACCOUNT_FAIL')) {
                     logger.error(`Error while making payment to ${upi}, ${name}, amount: ${cash}`, {
-                        error: upiPaymentResponse
+                        error: upiPaymentResponse.toString()
                     });
                     return { status: 400, message: 'Invalid UPI ID. Please enter correct UPI ID.' }
                 }
@@ -381,7 +381,7 @@ const makeUPIPayment = async (upi, name, cash) => {
 
             if (upiPaymentResponse.status !== 200) {
                 logger.error(`Error while making payment to ${upi}, ${name}, amount: ${cash}`, {
-                    error: upiPaymentResponse
+                    error: upiPaymentResponse.toString()
                 });
                 return { status: 400, message: 'Error while making payment.' }
             } else {
@@ -452,7 +452,7 @@ const upiPayment = async (upi, name, cash) => {
             const upiPaymentResult = await makeUPIPayment(upi, name, cash);
             if (upiPaymentResult.status === 400) {
                 logger.error('Error while making upi payment.', {
-                    error: upiPaymentResult
+                    error: upiPaymentResult.toString()
                 });
                 return { success: false, message: upiPaymentResult.message, data: upiPaymentResult.data };
             }else if (upiPaymentResult.status === 200) {
@@ -460,7 +460,7 @@ const upiPayment = async (upi, name, cash) => {
                 return { success: true, message: upiPaymentResult.message };
             }else {
                 logger.error('Error while making upi payment.', {
-                    error: upiPaymentResult
+                    error: upiPaymentResult.toString()
                 });
                 return { success: false, message: upiPaymentResult.message };
             }
