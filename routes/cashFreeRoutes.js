@@ -25,8 +25,8 @@ router.post('/testPayment', async (req, res) => {
 
 router.post('/testUPIPayment', async (req, res) => {
     try {
-        const { upi, name, cash } = req.body;
-        const paymentResult = await cashFreePaymentService.upiPayment(upi, name, cash);
+        const { upi, mobile, cash } = req.body;
+        const paymentResult = await cashFreePaymentService.upiPayment(upi, mobile, cash);
         if (paymentResult.success) {
             res.status(200).json({ success: true, message: paymentResult.message });
         } else {

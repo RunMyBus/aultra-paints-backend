@@ -82,7 +82,7 @@ exports.register = async (req, next) => {
 
 exports.redeemCash = async (req, next) => {
     try {
-        const { mobile, name, upi } = req.body;
+        const { mobile, upi } = req.body;
         const qr = req.params.qrCodeID;
 
         // Find the user by mobile number
@@ -103,7 +103,7 @@ exports.redeemCash = async (req, next) => {
             return next({ status: 400, message: paymentResult.message });
         }*/
 
-        const paymentResult = await cashFreePaymentService.upiPayment(upi, name, transaction.value);
+        const paymentResult = await cashFreePaymentService.upiPayment(upi, mobile, transaction.value);
         if (!paymentResult.success) {
             return next({ status: 400, message: paymentResult.message });
         }
@@ -139,7 +139,7 @@ exports.redeemCash = async (req, next) => {
             }
 
             const ledgerEntry = {
-                name: userData.name || name,
+                name: userData.name || mobile.toString(),
                 mobile: userData.mobile,
                 // redeemablePoints: updatedTransaction.redeemablePoints,
                 couponCode: updatedTransaction.couponCode,
@@ -161,10 +161,11 @@ exports.redeemCash = async (req, next) => {
             const cashValue = transaction.value || 0;
 
             const newUser = new User({
-                name: name || 'NA',  
+                name: mobile.toString() || 'NA',
                 mobile: mobile,
                 // rewardPoints: redeemablePointsCount,
                 cash: cashValue,
+                upiID: upi
             });
 
             const userData = await newUser.save();
