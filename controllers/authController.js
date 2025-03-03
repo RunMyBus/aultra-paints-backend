@@ -82,7 +82,7 @@ exports.register = async (req, next) => {
 
 exports.redeemCash = async (req, next) => {
     try {
-        const { mobile, name } = req.body;
+        const { mobile, name, upi } = req.body;
         const qr = req.params.qrCodeID;
 
         // Find the user by mobile number
@@ -98,7 +98,12 @@ exports.redeemCash = async (req, next) => {
             return next({status: 400, message: 'Coupon already redeemed.' });
         }
 
-        const paymentResult = await cashFreePaymentService.pay2Phone(mobile, name, transaction.value);
+        /*const paymentResult = await cashFreePaymentService.pay2Phone(mobile, name, transaction.value);
+        if (!paymentResult.success) {
+            return next({ status: 400, message: paymentResult.message });
+        }*/
+
+        const paymentResult = await cashFreePaymentService.upiPayment(upi, name, transaction.value);
         if (!paymentResult.success) {
             return next({ status: 400, message: paymentResult.message });
         }

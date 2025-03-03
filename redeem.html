@@ -158,6 +158,11 @@
                             <input class="form-control" type="text" id="name" placeholder="Enter your name" />
                         </div>
 
+                        <div class="mb-3">
+                            <label for="name" class="form-label">UPI ID</label>
+                            <input class="form-control" type="text" id="upi" placeholder="Enter your UPI ID" />
+                        </div>
+
                         <div id="message"></div>
     
                         <button class="btn btn-success" type="submit">Submit</button>
@@ -189,6 +194,7 @@
         const form = document.getElementById('mobileForm');
         const mobileNumberInput = document.getElementById('mobileNumber');
         const nameInput = document.getElementById('name');
+        const upiInput = document.getElementById('upi');
         const messageDiv = document.getElementById('message');
 
         // Extract QR Code ID from URL
@@ -207,10 +213,17 @@
             event.preventDefault();
             const mobile = mobileNumberInput.value.trim();
             const name = nameInput.value.trim();
+            const upi = upiInput.value.trim();
 
               // Validate name field
               if (!name) {
                 messageDiv.textContent = 'Name is required.';
+                messageDiv.style.color = 'red';
+                return;
+            }
+
+            if (!upi) {
+                messageDiv.textContent = 'UPI ID is required.';
                 messageDiv.style.color = 'red';
                 return;
             }
@@ -234,7 +247,7 @@
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({mobile, name}),
+                    body: JSON.stringify({mobile, name, upi}),
                 });
 
                 const responseData = await response.json();

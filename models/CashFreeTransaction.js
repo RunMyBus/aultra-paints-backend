@@ -6,9 +6,7 @@ const CashFreeTransactionSchema = new mongoose.Schema({
     status: { type: String },
     status_code: { type: String },
     status_description: { type: String },
-    beneficiary_details: {
-        beneficiary_id: { type: String }
-    },
+    beneficiary_details: { type: Object },
     currency: { type: String },
     transfer_amount: { type: Number },
     transfer_service_charge: { type: Number },
@@ -16,8 +14,10 @@ const CashFreeTransactionSchema = new mongoose.Schema({
     transfer_mode: { type: String },
     transfer_utr: { type: String },
     fundsource_id: { type: String },
-    added_on: { type: Date },
-    updated_on: { type: Date }
+    added_on: { type: String },
+    updated_on: { type: String },
+    event_time: { type: String },
+    event_type: { type: String }
 },{timestamps: true});
 
 const CashFreeTransaction = mongoose.model('CashFreeTransaction', CashFreeTransactionSchema, 'cashFreeTransactions');
