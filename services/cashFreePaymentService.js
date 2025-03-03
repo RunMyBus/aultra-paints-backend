@@ -1,5 +1,6 @@
 const axios = require('axios');
 const CashFreeTransaction = require('../models/CashFreeTransaction');
+const logger = require('../utils/logger');
 
 const API_VERSION = '2024-01-01'
 let CLIENT_ID = null;
@@ -29,6 +30,7 @@ if (config.ACTIVATE_CASHFREE === 'true') {
 
 const getToken = async () => {
     try {
+        logger.info('Getting token');
         const response = await axios.post(`${BASE_URL}/v1/authorize`, {}, {
             headers: {
                 'X-Client-Id': CLIENT_ID,
@@ -37,20 +39,55 @@ const getToken = async () => {
         });
 
         if (response.data.status === 'SUCCESS') {
+            logger.info('Successfully received token.');
             return response.data.data.token;
         } else {
+            logger.error('Error while receiving token.');
             throw new Error(response.data.message);
             //return response.data.message;
         }
     } catch (error) {
-        console.error('Error fetching token:', error.message);
-        //throw new Error('Failed to fetch authorization token.');
+        logger.error('Error fetching token.', {
+            error: error
+        });
         return error.message;
     }
 };
 
+const verifyUPI = async (token, upi) => {
+    try {
+        logger.info('Validating upi id.');
+        logger.debug('Validating upi id.', {
+            upi_id: upi
+        });
+        const response = await axios.get(`${BASE_URL}/v1/validation/upiDetails?vpa=${upi}`, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+        });
+
+        if (response.data.subCode === "200") {
+            logger.info('UPI validation successful.');
+        } else if (response.data.subCode === "422") {
+            logger.error('UPI validation failed.', {
+                api_response: response.toString()
+            });
+        }
+
+        return response;
+
+    } catch (error) {
+        logger.error('Error validating upi id.', {
+            error: error
+        });
+        return error.message;
+    }
+}
+
 const getBalance = async (token) => {
     try {
+        logger.info('Getting balance');
         const response = await axios.get(`${BASE_URL}/v1/getBalance`, {
             headers: {
                 Authorization: `Bearer ${token}`,
@@ -59,13 +96,23 @@ const getBalance = async (token) => {
         });
 
         if (response.data.status === 'SUCCESS') {
-            return parseFloat(response.data.data.availableBalance);
+            const availableBalance = parseFloat(response.data.data.availableBalance);
+            logger.info('Successfully received balance.');
+            logger.debug('Successfully received balance.', {
+                availableBalance: availableBalance
+            });
+            return availableBalance;
         } else {
+            logger.error('Error while receiving balance.');
+            logger.debug('Error while receiving balance.', {
+                token: token
+            })
             throw new Error(response.data.message);
         }
     } catch (error) {
-        console.error('Error fetching balance:', error.message);
-        //throw new Error('Failed to fetch account balance.');
+        logger.error('Error fetching balance:', {
+            error: error
+        });
         return error.message;
     }
 };
@@ -227,6 +274,10 @@ async function sanitize(input) {
 const createBeneficiary = async (upi, name) => {
     let beneficiaryId = await sanitize(upi);
     try {
+        logger.info('Creating beneficiary details.');
+        logger.debug('Creating beneficiary details.', {
+            body: { upi, name }
+        });
         const beneficiaryResponse = await axios.post(
             `${UPI_BASE_URL}/beneficiary`,
             {
@@ -248,18 +299,30 @@ const createBeneficiary = async (upi, name) => {
         );
 
         if (beneficiaryResponse.status === 201) {
-            console.info(`Successfully created beneficiary - ${beneficiaryId}.`);
+            logger.info('Successfully created beneficiary.');
+            logger.debug('Successfully created beneficiary.', {
+                beneficiaryId: beneficiaryId
+            });
             return beneficiaryId;
         } else if (beneficiaryResponse.status === 409) {
-            //beneficiaryId = beneficiaryResponse.data.beneficiary_id;
-            console.warn(`Beneficiary already exists - ${beneficiaryId}.`);
+            logger.warn('Beneficiary already exists.');
+            logger.debug('Beneficiary already exists.', {
+                beneficiaryId: beneficiaryId
+            });
             return beneficiaryId;
         } else {
+            logger.error(`Error while creating beneficiary.`);
+            logger.debug(`Error while creating beneficiary.`, {
+                beneficiaryId: beneficiaryId,
+                beneficiaryResponse: beneficiaryResponse
+            });
             console.error(`Error while creating beneficiary (${beneficiaryId}) ----- `, JSON.stringify(beneficiaryResponse));
             return null;
         }
     } catch (error) {
-        console.error('Error during createBeneficiary --- ', error);
+        logger.error(`Error during createBeneficiary.`, {
+            error: error
+        });
         return error;
     }
 }
@@ -269,10 +332,15 @@ const makeUPIPayment = async (upi, name, cash) => {
         let beneficiaryId = await createBeneficiary(upi, name);
 
         if (beneficiaryId === null || beneficiaryId === undefined) {
+            logger.error('Error while creating beneficiary.');
             return { status: 400, message: 'Error while creating beneficiary.' }
         } else {
             let transferId = await sanitize(upi);
             transferId = (transferId +"_"+ Date.now()).toString();
+            logger.info('Transfer id created.');
+            logger.debug('Transfer id created.', {
+                transferId: transferId
+            });
 
             const upiPaymentResponse = await axios.post(
                 `${UPI_BASE_URL}/transfers`,
@@ -299,14 +367,22 @@ const makeUPIPayment = async (upi, name, cash) => {
             );
 
             if (upiPaymentResponse.status === 200) {
-                if (upiPaymentResponse.data.status === 'FAILED' && upiPaymentResponse.data.status_code === 'INVALID_BENE_VPA') {
-                    console.error(`Error while making payment to ${upi}, ${name}, amount: ${cash} ----- `, upiPaymentResponse);
+                logger.error('UPI transfer failed due to invalid UPI.');
+                logger.debug('UPI transfer failed due to invalid UPI.', {
+                    response: upiPaymentResponse
+                });
+                if (upiPaymentResponse.data.status === 'FAILED' && ( upiPaymentResponse.data.status_code === 'INVALID_BENE_VPA' || upiPaymentResponse.data.status_code === 'INVALID_ACCOUNT_FAIL')) {
+                    logger.error(`Error while making payment to ${upi}, ${name}, amount: ${cash}`, {
+                        error: upiPaymentResponse
+                    });
                     return { status: 400, message: 'Invalid UPI ID. Please enter correct UPI ID.' }
                 }
             }
 
             if (upiPaymentResponse.status !== 200) {
-                console.error(`Error while making payment to ${upi}, ${name}, amount: ${cash} ----- `, upiPaymentResponse);
+                logger.error(`Error while making payment to ${upi}, ${name}, amount: ${cash}`, {
+                    error: upiPaymentResponse
+                });
                 return { status: 400, message: 'Error while making payment.' }
             } else {
                 const responseData = upiPaymentResponse.data;
@@ -343,12 +419,14 @@ const makeUPIPayment = async (upi, name, cash) => {
                         updated_on: new Date().toString()
                     });
                 }
-                console.info(`Payment initiated successfully. CashFree TransactionId - ${cashFreeTransaction._id}`);
+                logger.info(`Payment initiated successfully. CashFree TransactionId - ${cashFreeTransaction._id}`);
                 return { status: 200, message: 'Payment initiated successfully.' };
             }
         }
     } catch (error) {
-        console.error('Error during makePayment:', error);
+        logger.error('Error during makePayment.', {
+            error: error
+        });
         return error;
     }
 };
@@ -357,21 +435,41 @@ const upiPayment = async (upi, name, cash) => {
     try {
         // Get auth token
         const token = await getToken();
+        const verifyUPIResponse = await verifyUPI(token, upi);
+        if (verifyUPIResponse.data.subCode === "422") {
+            logger.error(`Error while making payment to ${upi}, ${name}, amount: ${cash}`, {
+                api_response: verifyUPIResponse.toString()
+            });
+            console.error(`Error while making payment to ${upi}, ${name}, amount: ${cash} ----- `, verifyUPIResponse);
+            return { success: false, message: 'Invalid UPI ID. Please enter correct UPI ID.' }
+        } else if (verifyUPIResponse.data.subCode === "200" && verifyUPIResponse.data.accountExists === 'YES') {
+            console.log('UPI validation successful. Account exists.');
+        }
         // Get account balance
         const balance = await getBalance(token);
         if (balance > cash) {
             // Make upi payment
             const upiPaymentResult = await makeUPIPayment(upi, name, cash);
             if (upiPaymentResult.status === 400) {
+                logger.error('Error while making upi payment.', {
+                    error: upiPaymentResult
+                });
                 return { success: false, message: upiPaymentResult.message, data: upiPaymentResult.data };
             }else if (upiPaymentResult.status === 200) {
+                logger.info('UPI payment successful.');
                 return { success: true, message: upiPaymentResult.message };
             }else {
+                logger.error('Error while making upi payment.', {
+                    error: upiPaymentResult
+                });
                 return { success: false, message: upiPaymentResult.message };
             }
         }
     } catch (error) {
         console.error('Payment error --- ', error);
+        logger.error('Error while making upi payment.', {
+            error: error
+        });
         return { success: false, message: error.message };
     }
 }
