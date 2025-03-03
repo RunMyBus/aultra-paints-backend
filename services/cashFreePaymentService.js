@@ -435,7 +435,7 @@ const upiPayment = async (upi, name, cash) => {
     try {
         // Get auth token
         const token = await getToken();
-        const verifyUPIResponse = await verifyUPI(token, upi);
+        /*const verifyUPIResponse = await verifyUPI(token, upi);
         if (verifyUPIResponse.data.subCode === "422") {
             logger.error(`Error while making payment to ${upi}, ${name}, amount: ${cash}`, {
                 api_response: verifyUPIResponse.toString()
@@ -444,7 +444,7 @@ const upiPayment = async (upi, name, cash) => {
             return { success: false, message: 'Invalid UPI ID. Please enter correct UPI ID.' }
         } else if (verifyUPIResponse.data.subCode === "200" && verifyUPIResponse.data.accountExists === 'YES') {
             console.log('UPI validation successful. Account exists.');
-        }
+        }*/
         // Get account balance
         const balance = await getBalance(token);
         if (balance > cash) {
