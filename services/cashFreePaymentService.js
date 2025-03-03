@@ -5,17 +5,26 @@ const API_VERSION = '2024-01-01'
 let CLIENT_ID = null;
 let CLIENT_SECRET = null;
 let BASE_URL = null;
+let UPI_BASE_URL = null;
 let GET_TRANSFER = null;
+let FUND_SOURCE_ID = null;
+const REMARKS = 'Aultra paints reward';
+const TRANSFER_MODE = 'upi';
+const TRANSFER_CURRENCY = 'INR';
 if (config.ACTIVATE_CASHFREE === 'true') {
     CLIENT_ID = config.X_CLIENT_ID;
     CLIENT_SECRET = config.X_CLIENT_SECRET;
     BASE_URL = config.BASE_URL;
+    UPI_BASE_URL = config.UPI_BASE_URL;
     GET_TRANSFER = config.GET_TRANSFERS;
+    FUND_SOURCE_ID = config.FUND_SOURCE_ID;
 }else {
     CLIENT_ID = config.X_CLIENT_ID_QA;
     CLIENT_SECRET = config.X_CLIENT_SECRET_QA;
     BASE_URL = config.BASE_URL_QA;
+    UPI_BASE_URL = config.UPI_BASE_URL_QA;
     GET_TRANSFER = config.GET_TRANSFERS_QA;
+    FUND_SOURCE_ID = config.FUND_SOURCE_ID_QA;
 }
 
 const getToken = async () => {
@@ -209,4 +218,162 @@ const pay2Phone = async (mobile, name, cash) => {
     }
 };
 
-module.exports = { pay2Phone, checkTransferStatus, updateToDB };
+async function sanitize(input) {
+    let sanitized = input.replace(/[^a-zA-Z0-9\-_|.]/g, "_"); // Remove invalid characters
+    sanitized = sanitized.replace(/\s+/g, "_"); // Replace spaces with underscores
+    return sanitized.slice(0, 50); // Ensure max length of 50 characters
+}
+
+const createBeneficiary = async (upi, name) => {
+    let beneficiaryId = await sanitize(upi);
+    try {
+        const beneficiaryResponse = await axios.post(
+            `${UPI_BASE_URL}/beneficiary`,
+            {
+                beneficiary_id: beneficiaryId,
+                beneficiary_name: name,
+                beneficiary_instrument_details: {
+                    vpa: upi
+                }
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-version': API_VERSION,
+                    'x-client-id': CLIENT_ID,
+                    'x-client-secret': CLIENT_SECRET
+                },
+                validateStatus: (status) => true  // Accept all status codes
+            }
+        );
+
+        if (beneficiaryResponse.status === 201) {
+            console.info(`Successfully created beneficiary - ${beneficiaryId}.`);
+            return beneficiaryId;
+        } else if (beneficiaryResponse.status === 409) {
+            //beneficiaryId = beneficiaryResponse.data.beneficiary_id;
+            console.warn(`Beneficiary already exists - ${beneficiaryId}.`);
+            return beneficiaryId;
+        } else {
+            console.error(`Error while creating beneficiary (${beneficiaryId}) ----- `, JSON.stringify(beneficiaryResponse));
+            return null;
+        }
+    } catch (error) {
+        console.error('Error during createBeneficiary --- ', error);
+        return error;
+    }
+}
+
+const makeUPIPayment = async (upi, name, cash) => {
+    try {
+        let beneficiaryId = await createBeneficiary(upi, name);
+
+        if (beneficiaryId === null || beneficiaryId === undefined) {
+            return { status: 400, message: 'Error while creating beneficiary.' }
+        } else {
+            let transferId = await sanitize(upi);
+            transferId = (transferId +"_"+ Date.now()).toString();
+
+            const upiPaymentResponse = await axios.post(
+                `${UPI_BASE_URL}/transfers`,
+                {
+                    transfer_id: transferId,
+                    transfer_amount: Number(cash),
+                    beneficiary_details: {
+                        beneficiary_id: beneficiaryId
+                    },
+                    transfer_currency: TRANSFER_CURRENCY,
+                    transfer_mode: TRANSFER_MODE,
+                    transfer_remarks: REMARKS,
+                    fundsource_id: FUND_SOURCE_ID,
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-version': API_VERSION,
+                        'x-client-id': CLIENT_ID,
+                        'x-client-secret': CLIENT_SECRET
+                    },
+                    validateStatus: (status) => true  // Accept all status codes
+                }
+            );
+
+            if (upiPaymentResponse.status === 200) {
+                if (upiPaymentResponse.data.status === 'FAILED' && upiPaymentResponse.data.status_code === 'INVALID_BENE_VPA') {
+                    console.error(`Error while making payment to ${upi}, ${name}, amount: ${cash} ----- `, upiPaymentResponse);
+                    return { status: 400, message: 'Invalid UPI ID. Please enter correct UPI ID.' }
+                }
+            }
+
+            if (upiPaymentResponse.status !== 200) {
+                console.error(`Error while making payment to ${upi}, ${name}, amount: ${cash} ----- `, upiPaymentResponse);
+                return { status: 400, message: 'Error while making payment.' }
+            } else {
+                const responseData = upiPaymentResponse.data;
+                let cashFreeTransaction = null;
+                if (responseData != null ) {
+                    cashFreeTransaction = await CashFreeTransaction.create({
+                        transfer_id: transferId,
+                        cf_transfer_id: responseData.cf_transfer_id,
+                        status: responseData.status,
+                        status_code: responseData.status_code,
+                        status_description: responseData.message,
+                        beneficiary_details: responseData.beneficiary_details,
+                        currency: responseData.currency ? responseData.currency : TRANSFER_CURRENCY,
+                        transfer_amount: responseData.transfer_amount,
+                        transfer_mode: responseData.transfer_mode,
+                        added_on: responseData.added_on ? responseData.added_on.toString() : new Date().toString(),
+                        updated_on: responseData.updated_on ? responseData.updated_on.toString() : new Date().toString()
+                    });
+                } else {
+                    cashFreeTransaction = await CashFreeTransaction.create({
+                        transfer_id: transferId,
+                        status: responseData.status,
+                        status_description: responseData.message,
+                        beneficiary_details: {
+                            beneficiary_id: beneficiaryId,
+                            beneficiary_instrument_details: {
+                                vpa: upi
+                            }
+                        },
+                        currency: TRANSFER_CURRENCY,
+                        transfer_amount: cash,
+                        transfer_mode: TRANSFER_MODE,
+                        added_on: new Date().toString(),
+                        updated_on: new Date().toString()
+                    });
+                }
+                console.info(`Payment initiated successfully. CashFree TransactionId - ${cashFreeTransaction._id}`);
+                return { status: 200, message: 'Payment initiated successfully.' };
+            }
+        }
+    } catch (error) {
+        console.error('Error during makePayment:', error);
+        return error;
+    }
+};
+
+const upiPayment = async (upi, name, cash) => {
+    try {
+        // Get auth token
+        const token = await getToken();
+        // Get account balance
+        const balance = await getBalance(token);
+        if (balance > cash) {
+            // Make upi payment
+            const upiPaymentResult = await makeUPIPayment(upi, name, cash);
+            if (upiPaymentResult.status === 400) {
+                return { success: false, message: upiPaymentResult.message, data: upiPaymentResult.data };
+            }else if (upiPaymentResult.status === 200) {
+                return { success: true, message: upiPaymentResult.message };
+            }else {
+                return { success: false, message: upiPaymentResult.message };
+            }
+        }
+    } catch (error) {
+        console.error('Payment error --- ', error);
+        return { success: false, message: error.message };
+    }
+}
+
+module.exports = { pay2Phone, checkTransferStatus, updateToDB, upiPayment };
