@@ -88,7 +88,7 @@ class TransactionService {
                 {
                     $project: {
                         _id: 1,
-                        transactionId: 1,
+                        //transactionId: 1,
                         batchId: 1,
                         branchName: { $ifNull: ['$batchData.Branch', ''] },
                         batchNumber: { $ifNull: ['$batchData.BatchNumber', ''] },
@@ -99,12 +99,12 @@ class TransactionService {
                         updatedByName: { $ifNull: ['$uploadData.name', ''] },
                         createdBy: 1,
                         updatedBy: 1,
-                        qr_code_id: 1,
+                        //qr_code_id: 1,
                         qr_code: 1,
                         //couponValue: 1,
                         //points: 1,
                         //redeemedBy: 1,
-                        redeemedByName:  { $ifNull: ['$redeemedData.name', ''] },
+                        //redeemedByName:  { $ifNull: ['$redeemedData.name', ''] },
                         //redeemedByMobile: { $ifNull: ['$redeemedData.mobile', ''] },
                         isProcessed: 1,
                         createdAt: 1,

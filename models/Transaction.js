@@ -2,12 +2,12 @@ const mongoose = require('mongoose');
 
 
 const transactionSchema = new mongoose.Schema({
-    transactionId: { type: String, required: true, unique: true },
-    batchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Batch', required: true },
+    //transactionId: { type: String, required: true, unique: true },
+    batchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Batch' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     //qr_code_id: {type: String},
-    qr_code: { type: String, required: true, unique: true },
+    qr_code: { type: String },
     //couponValue: { type: Number },
     //points: { type: Number },
     redeemablePoints: { type: Number },
