@@ -65,34 +65,28 @@ exports.markTransactionAsProcessed = async (req, res) => {
             }
             let userData = {};
             if (updatedTransaction.pointsRedeemedBy !== undefined) {
-                // let getTransaction = await Transaction.findOne({couponCode: qr})
-                // batch = await Batch.findOne({_id: getTransaction.batchId});
-                // if (getTransaction) {
-                    const rewardPointsCount = updatedTransaction.redeemablePoints || 0;
-                    // const cashCount = updatedTransaction.value || 0;
-
-                    // Update the user fields safely
-                    userData = await User.findOneAndUpdate(
-                        { _id: updatedTransaction.updatedBy },
-                        [
-                            {
-                                $set: {
-                                    rewardPoints: {
-                                        $add: [{ $ifNull: ["$rewardPoints", 0] }, rewardPointsCount],
-                                    }/*,
-                                    cash: {
-                                        $add: [{ $ifNull: ["$cash", 0] }, cashCount],
-                                    }*/
-                                }
+                const rewardPointsCount = updatedTransaction.redeemablePoints || 0;
+                // Update the user fields safely
+                userData = await User.findOneAndUpdate(
+                    { _id: updatedTransaction.updatedBy },
+                    [
+                        {
+                            $set: {
+                                rewardPoints: {
+                                    $add: [{ $ifNull: ["$rewardPoints", 0] }, rewardPointsCount],
+                                }/*,
+                                cash: {
+                                    $add: [{ $ifNull: ["$cash", 0] }, cashCount],
+                                }*/
                             }
-                        ],
-                        { new: true } // Return the updated document
-                    );
+                        }
+                    ],
+                    { new: true } // Return the updated document
+                );
 
-                    if (!userData) {
-                        return res.status(404).json({ message: 'User not found for update.' });
-                    }
-                // }
+                if (!userData) {
+                    return res.status(404).json({ message: 'User not found for update.' });
+                }
             }
 
             if (!updatedTransaction) {
@@ -100,13 +94,8 @@ exports.markTransactionAsProcessed = async (req, res) => {
             }
 
             const data = {
-                // qr_code_id: updatedTransaction.qr_code_id,
-                // isProcessed: updatedTransaction.isProcessed,
                 rewardPoints: updatedTransaction.redeemablePoints,
-                couponCode: document.couponCode,
-                // cash: updatedTransaction.value,
-                // brachName: batch.Branch,
-                // batchNumber: batch.BatchNumber,
+                couponCode: document.couponCode
             }
 
             await transactionLedger.create({
