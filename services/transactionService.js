@@ -63,7 +63,7 @@ class TransactionService {
             }
 
             if (couponCode) {
-                query.couponCode = couponCode;
+                query.couponCode = parseInt(couponCode);
             }
 
             let querySet = [
@@ -113,7 +113,16 @@ class TransactionService {
             // Execute query
             const transactionsData = await Transaction.aggregate(querySet);
 
-            const total = await Transaction.countDocuments(query);
+            const totalQuery = [
+                { $match: query },
+                { $addFields: { batchId: { $toObjectId: "$batchId" } } },
+                { $lookup: { from: 'batchnumbers', localField: 'batchId', foreignField: '_id', as: 'batchData' } },
+                { $match: { "batchData.0": { $exists: true } } },
+                { $count: "total" }
+            ];
+
+            const totalResult = await Transaction.aggregate(totalQuery);
+            const total = totalResult.length > 0 ? totalResult[0].total : 0;
 
             logger.info('Successfully retrieved transactions', {
                 count: transactionsData.length,
