@@ -103,7 +103,6 @@ exports.createBatchNumberWithCouponCheck = async (req, res) => {
                     const qrCodeKey = `${batchResult._id}-${coupon.UDID}.png`;
                     const qrCodeUrl = await uploadQRCodeToS3(qrCodeData, qrCodeKey);
                     // update the coupon
-                    //coupon.transactionId = uuidv4();
                     coupon.batchId = batchResult._id;
                     coupon.redeemablePoints = batchResult.RedeemablePoints;
                     coupon.value = batchResult.value;

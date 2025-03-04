@@ -184,7 +184,6 @@ exports.redeemCash = async (req, next) => {
             const data = {
                 mobile: userData.mobile,
                 name: userData.name || 'NA',
-                // redeemablePoints: updatedTransaction.redeemablePoints,
                 couponCode: updatedTransaction.couponCode,
                 cash: updatedTransaction.value,
             };

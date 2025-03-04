@@ -17,19 +17,6 @@ const BatchNumberSchema = new Schema({
     endCouponSeries: { type: Number, required: true },
 }, {timestamps: true});
 
-// Add index to enforce unique batch numbers within a month at a branch
-// BatchNumberSchema.index(
-//     { Branch: 1, BatchNumber: 1, CreationDate: 1 },
-//     {
-//         unique: true,
-//         partialFilterExpression: {
-//             CreationDate: { $exists: true },
-//             BatchNumber: { $exists: true },
-//             Branch: { $exists: true },
-//         },
-//     }
-// );
-
 // Create the Branch model
 const Batch = mongoose.model('BatchNumber', BatchNumberSchema);
 

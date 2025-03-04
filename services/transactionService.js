@@ -88,7 +88,6 @@ class TransactionService {
                 {
                     $project: {
                         _id: 1,
-                        //transactionId: 1,
                         batchId: 1,
                         branchName: { $ifNull: ['$batchData.Branch', ''] },
                         batchNumber: { $ifNull: ['$batchData.BatchNumber', ''] },
@@ -99,13 +98,7 @@ class TransactionService {
                         updatedByName: { $ifNull: ['$uploadData.name', ''] },
                         createdBy: 1,
                         updatedBy: 1,
-                        //qr_code_id: 1,
                         qr_code: 1,
-                        //couponValue: 1,
-                        //points: 1,
-                        //redeemedBy: 1,
-                        //redeemedByName:  { $ifNull: ['$redeemedData.name', ''] },
-                        //redeemedByMobile: { $ifNull: ['$redeemedData.mobile', ''] },
                         isProcessed: 1,
                         createdAt: 1,
                         updatedAt: 1,
@@ -175,7 +168,6 @@ class TransactionService {
                 stack: error.stack,
                 pid: process.pid
             });
-            //console.error('Invalid URL:', qrCodeUrl, error);
             return null;
         }
     };
@@ -246,10 +238,7 @@ class TransactionService {
                                 $set: {
                                     rewardPoints: {
                                         $add: [{ $ifNull: ["$rewardPoints", 0] }, rewardPointsCount],
-                                    }/*,
-                                    cash: {
-                                        $add: [{ $ifNull: ["$cash", 0] }, cashCount],
-                                    }*/
+                                    }
                                 }
                             }
                         ],
@@ -274,13 +263,8 @@ class TransactionService {
                 }
 
                 const data = {
-                    // qr_code_id: updatedTransaction.qr_code_id,
-                    // isProcessed: updatedTransaction.isProcessed,
                     rewardPoints: updatedTransaction.redeemablePoints,
                     couponCode: document.couponCode,
-                    // cash: updatedTransaction.value,
-                    // brachName: batch.Branch,
-                    // batchNumber: batch.BatchNumber,
                 }
 
                 await transactionLedger.create({
