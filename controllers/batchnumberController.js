@@ -62,8 +62,7 @@ exports.createBatchNumberWithCouponCheck = async (req, res) => {
                 });
                 // Check if any coupon in the range is consumed
                 const consumedCoupons = couponsInRange.filter(coupon =>
-                    coupon.pointsRedeemedBy != null ||
-                    coupon.cashRedeemedBy != null
+                    coupon.batchId
                 );
                 if (consumedCoupons.length > 0) {
                     return res.status(400).json({
