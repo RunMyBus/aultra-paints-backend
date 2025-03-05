@@ -6,7 +6,7 @@ const passport = require('../middleware/passport');
 router.use(passport.authenticate('jwt', { session: false }));
 
 // Existing route to get all transactions for a batch
-router.post('/', transactionController.getAllTransactionsForBatch);
+router.post('/', transactionController.getAllTransactions);
 
 // New route to mark transaction as processed
 router.patch('/mark-processed/:qr', transactionController.markTransactionAsProcessed);
