@@ -19,13 +19,13 @@ class TransactionService {
             const limit = parseInt(body.limit || 10);
             const skip = (page - 1) * limit;
 
-            const { userId, search, pointsRedeemedBy, cashRedeemedBy, couponCode } = body;
+            const { searchKey, pointsRedeemedBy, cashRedeemedBy, couponCode, showUsedCoupons } = body;
 
             logger.debug('Query parameters processed', {
                 page,
                 limit,
                 skip,
-                search,
+                searchKey,
                 pid: process.pid
             });
 
@@ -34,19 +34,19 @@ class TransactionService {
             // fixed check to display only activated coupons
             query.batchId = { $exists: true }
 
-            if (userId) {
-                query.redeemedBy = userId;
-                logger.debug('Adding userId filter', {
-                    userId,
-                    pid: process.pid
-                });
-            }
+            // if (userId) {
+            //     query.redeemedBy = userId;
+            //     logger.debug('Adding userId filter', {
+            //         userId,
+            //         pid: process.pid
+            //     });
+            // }
 
-            if (search) {
+            if (searchKey) {
                 query.$or = [
-                    { couponCode: parseInt(search) },
-                    { pointsRedeemedBy: { $regex: search, $options: 'i' } },
-                    { cashRedeemedBy: { $regex: search, $options: 'i' } }
+                    { couponCode: parseInt(searchKey) },
+                    { pointsRedeemedBy: { $regex: searchKey, $options: 'i' } },
+                    { cashRedeemedBy: { $regex: searchKey, $options: 'i' } }
                 ];
                 logger.debug('Search query built', {
                     searchQuery: query.$or,
@@ -54,6 +54,18 @@ class TransactionService {
                 });
             }
 
+            if (showUsedCoupons) {
+                // If showUsedCoupons is true, check if pointsRedeemedBy or cashRedeemedBy exists
+                query.$or = [
+                    { pointsRedeemedBy: { $exists: true } },
+                    { cashRedeemedBy: { $exists: true } }
+                ];
+                logger.debug('Show used coupons filter added', {
+                    showUsedCoupons,
+                    pid: process.pid
+                });
+            }
+            
             if (pointsRedeemedBy) {
                 query.pointsRedeemedBy = { $regex: pointsRedeemedBy, $options: 'i' };
             }

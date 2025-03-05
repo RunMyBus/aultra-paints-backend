@@ -8,7 +8,7 @@ const transactionLedger = require("../models/TransactionLedger");
 const logger = require('../utils/logger'); // Import the configured logger
 const transactionService = require('../services/transactionService');
 
-exports.getAllTransactionsForBatch = async (req, res) => {
+exports.getAllTransactions = async (req, res) => {
 
     logger.info('Starting getAllTransactionsForBatch request', {
         page: req.body.page,
