@@ -16,6 +16,10 @@ router.get('batch/:BatchNumber', batchnumberController.getBranchByBatchNumber);
 //router.post('/add', batchnumberController.createBatchNumber);
 router.post('/add', batchnumberController.createBatchNumberWithCouponCheck);
 
+
+//router.post('/add', batchnumberController.createBatchNumber);
+router.post('/uploadAudio', batchnumberController.uploadAudioToS3);
+
 // PUT to update a branch by BatchNumber
 router.put('/update/:id', batchnumberController.updateBatchNumber);
 

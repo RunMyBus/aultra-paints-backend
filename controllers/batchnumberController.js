@@ -22,10 +22,31 @@ async function uploadQRCodeToS3(qrCodeData, key) {
 
     try {
         const response = await s3.upload(params).promise();
-        console.log('QR code uploaded to S3 successfully.');
+        logger.info('QR code uploaded to S3 successfully.');
         return response.Location; // Return the S3 URL
     } catch (error) {
-        console.error('Error uploading QR code to S3:', error);
+        logger.error('Error uploading QR code to S3:', error);
+        throw error;
+    }
+}
+
+exports.uploadAudioToS3 = async (req, res) => {
+    var now = new Date();
+    var timeLabel =  ((now.getMonth() + 1) + '_' + (now.getDate()) + '_' + now.getFullYear() + "_" + now.getHours() + '_' + ((now.getMinutes() < 10) ? ("0" + now.getMinutes()) : (now.getMinutes())));
+    const params = {
+        Bucket: 'my-audio-files',
+        Key: timeLabel,
+        Body: req.audioFile,
+        ContentType: 'audio/mpeg3',
+        ACL: 'public-read'
+    };
+
+    try {
+        const response = await s3.upload(params).promise();
+        logger.info('Audio uploaded to S3 successfully.');
+        return response.Location; // Return the S3 URL
+    } catch (error) {
+        logger.error('Error uploading Audio  to S3:', error);
         throw error;
     }
 }
@@ -113,14 +134,14 @@ exports.createBatchNumberWithCouponCheck = async (req, res) => {
                 batchResult.transactions = updatedCoupons;
                 successArray.push(batchResult);
             } catch (error) {
-                console.error(error);
+                logger.error(error);
                 errorArray.push({ batchNumber, error: error.message });
             }
         }
 
         return res.status(200).json({ success: successArray, error: errorArray });
     } catch (error) {
-        console.error(error);
+        logger.error(error);
         return res.status(500).json({ error: error.message });
     }
 };
