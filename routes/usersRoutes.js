@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController')
 const passport = require("passport");
-
 router.use(passport.authenticate('jwt', {session: false}));
 
 // Get all users
@@ -95,6 +94,12 @@ router.post('/getDealers', async (req, res) => {
 		res.status(result.status).json(result);
 	})
 });
+
+
+router.get('/sales-executives', async (req, res) => {
+    userController.getAllSalesExecutives(req, res);  
+});
+
 
 
 module.exports = router;

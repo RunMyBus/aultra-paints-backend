@@ -19,13 +19,14 @@ class TransactionService {
             const limit = parseInt(body.limit || 10);
             const skip = (page - 1) * limit;
 
-            const { searchKey, pointsRedeemedBy, cashRedeemedBy, couponCode, showUsedCoupons } = body;
+            const { searchKey, pointsRedeemedBy, cashRedeemedBy, couponCode, showUsedCoupons, salesExecutiveMobile  } = body;
 
             logger.debug('Query parameters processed', {
                 page,
                 limit,
                 skip,
                 searchKey,
+                salesExecutiveMobile,
                 pid: process.pid
             });
 
@@ -54,6 +55,76 @@ class TransactionService {
                 });
             }
 
+
+            if (salesExecutiveMobile) {
+                const salesExecutive = await User.findOne({
+                    accountType: 'Dealer',
+                    salesExecutive: salesExecutiveMobile
+                });
+            
+                // If no sales executive is found for the given mobile number
+                if (!salesExecutive) {
+                    const errorMessage = `Sales Executive with mobile number ${salesExecutiveMobile} not found.`;
+                    
+                    logger.error(errorMessage, {
+                        salesExecutiveMobile,
+                        pid: process.pid
+                    });
+            
+                    throw new Error(errorMessage);
+                }
+            
+                // Fetch the dealers assigned to this sales executive's mobile number
+                const dealersAssigned = await User.find({
+                    accountType: 'Dealer',
+                    salesExecutive: salesExecutiveMobile
+                });
+            
+                // If no dealers are found for the sales executive's mobile number
+                if (dealersAssigned.length === 0) {
+                    const errorMessage = `No dealers found for Sales Executive with mobile number ${salesExecutiveMobile}.`;
+            
+                    logger.error(errorMessage, {
+                        salesExecutiveMobile,
+                        pid: process.pid
+                    });
+            
+                    throw new Error(errorMessage);
+                }
+            
+                const dealerMobiles = dealersAssigned.map(dealer => dealer.mobile);
+            
+                const redeemedTransactions = await Transaction.find({
+                    $or: [
+                        { pointsRedeemedBy: { $in: dealerMobiles } },
+                        { cashRedeemedBy: { $in: dealerMobiles } }
+                    ]
+                });
+            
+                // If no transactions have been redeemed by any of the dealers
+                if (redeemedTransactions.length === 0) {
+                    const errorMessage = `No transactions redeemed by dealers for Sales Executive mobile number ${salesExecutiveMobile}.`;
+            
+                    logger.error(errorMessage, {
+                        salesExecutiveMobile,
+                        pid: process.pid
+                    });
+            
+                    throw new Error(errorMessage);
+                }
+
+                query.$or = [
+                    { pointsRedeemedBy: { $in: dealerMobiles } },
+                    { cashRedeemedBy: { $in: dealerMobiles } }
+                ];
+            
+                logger.debug('Sales Executive filter added', {
+                    salesExecutiveMobile,
+                    dealerMobiles,
+                    pid: process.pid
+                });
+            }
+
             if (showUsedCoupons) {
                 // If showUsedCoupons is true, check if pointsRedeemedBy or cashRedeemedBy exists
                 query.$or = [
@@ -65,6 +136,7 @@ class TransactionService {
                     pid: process.pid
                 });
             }
+
             
             if (pointsRedeemedBy) {
                 query.pointsRedeemedBy = { $regex: pointsRedeemedBy, $options: 'i' };

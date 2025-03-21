@@ -39,7 +39,7 @@ exports.searchUser = async (body, res) => {
         }
     
         // Account Type filter
-        if (body.accountType && ['All', 'Dealer', 'Contractor', 'Painter', 'SuperUser'].includes(body.accountType)) {
+        if (body.accountType && ['All', 'Dealer', 'Contractor', 'Painter', 'SuperUser', 'SalesExecutive'].includes(body.accountType)) {
             if (body.accountType !== 'All') {
                 query.accountType = body.accountType;
             }
@@ -87,6 +87,9 @@ exports.addUser = async (body, res) => {
             if (!body.primaryContactPerson) errorArray.push('Primary contact person is required for dealers');
             if (!body.primaryContactPersonMobile) errorArray.push('Primary contact person mobile is required for dealers');
             if (!body.dealerCode) errorArray.push('Dealer code is required for dealers');
+            if (!body.salesExecutive) {
+                errorArray.push('Sales executive is required for dealers');
+            }
             
             if (body.dealerCode) {
                 // Check if the dealer code already exists
@@ -108,6 +111,7 @@ exports.addUser = async (body, res) => {
             body.dealerCode = null;
             body.primaryContactPerson = null;
             body.primaryContactPersonMobile = null;
+            body.salesExecutive = null;
             body.address = null;
         }
 
@@ -125,7 +129,7 @@ exports.addUser = async (body, res) => {
 exports.userUpdate = async (id, body, res) => {
     try {
         let errorArray = [];
-        if (body.mobile) {
+        if (body.mobile) {  
             const oldMobile = await userModel.findOne({
                 mobile: {
                     $regex: new RegExp(`^${body.mobile.trim()}$`),
@@ -145,6 +149,9 @@ exports.userUpdate = async (id, body, res) => {
             }
             if (!body.primaryContactPersonMobile) {
                 errorArray.push('Primary contact person mobile is required for dealers');
+            }
+            if (!body.salesExecutive) {
+                errorArray.push('Sales executive is required for dealers');
             }
             if (!body.dealerCode) {
                 errorArray.push('Dealer code is required for dealers');
@@ -170,6 +177,7 @@ exports.userUpdate = async (id, body, res) => {
             body.dealerCode = null;
             body.primaryContactPerson = null;
             body.primaryContactPersonMobile = null;
+            body.salesExecutive = null;
             body.address = null;
         }
 
@@ -484,3 +492,27 @@ exports.getDealers = async (body, res) => {
         return res({ status: 500, error: err });
     }
 }
+
+
+exports.getAllSalesExecutives = async (req, res) => {
+    try {
+        const salesExecutives = await userModel.find(
+            { accountType: 'SalesExecutive' },
+            { name: 1, mobile: 1 } 
+        ).sort({ name: 1 }); 
+
+        return res.status(200).json({
+            status: 'success',
+            data: salesExecutives.map(exec => ({
+                id: exec._id,
+                name: exec.name,
+                mobile: exec.mobile
+            }))
+        }); 
+    } catch (error) {
+        return res.status(500).json({
+            status: 'error',
+            message: 'Error fetching sales executives'
+        });
+    }
+};
