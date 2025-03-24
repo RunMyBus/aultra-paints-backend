@@ -10,6 +10,13 @@ const productOffersSchema = new mongoose.Schema({
     createdBy: { type: String },
     cashback: { type: Number, required: true, default: 0 }, 
     redeemPoints: { type: Number, required: true, default: 0 },
+    price: [
+        {
+          refId: { type: String, required: true },
+          price: { type: Number, required: true }
+        }
+      ],
+  
 }, { timestamps: true });
 
 const productOffers = mongoose.model('productOffers', productOffersSchema, 'productOffers');

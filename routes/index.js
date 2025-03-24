@@ -10,8 +10,11 @@ const rewardSchemesRoutes = require('./rewardSchemes.route.js')
 const transferRoutes = require('./transfer.route.js')
 const cashFreeRoutes = require('./cashFreeRoutes')
 const transactionLedgerRoutes = require('./transactionLedgerRoute')
-
+const statesRoutes = require('./stateRoutes');
+const zoneRoutes = require('./zoneRoutes');
 const router = express.Router();
+const districtRoutes = require('./districtRoutes');
+
 
 /** GET /health-check - Check service health */
 router.get('/health-check', (req, res) => res.send('OK'));
@@ -27,5 +30,8 @@ router.use('/rewardSchemes', rewardSchemesRoutes);
 router.use('/transfer', transferRoutes);
 router.use('/cashFree', cashFreeRoutes);
 router.use('/transactionLedger', transactionLedgerRoutes);
+router.use('/states', statesRoutes);
+router.use('/zones', zoneRoutes);
+router.use('/districts', districtRoutes);
 
 module.exports = router;

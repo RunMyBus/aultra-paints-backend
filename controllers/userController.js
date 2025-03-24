@@ -89,6 +89,9 @@ exports.addUser = async (body, res) => {
             if (!body.dealerCode) errorArray.push('Dealer code is required for dealers');
             if (!body.salesExecutive) {
                 errorArray.push('Sales executive is required for dealers');
+                // if (!body.state) errorArray.push('State is required for dealers');
+                // if (!body.zone) errorArray.push('Zone is required for dealers');
+                // if (!body.district) errorArray.push('District is required for dealers');
             }
             
             if (body.dealerCode) {
@@ -113,6 +116,9 @@ exports.addUser = async (body, res) => {
             body.primaryContactPersonMobile = null;
             body.salesExecutive = null;
             body.address = null;
+            body.state = null;
+            body.zone = null;
+            body.district = null;
         }
 
         if (errorArray.length) {
@@ -173,12 +179,24 @@ exports.userUpdate = async (id, body, res) => {
             if (!body.address) {
                 errorArray.push('Address is required for dealers');
             }
+            // if (!body.state) {
+            //     errorArray.push('State is required for dealers');
+            // }
+            // if (!body.zone) {
+            //     errorArray.push('Zone is required for dealers');
+            // }
+            // if (!body.district) {
+            //     errorArray.push('District is required for dealers');
+            // }
         } else {
             body.dealerCode = null;
             body.primaryContactPerson = null;
             body.primaryContactPersonMobile = null;
             body.salesExecutive = null;
             body.address = null;
+            body.state = null;
+            body.zone = null;
+            body.district = null;
         }
 
          // Check and set parentDealerCode to null if empty or undefined
