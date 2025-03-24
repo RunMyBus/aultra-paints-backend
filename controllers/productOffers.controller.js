@@ -6,7 +6,7 @@ const multer = require("multer");
 
 // Create a new productOffer
 exports.createProductOffer = async (req, res) => {
-    const {productOfferDescription, validUntil, productOfferStatus, cashback, redeemPoints} = req.body;
+    const {productOfferDescription, validUntil, productOfferStatus, cashback, redeemPoints, price} = req.body;
     if (!req.body.productOfferImage) {
         return res.status(400).json({message: 'Image is required'});
     }
@@ -16,12 +16,34 @@ exports.createProductOffer = async (req, res) => {
         return res.status(400).json({ message: 'Invalid image data' });
     }
 
+  
+let parsedPrice;
+try {
+    parsedPrice = typeof price === 'string' ? JSON.parse(price) : price;
+    if (!Array.isArray(parsedPrice)) throw new Error();
+    
+    // Transform the price array to match the required schema
+    parsedPrice = parsedPrice.map(priceObj => {
+        const [[refId, price]] = Object.entries(priceObj);
+        return {
+            refId: refId,
+            price: price
+        };
+    });
+
+} catch {
+    return res.status(400).json({ message: 'Invalid price format' });
+}
+
+
+
     const productOffer = new productOffersModel({
         productOfferDescription,
         validUntil,
         productOfferStatus,
         cashback,
-        redeemPoints
+        redeemPoints,
+        price : parsedPrice
     });
 
     try {
@@ -137,6 +159,9 @@ exports.updateProductOffer = async (req, res) => {
                 await s3.deleteObject(paramsRemove).promise();
             }
 
+
+            
+
             const imageData = await decodeBase64Image(req.body.productOfferImage);
             const params = {
                 Bucket: process.env.AWS_BUCKET_PRODUCT_OFFER,
@@ -150,6 +175,29 @@ exports.updateProductOffer = async (req, res) => {
             req.body.productOfferImageUrl = data.Location;
         }
 
+
+         let parsedPrice;
+        try {
+            const { price } = req.body;
+            parsedPrice = typeof price === 'string' ? JSON.parse(price) : price;
+            
+            if (!Array.isArray(parsedPrice)) {
+                return res.status(400).json({ message: 'Price must be an array' });
+            }
+
+            parsedPrice = parsedPrice.map(priceObj => {
+                try {
+                    const [[refId, price]] = Object.entries(priceObj);
+                    return { refId, price };
+                } catch (e) {
+                    throw new Error('Invalid price object structure');
+                }
+            });
+        } catch (priceError) {
+            console.error('Price parsing error:', priceError);
+            return res.status(400).json({ message: 'Invalid price format' });
+        }
+
         const productOfferData = {
             productOfferDescription: req.body.productOfferDescription,
             // productOfferTitle: req.body.productOfferTitle,
@@ -158,7 +206,8 @@ exports.updateProductOffer = async (req, res) => {
             cashback: req.body.cashback,        
             redeemPoints: req.body.redeemPoints, 
             productOfferImageUrl: req.body.productOfferImageUrl,
-            updatedBy: req.body.updatedBy,       
+            updatedBy: req.body.updatedBy,  
+            price: parsedPrice    
         };
 
         const productOffer = await productOffersModel.findByIdAndUpdate(req.params.id,  productOfferData, {new: true});

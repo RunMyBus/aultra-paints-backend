@@ -15,7 +15,10 @@ const userSchema = new mongoose.Schema({
     parentDealerCode: { type: String },  // valid only for painter user type
     accountType: { type: String, default: 'Painter'},
     upiID: { type: String },
-    salesExecutive: {type: String}
+    salesExecutive: {type: String},
+    state: { type: String },
+    zone: { type: String },
+    district: { type: String }
 }, {timestamps: true})
 
 const User = mongoose.model('User', userSchema);
