@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const cashFreePaymentService = require('../services/cashFreePaymentService');
 const CashFreeTransaction = require('../models/CashFreeTransaction');
+const config = process.env;
 
 // In-memory tracker for pending transactions and their retry counts
 const pendingTransactionTracker = new Map();
@@ -10,7 +11,13 @@ const processPendingTransactions = async () => {
         console.log('Cron Job Started: Fetching pending transactions...');
 
         // Fetch all transactions with status "PENDING"
-        const pendingTransactions = await CashFreeTransaction.find({ status: "PENDING" });
+        const pendingTransactions = await CashFreeTransaction.find({
+            status: { $in: ["PENDING", "RECEIVED"] }
+        });
+
+        if (!pendingTransactions.length) {
+            console.log('No pending transactions found.');
+        }
 
         for (const transaction of pendingTransactions) {
             const { transfer_id } = transaction;
@@ -24,6 +31,12 @@ const processPendingTransactions = async () => {
             if (transferStatus.data.status === "SUCCESS" && transferStatus.data.status_code === "COMPLETED") {
                 console.log(`Transfer Successful for ID: ${transfer_id}`);
                 // Update the transaction with success status
+                await cashFreePaymentService.updateToDB(transferStatus);
+                // Remove from tracker
+                pendingTransactionTracker.delete(transfer_id);
+            } else if (transferStatus.data.status === "REJECTED") {
+                console.log(`Transfer Rejected for ID: ${transfer_id}`);
+                // Update the transaction with rejected status
                 await cashFreePaymentService.updateToDB(transferStatus);
                 // Remove from tracker
                 pendingTransactionTracker.delete(transfer_id);
@@ -50,7 +63,13 @@ const processPendingTransactions = async () => {
 
 // Schedule the cron job to run every 30 minutes
 cron.schedule('*/30 * * * *', async () => {
-    await processPendingTransactions();
+    console.log('config ------ ', config.RUN_SCHEDULER_JOB);
+    if (config.RUN_SCHEDULER_JOB === "true") {
+        console.log('Cron Job Executed:', new Date());
+        await processPendingTransactions();
+    }
 });
 
 console.log('Cron Job Scheduled: Runs every 30 minutes.');
+
+// setInterval(() => {}, 1000 * 60 * 60); // Keeps the process alive

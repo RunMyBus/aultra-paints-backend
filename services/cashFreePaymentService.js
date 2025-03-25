@@ -1,6 +1,7 @@
 const axios = require('axios');
 const CashFreeTransaction = require('../models/CashFreeTransaction');
 const logger = require('../utils/logger');
+const config = process.env;
 
 const API_VERSION = '2024-01-01'
 let CLIENT_ID = null;
