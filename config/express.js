@@ -10,6 +10,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const routes = require('../routes/index');
 const passport = require('../middleware/passport');
+const scheduler = require('../crons/UpdatePendingCashFreeTransfers');
 
 const requestContext = require('../utils/requestContext');
 
