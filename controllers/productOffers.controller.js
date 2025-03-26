@@ -73,7 +73,7 @@ try {
         };
 
         const data = await s3.upload(params).promise();
-        savedProductOffer = await productOffersModel.updateOne({_id: savedProductOffer._id}, {$set: {productOfferImageUrl: 'local'}});
+        savedProductOffer = await productOffersModel.updateOne({_id: savedProductOffer._id}, {$set: {productOfferImageUrl: data.Location}});
 
         await processProductPrices(savedProductOfferId, parsedPrice);
 
@@ -99,12 +99,12 @@ const processProductPrices = async (productOfferId, parsedPrice) => {
             let priceObj = parsedPrice.find(p => p.refId === dealer.district) ||
                 parsedPrice.find(p => p.refId === dealer.zone) ||
                 parsedPrice.find(p => p.refId === dealer.state) ||
-                parsedPrice.find(p => p.refId === 'ALL');
+                parsedPrice.find(p => p.refId === 'All');
 
             return priceObj ? {
                 dealerId: dealer._id,
                 productOfferId,
-                price: priceObj.price
+                price: priceObj.price   
             } : null;
         }).filter(entry => entry !== null);  // Remove null values
 
@@ -191,7 +191,7 @@ exports.searchProductOffers = async (req, res) => {
             })
             return {
                 ...productOffer._doc,  // Spread product offer details
-                price: priceData ? priceData.price : null  // Add price if found, else null
+                productPrice: priceData ? priceData.price : null  // Add price if found, else null
             };
         }))
 
