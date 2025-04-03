@@ -297,6 +297,9 @@ exports.updateProductOffer = async (req, res) => {
         if (!productOffer) {
             return res({status: 400, message: 'ProductOffer not found'});
         }
+
+        await processProductPrices(req.params.id, parsedPrice);
+        
         return res({status: 200, data: productOffer});
     } catch (error) {
         console.log(error);
