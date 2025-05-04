@@ -2,14 +2,12 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-// Define the schema for the product
-const orderSchema = new Schema({
-  brand: { type: String, required: true },
-  productName: { type: String, required: true },
-  volume: { type: Number, required: true },
-  quantity: { type: Number, required: true }
-}, { timestamps: true });
-orderSchema.plugin(createdUpdatedPlugin);
+const OrderItemSchema = new mongoose.Schema({
+  _id: { type: String, required: true }, // Reference to productOffer or productCatalog
+  productOfferDescription: { type: String, required: true },
+  productPrice: { type: Number, required: true },
+  quantity: { type: Number, required: true },
+});
 
 function createdUpdatedPlugin(schema, options) {
   schema.add({
@@ -32,6 +30,16 @@ function createdUpdatedPlugin(schema, options) {
     next();
   });
 }
+
+// Define the schema for the order
+const orderSchema = new Schema({
+  orderId: { type: String, required: true, index: true },
+  items: { type: [ OrderItemSchema ], required: true },
+  totalPrice: { type: Number, required: true },
+  gstPrice: { type: Number, required: true },
+  finalPrice: { type: Number, required: true }
+}, { timestamps: true });
+orderSchema.plugin(createdUpdatedPlugin);
 
 // Create and export the model
 const order = mongoose.model('order', orderSchema);

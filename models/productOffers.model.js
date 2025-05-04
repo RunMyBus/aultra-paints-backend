@@ -4,7 +4,7 @@ const productOffersSchema = new mongoose.Schema({
     productOfferImageUrl: { type: String },
     productOfferDescription: { type: String, required: true },
     // productOfferTitle: { type: String, required: true }, -->
-    validUntil: { type: Date, required: true},
+    validUntil: { type: Date },
     productOfferStatus: { type: String, required: true },
     updatedBy: { type: String },
     createdBy: { type: String },
@@ -15,7 +15,8 @@ const productOffersSchema = new mongoose.Schema({
           refId: { type: String, required: true },
           price: { type: Number, required: true }
         }
-      ],
+    ],
+    offerAvailable: { type: Boolean, default: true }
   
 }, { timestamps: true });
 

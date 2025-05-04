@@ -1,9 +1,9 @@
-const productCatlogModel = require('../models/productCatlog');
+const productOfferModel = require('../models/productOffers.model');
 const AWS = require('aws-sdk');
 const s3 = require("../config/aws");
 const multer = require('multer');
 const { decodeBase64Image } = require('../services/utils.service');
-const ProductCatlogPrice = require('../models/productCatlogPrice.model');
+const ProductPriceModel = require('../models/ProductPrice');
 const UserModel = require('../models/User');
 const logger = require('../utils/logger');
 
@@ -39,15 +39,15 @@ exports.createProductCatlog = async (req, res) => {
     }
   
     // Create the product catlog document
-    const productCatlog = new productCatlogModel({
-      productDescription,
-      productStatus,
+    const productCatlog = new productOfferModel({
+      productOfferDescription: productDescription,
+      productOfferStatus: productStatus,
       price: parsedPrice,
-     
+      offerAvailable: false
     });
   
     try {
-      const existingProductCatlog = await productCatlogModel.findOne({ productDescription });
+      const existingProductCatlog = await productOfferModel.findOne({ productOfferDescription: productDescription });
       if (existingProductCatlog) {
         return res.status(400).json({ message: 'Product catlog with the same description already exists' });
       }
@@ -66,9 +66,9 @@ exports.createProductCatlog = async (req, res) => {
       };
   
       const data = await s3.upload(params).promise();
-      savedProductCatlog = await productCatlogModel.updateOne(
+      savedProductCatlog = await productOfferModel.updateOne(
         { _id: savedProductCatlog._id },
-        { $set: { productImageUrl: data.Location } }
+        { $set: { productOfferImageUrl: data.Location } }
       );
 
       await processProductCatlogPrices(savedProductCatlogId , parsedPrice);
@@ -90,7 +90,7 @@ exports.createProductCatlog = async (req, res) => {
   const processProductCatlogPrices = async (productcatlogId, parsedPrice) => {
     try {
         // Remove existing prices for the product
-        await ProductCatlogPrice.deleteMany({ productcatlogId });
+        await ProductPriceModel.deleteMany({ productOfferId: productcatlogId });
 
         // Fetch all dealers
         const dealers = await UserModel.find({ accountType: 'Dealer' });
@@ -105,13 +105,13 @@ exports.createProductCatlog = async (req, res) => {
 
             return priceObj ? {
                 dealerId: dealer._id,
-                productcatlogId,
+                productOfferId: productcatlogId,
                 price: priceObj.price
             } : null;
         }).filter(entry => entry !== null); // Remove nulls
 
         if (productCatlogPrices.length > 0) {
-            await ProductCatlogPrice.insertMany(productCatlogPrices);
+            await ProductPriceModel.insertMany(productCatlogPrices);
         }
 
         logger.info("Product catalog prices updated successfully.");
@@ -129,7 +129,7 @@ exports.createProductCatlog = async (req, res) => {
         let page = req.body.page || 1;
         let limit = req.body.limit || 10;
 
-        const productCatlogs = await productCatlogModel.find({ productStatus: 'Active' })
+        const productCatlogs = await productOfferModel.find({ productOfferStatus: 'Active' })
             .skip((page - 1) * limit)  
             .limit(limit)  
             .sort({ createdAt: -1 });  
@@ -148,6 +148,8 @@ exports.searchProductCatlog = async (req, res) => {
     const accountType = req.user.accountType; 
     let query = {};
 
+    query['offerAvailable'] = false;
+
     // Search by productDescription 
     if (req.body.searchQuery) {
       query['productDescription'] = {
@@ -155,23 +157,23 @@ exports.searchProductCatlog = async (req, res) => {
       };
     }
 
-    const data = await productCatlogModel
+    const data = await productOfferModel
       .find(query)
       .skip((page - 1) * limit)
       .limit(limit)
       .sort({ createdAt: -1 });
 
-    const total = await productCatlogModel.countDocuments(query);
+    const total = await productOfferModel.countDocuments(query);
 
-    const updatedData = await Promise.all(data.map(async (productCatlog) => {
+    let updatedData = await Promise.all(data.map(async (productCatlog) => {
       let productPrice = null;
 
       if (accountType === 'SuperUser') {
         const priceObj = productCatlog.price?.find(p => p.refId === 'All');
         productPrice = priceObj ? priceObj.price : null;
       } else {
-        const priceData = await ProductCatlogPrice.findOne({
-          productcatlogId: productCatlog._id,
+        const priceData = await ProductPriceModel.findOne({
+          productOfferId: productCatlog._id,
           dealerId: dealerId
         });
         productPrice = priceData ? priceData.price : null;
@@ -182,6 +184,21 @@ exports.searchProductCatlog = async (req, res) => {
         productPrice
       };
     }));
+      /*updatedData = updatedData.map(item => ({
+          _id: item._id,
+          productDescription: item.productOfferDescription,
+          productStatus: item.productOfferStatus,
+          productCategoryStatus: item.productOfferStatus,
+          productImageUrl: item.productOfferImageUrl,
+          productPrice: item.productPrice,
+          cashback: item.cashback,
+          redeemPoints: item.redeemPoints,
+          price: item.price,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+          __v: item.__v,
+          offerAvailable: item.offerAvailable
+      }));*/
 
     return res.status(200).json({
       data: updatedData,
@@ -199,8 +216,8 @@ exports.searchProductCatlog = async (req, res) => {
   exports.updateProductCatlog = async (req, res) => {
     console.log('req.body:', req.body);
     try {
-        const existingProductCatlog = await productCatlogModel.findOne({
-            productDescription: req.body.productDescription,
+        const existingProductCatlog = await productOfferModel.findOne({
+            productOfferDescription: req.body.productDescription,
             _id: { $ne: req.params.id }
         });
         if (existingProductCatlog) {
@@ -257,15 +274,15 @@ exports.searchProductCatlog = async (req, res) => {
 
         // Data to update
         const productCatlogData = {
-            productDescription: req.body.productDescription,
-            productStatus: req.body.productStatus,
-            productImageUrl: req.body.productImageUrl,
+            productOfferDescription: req.body.productDescription,
+            productOfferStatus: req.body.productStatus,
+            productOfferImageUrl: req.body.productImageUrl,
             updatedBy: req.body.updatedBy,
             price: parsedPrice
         };
 
         // Update the product catlog and return the updated data
-        const productCatlog = await productCatlogModel.findByIdAndUpdate(req.params.id, productCatlogData, { new: true });
+        const productCatlog = await productOfferModel.findByIdAndUpdate(req.params.id, productCatlogData, { new: true });
         if (!productCatlog) {
             return res.status(400).json({ message: 'Product catlog not found' });
         }
@@ -288,7 +305,7 @@ exports.searchProductCatlog = async (req, res) => {
 // Delete Product Catlog
 exports.deleteProductCatlog = async (req, res) => {
   try {
-      const productCatlog = await productCatlogModel.findByIdAndDelete(req.params.id);
+      const productCatlog = await productOfferModel.findByIdAndDelete(req.params.id);
       if (!productCatlog) {
           return res.status(404).json({ message: 'Product catlog not found' });
       }

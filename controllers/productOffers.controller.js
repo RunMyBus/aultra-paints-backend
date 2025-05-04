@@ -182,6 +182,7 @@ exports.searchProductOffers = async (req, res) => {
                 {'productOfferDescription': {$regex: new RegExp(req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}},
             ];
         }
+        query['offerAvailable'] = true;
         let data = await productOffersModel.find(query).skip((page - 1) * limit).limit(parseInt(limit)).sort({cashback: -1});
         const totalOffers = await productOffersModel.countDocuments(query);
         const updatedData = await Promise.all(data.map(async (productOffer) => {
