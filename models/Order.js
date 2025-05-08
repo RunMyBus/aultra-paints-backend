@@ -37,7 +37,10 @@ const orderSchema = new Schema({
   items: { type: [ OrderItemSchema ], required: true },
   totalPrice: { type: Number, required: true },
   gstPrice: { type: Number, required: true },
-  finalPrice: { type: Number, required: true }
+  finalPrice: { type: Number, required: true },
+  status: { type: String, required: true, default: 'PENDING' },
+  isVerified: { type: Boolean, default: false },
+  isRejected: { type: Boolean, default: false },
 }, { timestamps: true });
 orderSchema.plugin(createdUpdatedPlugin);
 

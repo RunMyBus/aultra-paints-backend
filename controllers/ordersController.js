@@ -7,6 +7,7 @@ const puppeteer = require('puppeteer');
 const path = require('path');
 const fs = require('fs');
 const productOffersModel = require("../models/productOffers.model");
+const userModel = require("../models/User");
 
 async function generateInvoicePdf(order, user) {
     // 1. Fetch template from DB
@@ -73,6 +74,11 @@ async function getNextOrderId() {
 exports.createOrder = async (req, res) => {
     try {
         let userId = req.user._id.toString();
+
+        if (req.user.accountType !== 'Dealer') {
+            return res.status(400).json({ success: false, message: 'Only dealers can place orders.' });
+        }
+
         const { items, totalPrice } = req.body;
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ success: false, message: 'No items provided for order.' });
@@ -91,8 +97,8 @@ exports.createOrder = async (req, res) => {
             });
         }
 
-        // GST Calculation (default 5%)
-        const gstPercentage = parseFloat(config.GST_PERCENTAGE) || 5; // default to 5% if not set
+        // GST Calculation
+        const gstPercentage = parseFloat(config.GST_PERCENTAGE);
         const gstPrice = +(calculatedTotalPrice * (gstPercentage / 100)).toFixed(2);
         const finalPrice = +(calculatedTotalPrice + gstPrice).toFixed(2);
 
@@ -119,12 +125,167 @@ exports.createOrder = async (req, res) => {
                 totalPrice: calculatedTotalPrice,
                 gstPrice,
                 finalPrice,
-                gstPercentage: parseFloat(config.GST_PERCENTAGE) || 5
+                gstPercentage: parseFloat(config.GST_PERCENTAGE)
             },
             // invoicePdfBase64: pdfBuffer.toString('base64')
         });
     } catch (error) {
         logger.error('Order creation failed ', error);
         return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.getOrders = async (req, res) => {
+    try {
+        const user = req.user;
+        const { accountType } = user;
+
+        // If the user is neither SuperUser nor Dealer, returning an empty array
+        if (!['SuperUser', 'Dealer', 'SalesExecutive'].includes(accountType)) {
+            return res.status(200).json({
+                success: true,
+                orders: []
+            });
+        }
+
+        let query = {};
+        let populateOptions = {
+            path: 'createdBy',
+            select: 'name mobile accountType'
+        };
+        let orders;
+
+        // If SuperUser, fetch all orders with user details
+        if (accountType === 'SuperUser') {
+            orders = await orderModel
+                .find(query)
+                .populate(populateOptions)
+                .sort({ createdAt: -1 }) // Latest orders first
+                .lean();
+        } // If SalesExecutive, fetch orders from mapped dealers
+        else if (accountType === 'SalesExecutive') {
+            // First, find all dealers mapped to this sales executive
+            const mappedDealers = await userModel.find(
+                {
+                    salesExecutive: user._id,
+                    accountType: 'Dealer',
+                    status: 'active'
+                },
+                '_id'
+            ).lean();
+
+            const dealerIds = mappedDealers.map(dealer => dealer._id);
+            query = { createdBy: { $in: dealerIds } };
+
+            orders = await orderModel
+                .find(query)
+                .populate({
+                    path: 'createdBy',
+                    select: 'name dealerCode mobile'
+                })
+                .sort({ createdAt: -1 })
+                .lean();
+        }
+        else {
+            // For Dealers, fetch only their orders
+            query = { createdBy: user._id };
+            orders = await orderModel
+                .find(query)
+                .populate(populateOptions)
+                .sort({ createdAt: -1 })
+                .lean();
+        }
+        return res.status(200).json({
+            success: true,
+            orders
+        });
+    } catch (error) {
+        logger.error('Error fetching orders ', error);
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.updateOrderStatus = async (req, res) => {
+    try {
+        const { orderId, isVerified } = req.body;
+        const user = req.user;
+
+        // Check if the user is a SalesExecutive
+        if (user.accountType !== 'SalesExecutive') {
+            return res.status(403).json({
+                success: false,
+                message: 'Only Sales Executives can verify/reject orders'
+            });
+        }
+
+        // Get mapped dealers for this sales executive
+        const mappedDealers = await userModel.find(
+            {
+                salesExecutive: user._id,
+                accountType: 'Dealer',
+                status: 'active'
+            },
+            '_id'
+        );
+        const dealerIds = mappedDealers.map(dealer => dealer._id);
+
+        // Find the order and verify it belongs to a mapped dealer
+        const order = await orderModel.findOne({
+            orderId: orderId,
+            status: 'PENDING',
+            createdBy: { $in: dealerIds }
+        });
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: 'Order not found or not authorized to modify this order'
+            });
+        }
+
+        // Update the order status
+        let updateData = {};
+        if (isVerified === 1) {
+            updateData = {
+                status: 'VERIFIED',
+                isVerified: true,
+                isRejected: false
+            };
+        } else if (isVerified === 0) {
+            updateData = {
+                status: 'REJECTED',
+                isVerified: false,
+                isRejected: true
+            };
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid action. Use 1 or 0 for verification/rejection.'
+            });
+        }
+
+        // Update the order
+        const updatedOrder = await orderModel.findOneAndUpdate(
+            { orderId: orderId },
+            updateData,
+            {
+                new: true,
+                context: { userId: user._id } // This will be used by the updatedBy plugin
+            }
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: `Order successfully ${isVerified === 1 ? 'verified' : 'rejected'}.`,
+            order: updatedOrder
+        });
+
+    } catch (error) {
+        logger.error('Error updating order status: ', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Error updating order status',
+            error: error.message
+        });
     }
 };
