@@ -238,7 +238,7 @@ exports.updateOrderStatus = async (req, res) => {
         // Get mapped dealers for this sales executive
         const mappedDealers = await userModel.find(
             {
-                salesExecutive: user._id,
+                salesExecutive: user.mobile,
                 accountType: 'Dealer',
                 status: 'active'
             },
