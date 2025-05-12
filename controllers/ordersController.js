@@ -139,12 +139,16 @@ exports.getOrders = async (req, res) => {
     try {
         const user = req.user;
         const { accountType } = user;
+        const { page, limit } = req.body;
 
         // If the user is neither SuperUser nor Dealer, returning an empty array
         if (!['SuperUser', 'Dealer', 'SalesExecutive'].includes(accountType)) {
             return res.status(200).json({
                 success: true,
-                orders: []
+                orders: [],
+                total: 0,
+                pages: 0,
+                currentPage: page
             });
         }
 
@@ -154,20 +158,24 @@ exports.getOrders = async (req, res) => {
             select: 'name mobile accountType'
         };
         let orders;
+        let totalOrders;
 
         // If SuperUser, fetch all orders with user details
         if (accountType === 'SuperUser') {
+            totalOrders = await orderModel.countDocuments(query);
             orders = await orderModel
                 .find(query)
                 .populate(populateOptions)
                 .sort({ createdAt: -1 }) // Latest orders first
+                .skip((page - 1) * limit)
+                .limit(limit)
                 .lean();
         } // If SalesExecutive, fetch orders from mapped dealers
         else if (accountType === 'SalesExecutive') {
             // First, find all dealers mapped to this sales executive
             const mappedDealers = await userModel.find(
                 {
-                    salesExecutive: user._id,
+                    salesExecutive: user.mobile,
                     accountType: 'Dealer',
                     status: 'active'
                 },
@@ -176,7 +184,7 @@ exports.getOrders = async (req, res) => {
 
             const dealerIds = mappedDealers.map(dealer => dealer._id);
             query = { createdBy: { $in: dealerIds } };
-
+            totalOrders = await orderModel.countDocuments(query);
             orders = await orderModel
                 .find(query)
                 .populate({
@@ -184,20 +192,29 @@ exports.getOrders = async (req, res) => {
                     select: 'name dealerCode mobile'
                 })
                 .sort({ createdAt: -1 })
+                .skip((page - 1) * limit)
+                .limit(limit)
                 .lean();
         }
         else {
             // For Dealers, fetch only their orders
             query = { createdBy: user._id };
+            totalOrders = await orderModel.countDocuments(query);
             orders = await orderModel
                 .find(query)
                 .populate(populateOptions)
                 .sort({ createdAt: -1 })
+                .skip((page - 1) * limit)
+                .limit(limit)
                 .lean();
         }
+        const totalPages = Math.ceil(totalOrders / limit);
         return res.status(200).json({
             success: true,
-            orders
+            orders,
+            total: totalOrders,
+            pages: totalPages,
+            currentPage: page
         });
     } catch (error) {
         logger.error('Error fetching orders ', error);
