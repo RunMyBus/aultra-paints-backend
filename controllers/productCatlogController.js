@@ -152,7 +152,7 @@ exports.searchProductCatlog = async (req, res) => {
 
     // Search by productDescription 
     if (req.body.searchQuery) {
-      query['productDescription'] = {
+      query['productOfferDescription'] = {
         $regex: new RegExp(req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
       };
     }
