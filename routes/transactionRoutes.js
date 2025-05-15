@@ -8,6 +8,8 @@ router.use(passport.authenticate('jwt', { session: false }));
 // Existing route to get all transactions for a batch
 router.post('/', transactionController.getAllTransactions);
 
+router.post('/export', transactionController.exportTransactions);
+
 // New route to mark transaction as processed
 router.patch('/mark-processed/:qr', transactionController.markTransactionAsProcessed);
 
