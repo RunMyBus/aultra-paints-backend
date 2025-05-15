@@ -34,6 +34,30 @@ exports.getAllTransactions = async (req, res) => {
     }
 };
 
+exports.exportTransactions = async (req, res) => {
+    try {
+        const result = await transactionService.exportTransactionsToCSV(req.body);
+
+        // Set appropriate headers for CSV download
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename=${result.filename}`);
+
+        // Send the CSV content directly
+        res.send(result.csvContent);
+    } catch (error) {
+        logger.error('Error in exportTransactions', {
+            error: error.message,
+            stack: error.stack,
+            pid: process.pid
+        });
+
+        return res.status(400).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+};
+
 exports.markTransactionAsProcessed = async (req, res) => {
     const { qr } = req.params;  // Assuming qr is passed as a URL parameter
 
