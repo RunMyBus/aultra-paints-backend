@@ -166,7 +166,7 @@ exports.getMonthlyBatchStatistics = async (req, res) => {
             {
                 $group: {
                     _id: {
-                        month: { $dateToString: { format: "%B %Y", date: "$updatedAt" } },
+                        month: { $dateToString: { format: "%Y-%m", date: "$updatedAt", timezone: "Asia/Kolkata" } },
                         batchId: "$batchId"
                     },
                     quantity: { $sum: 1 },
@@ -217,12 +217,11 @@ exports.getMonthlyBatchStatistics = async (req, res) => {
 
         const issuedPoints = batch.Quantity * batch.RedeemablePoints;
         const issuedValue = batch.Quantity * batch.value;
-        
 
         const statistics = await Transaction.aggregate(pipeline);
 
         const chartData = {
-            months: statistics.map(stat => stat.month),
+            months: statistics.map(stat => stat.month), 
             issuedPoints,
             issuedValue,
             metrics: [
