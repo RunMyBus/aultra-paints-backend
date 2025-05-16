@@ -16,7 +16,7 @@ const router = express.Router();
 const districtRoutes = require('./districtRoutes');
 const productCatlogRoutes = require('./productCatlogRoutes.js');
 const orderRoutes = require('./orderRoutes.js');
-
+const chartRoutes = require('./chartRoutes');
 
 /** GET /health-check - Check service health */
 router.get('/health-check', (req, res) => res.send('OK'));
@@ -37,5 +37,6 @@ router.use('/zones', zoneRoutes);
 router.use('/districts', districtRoutes);
 router.use('/productCatlog', productCatlogRoutes);
 router.use('/order', orderRoutes);
+router.use('/chart', chartRoutes);
 
 module.exports = router;
