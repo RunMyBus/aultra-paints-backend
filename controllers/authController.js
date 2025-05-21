@@ -112,7 +112,7 @@ exports.redeemCash = async (req, next) => {
         if (user) {
             const updatedTransaction = await Transaction.findOneAndUpdate(
                 { UDID: qr },
-                { updatedBy: user._id, cashRedeemedBy: req.body.mobile },
+                { $set: { updatedBy: user._id, cashRedeemedBy: req.body.mobile, cashRedeemedAt: new Date() } },
                 { new: true }
             );
 

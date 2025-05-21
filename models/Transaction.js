@@ -12,7 +12,9 @@ const transactionSchema = new mongoose.Schema({
     UDID: { type: String },
     isProcessed: { type: Boolean, default: false },  // Default set to false
     pointsRedeemedBy: { type: String },
-    cashRedeemedBy: { type: String }
+    cashRedeemedBy: { type: String },
+    pointsRedeemedAt: { type: Date },
+    cashRedeemedAt: { type: Date },
 }, { timestamps: true });
 
 const Transaction = mongoose.model('Transaction', transactionSchema);
