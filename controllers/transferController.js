@@ -9,23 +9,52 @@ exports.transferPoints = async (req, res) => {
         if (!rewardPoints || rewardPoints <= 0) {
             return res({status: 400, error: 'Invalid reward points'});
         }
-        // Check if logged-in user is a painter
-        if (loggedInUser.accountType !== 'Painter') {
-            return res({status: 403, error: 'Only painters can transfer reward points'});
+
+        let recipientUser;
+        let narrationFrom;
+        let narrationTo;
+
+        // Handle different transfer scenarios based on account type
+        if (loggedInUser.accountType === 'Painter') {
+            // Painter to Dealer transfer logic
+            recipientUser = await userModel.findOne({ dealerCode: loggedInUser.parentDealerCode });
+            if (!recipientUser) {
+                return res({status: 404, error: 'Dealer not found'});
+            }
+            narrationFrom = 'Transferred reward points to dealer';
+            narrationTo = 'Received reward points from painter';
+        } 
+        else if (loggedInUser.accountType === 'Dealer') {
+            // Dealer to Super User transfer logic
+            const superUserMobile = process.env.SUPER_USER_MOBILE;
+            if (!superUserMobile) {
+                return res({status: 400, error: 'Super User mobile not configured'});
+            }
+
+            recipientUser = await userModel.findOne({ 
+                mobile: superUserMobile,
+                accountType: 'SuperUser'
+            });
+            
+            if (!recipientUser) {
+                return res({status: 404, error: 'Super User not found'});
+            }
+            narrationFrom = 'Transferred reward points to Super User';
+            narrationTo = 'Received reward points from dealer';
         }
-        // Find the dealer using the painter's parentDealerCode
-        const dealer = await userModel.findOne({ dealerCode: loggedInUser.parentDealerCode });
-        if (!dealer) {
-            return res({status: 404, error: 'Dealer not found'});
+        else {
+            return res({status: 403, error: 'Unauthorized, either painters and dealers can transfer points'});
         }
-        // Check if the painter has enough reward points to transfer
+
+        // Check if sender has enough reward points to transfer
         if (loggedInUser.rewardPoints < rewardPoints) {
             return res({status: 400, error: 'Insufficient reward points'});
         }
-        // Perform the transfer: deduct from painter and add to dealer
+
+        // Perform the transfer
         try {
-            // Deduct points from painter
-            const savedUserData = await userModel.findOneAndUpdate(
+            // Deduct points from sender
+            const savedSenderData = await userModel.findOneAndUpdate(
                 { _id: loggedInUser._id },
                 [
                     {
@@ -37,9 +66,10 @@ exports.transferPoints = async (req, res) => {
                     }
                 ]
             ,{ new: true });
-            // Add points to dealer
-            const savedDealerData = await userModel.findOneAndUpdate(
-                { _id: dealer._id },
+
+            // Add points to recipient
+            const savedRecipientData = await userModel.findOneAndUpdate(
+                { _id: recipientUser._id },
                 [
                     {
                         $set: {
@@ -50,19 +80,22 @@ exports.transferPoints = async (req, res) => {
                     }
                 ]
             ,{ new: true });
+
             // Add transactions to the ledger
             await transactionLedger.create({
-                narration: 'Transferred reward points to dealer',
+                narration: narrationFrom,
                 amount: `- ${rewardPoints}`,
-                balance: savedUserData.rewardPoints,
-                userId: savedUserData._id
+                balance: savedSenderData.rewardPoints,
+                userId: savedSenderData._id
             });
+
             await transactionLedger.create({
-                narration: 'Received reward points from painter',
+                narration: narrationTo,
                 amount: `+ ${rewardPoints}`,
-                balance: savedDealerData.rewardPoints,
-                userId: savedDealerData._id
+                balance: savedRecipientData.rewardPoints,
+                userId: savedRecipientData._id
             });
+
             return res({status: 200, message: 'Reward points transferred successfully'});
         } catch (transactionError) {
             throw transactionError;

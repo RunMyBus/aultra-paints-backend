@@ -6,6 +6,7 @@ const redeemedUserModel = require("../models/redeemedUser.model");
 const UserLoginSMSModel = require("../models/UserLoginSMS");
 const axios = require("axios");
 const { validateAndCreateOTP } = require('../services/user.service');
+const { Parser } = require('json2csv');
 
 exports.getAll = async (body, res) => {
     try {
@@ -531,6 +532,138 @@ exports.getAllSalesExecutives = async (req, res) => {
         return res.status(500).json({
             status: 'error',
             message: 'Error fetching sales executives'
+        });
+    }
+};
+
+exports.exportUsers = async (req, res) => {  // Changed to handle req and res directly
+    try {
+        let query = {};
+        query['$or'] = [];
+
+        // Filter by search query if provided
+        if (req.body.searchQuery) {
+            query['$or'] = [
+                { 'name': { $regex: new RegExp(req.body.searchQuery.trim(), "i") } },
+                { 'mobile': { $regex: new RegExp(req.body.searchQuery.trim(), "i") } }
+            ];
+            
+            query['$nor'] = [
+                { accountType: 'Painter', parentDealerCode: { $in: [null, ''] } }
+            ];
+        }
+    
+        // Account Type filter
+        if (req.body.accountType && ['All', 'Dealer', 'Contractor', 'Painter', 'SuperUser', 'SalesExecutive'].includes(req.body.accountType)) {
+            if (req.body.accountType !== 'All') {
+                query.accountType = req.body.accountType;
+            }
+        }
+
+        // Apply the condition for painters and non-painters
+        if (query['$or'].length === 0) {
+            query['$or'].push({ accountType: { $ne: 'Painter' } });
+            query['$or'].push({
+                accountType: 'Painter',
+                parentDealerCode: { $nin: [null] }
+            });
+        }
+
+        // Fetch all users without pagination
+        const users = await userModel.find(query, {
+            name: 1,
+            mobile: 1,
+            accountType: 1,
+            rewardPoints: 1,
+            cash: 1,
+            status: 1,
+            createdAt: 1,
+            _id: 0
+        });
+
+        // Prepare data for CSV
+        const csvData = users.map(user => ({
+            Name: user.name || '',
+            Mobile: user.mobile || '',
+            Role: user.accountType || '',
+            'Reward Points': user.rewardPoints || 0,
+            'Cash Reward': user.cash || 0,
+            Status: user.status || '',
+            'Created Date': user.createdAt ? new Date(user.createdAt).toLocaleDateString().replaceAll('/', '-') : ''
+        }));
+
+        // CSV Parser options
+        const fields = ['Name', 'Mobile', 'Role', 'Reward Points', 'Cash Reward', 'Status', 'Created Date'];
+        const opts = { fields };
+        
+        // Create parser and convert to CSV
+        const parser = new Parser(opts);
+        const csv = parser.parse(csvData);
+
+        // Set response headers for file download
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename=Users_${new Date().toLocaleDateString().replaceAll('/', '-')}.csv`);
+        
+        // Send the CSV data
+        return res.send(csv);
+    } catch (err) {
+        console.error('Export error:', err);
+        return res.status(500).json({
+            status: 500,
+            message: `Export failed: ${err.message}`
+        });
+    }
+};
+
+exports.exportUnverifiedUsers = async (req, res) => {
+    try {
+        let query = { 
+            accountType: 'Painter',
+            parentDealerCode: null
+        };
+
+        // Fetch all unverified users
+        const users = await userModel.find(query, {
+            name: 1,
+            mobile: 1,
+            accountType: 1,
+            rewardPoints: 1,
+            cash: 1,
+            status: 1,
+            createdAt: 1,
+            _id: 0
+        });
+
+        // Prepare data for CSV
+        const csvData = users.map(user => ({
+            Name: user.name || '',
+            Mobile: user.mobile || '',
+            Role: user.accountType || '',
+            'Reward Points': user.rewardPoints || 0,
+            'Cash Reward': user.cash || 0,
+            Status: user.status || '',
+            'Created Date': user.createdAt ? new Date(user.createdAt).toLocaleDateString() : ''
+        }));
+
+        // CSV Parser options
+        const fields = ['Name', 'Mobile', 'Role', 'Reward Points', 'Cash Reward', 'Status', 'Created Date'];
+        const opts = { fields };
+        
+        // Create parser and convert to CSV
+        const parser = new Parser(opts);
+        const csv = parser.parse(csvData);
+
+        // Set response headers for file download
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename=UnverifiedUsers-${new Date().toISOString().split('T')[0]}.csv`);
+        
+        // Send the CSV data
+        return res.send(csv);
+    } catch (err) {
+        console.error('Export error:', err);
+        return res.status(500).json({
+            status: 500,
+            message: `Export failed: ${err.message}`
         });
     }
 };

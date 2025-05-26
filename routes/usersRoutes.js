@@ -100,6 +100,8 @@ router.get('/sales-executives', async (req, res) => {
     userController.getAllSalesExecutives(req, res);  
 });
 
+router.post('/export', userController.exportUsers);
 
+router.get('/export-unverified', userController.exportUnverifiedUsers);
 
 module.exports = router;

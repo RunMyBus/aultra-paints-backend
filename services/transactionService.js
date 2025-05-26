@@ -189,7 +189,9 @@ class TransactionService {
                         createdAt: 1,
                         updatedAt: 1,
                         pointsRedeemedBy: 1,
-                        cashRedeemedBy: 1
+                        cashRedeemedBy: 1,
+                        pointsRedeemedAt: 1,
+                        cashRedeemedAt: 1
                     }
                 },
                 { $sort: { createdAt: -1, _id: -1 } },
@@ -404,7 +406,9 @@ class TransactionService {
                         cashRedeemedBy: 1,
                         createdAt: 1,
                         updatedAt: 1,
-                        qr_code: 1
+                        qr_code: 1,
+                        pointsRedeemedAt: { $ifNull: ['$pointsRedeemedAt', null] },  // Added this
+                        cashRedeemedAt: { $ifNull: ['$cashRedeemedAt', null] }
                     }
                 },
                 { $sort: { createdAt: -1, _id: -1 } },
@@ -417,6 +421,8 @@ class TransactionService {
                 ...record,
                 createdAt: moment(record.createdAt).format('D-M-YYYY h:mm A'),
                 updatedAt: moment(record.updatedAt).format('D-M-YYYY h:mm A'),
+                pointsRedeemedAt: record.pointsRedeemedAt ? moment(record.pointsRedeemedAt).format('D-M-YYYY h:mm A') : '',
+                cashRedeemedAt: record.cashRedeemedAt ? moment(record.cashRedeemedAt).format('D-M-YYYY h:mm A') : '',
                 batch: `${record.branchName} - ${record.batchNumber}`
             }));
 
@@ -431,6 +437,8 @@ class TransactionService {
                 { label: 'QR Code', value: 'qr_code' },
                 { label: 'Created At', value: 'createdAt' },
                 { label: 'Created By', value: 'createdByName' },
+                { label: 'Points Redeemed At', value: 'pointsRedeemedAt' },
+                { label: 'Cash Redeemed At', value: 'cashRedeemedAt' },
             ];
 
             // Create CSV parser
@@ -542,7 +550,7 @@ class TransactionService {
                     // Find the transaction and update isProcessed to true
                     updatedTransaction = await Transaction.findOneAndUpdate(
                         {UDID: qr},  // Match the QR code
-                        {updatedBy: req.user._id, pointsRedeemedBy: req.user.mobile },
+                        {$set: {updatedBy: req.user._id, pointsRedeemedBy: req.user.mobile, pointsRedeemedAt: new Date()} },
                         {new: true}  // Return the updated document
                     );
                     logger.info('Successfully updated coupon', {
