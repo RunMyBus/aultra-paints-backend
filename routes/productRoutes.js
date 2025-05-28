@@ -1,22 +1,39 @@
 const express = require('express');
-const { createProduct, getProducts,  getProductByName, updateProduct, deleteProduct } = require('../controllers/productController');
 const router = express.Router();
 
-// Create a new product
+const {
+  createProduct,
+  getProductsByBrandId,
+  getAllProducts,
+  updateProduct,
+  deleteProduct,
+  getAllProductsForSelect,
+  getProductsByName,
+  getUnifiedProductList
+} = require('../controllers/productController');
+
+// Route to create a new product
 router.post('/', createProduct);
 
-// Get all products
-router.get('/', getProducts);
+// Route to get all products for a specific brand by brandId
+router.get('/:brandId', getProductsByBrandId);
 
-router.get('/getAllProducts', getAllProducts);
+// Route to get all products with pagination and brand info
+router.get('/', getAllProducts);
 
-// Get a product by Name (new route for search)
-router.get('/search/:name', getProductByName);  
+// Route to search products by product name
+router.get('/search/:productName', getProductsByName);
 
-// Update a product by ID
+// Route to update a product by its ID
 router.put('/:id', updateProduct);
 
-// Delete a product by ID
+// Route to delete a product by its ID
 router.delete('/:id', deleteProduct);
+
+// Route to get all products for dropdown/select (based on brand)
+router.get('/getAllProductsForSelect/:brandId', getAllProductsForSelect);
+
+// Route to get unified product list
+router.get('/unified-products', getUnifiedProductList);
 
 module.exports = router;
