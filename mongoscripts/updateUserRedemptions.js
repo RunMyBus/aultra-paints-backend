@@ -1,5 +1,5 @@
 // Switch to your DB
-db = db.getSiblingDB('aultrapaintsnew');
+db = db.getSiblingDB('aultrapaints');
 
 db.transactions.createIndex({ pointsRedeemedBy: 1 });
 db.transactions.createIndex({ cashRedeemedBy: 1 });
