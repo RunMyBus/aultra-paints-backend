@@ -8,487 +8,741 @@ const Brand = require('../models/Brand');
 const { Parser } = require('json2csv');
 
 exports.getBatchStatistics = async (req, res) => {
-    try {
-        // Get all batch numbers
-        const batches = await BatchNumber.find().select('ProductName _id Brand');
-        
-        // Get an array of batch IDs and brand IDs
-        const batchIds = batches.map(batch => batch._id);
-        const productIds = batches.map(batch => batch.ProductName);
-        const brandIds = batches.map(batch => batch.Brand);
-
-        // Get product names for all product IDs
-        const products = await Product.find({ _id: { $in: productIds } }).select('name');
-        const productMap = new Map(products.map(product => [product._id.toString(), product.name]));
-
-        // Get brand names for all brand IDs
-        const brands = await Brand.find({ _id: { $in: brandIds } }).select('brands');
-        const brandMap = new Map(brands.map(brand => [brand._id.toString(), brand.brands]));
-        
-        // Prepare aggregation pipeline for batch statistics
-        const pipeline = [
-            {
-                $match: {
-                    batchId: { $in: batchIds }
-                }
-            },
-            {
-                $group: {
-                    _id: "$batchId",
-                    quantity: { $sum: 1 },
-                    pointsRedeemed: {
-                        $sum: {
-                            $cond: [{
-                                $or: [
-                                    {
-                                        $and: [
-                                            { $gt: [{ $type: "$pointsRedeemedBy" }, "missing"] },
-                                            { $ne: ["$pointsRedeemedBy", null] },
-                                            { $ne: ["$pointsRedeemedBy", ""] }
-                                        ]
-                                    }
-                                ]
-                            }, 1, 0]
-                        }
-                    },
-                    cashRedeemed: {
-                        $sum: {
-                            $cond: [{
-                                $or: [
-                                    {
-                                        $and: [
-                                            { $gt: [{ $type: "$cashRedeemedBy" }, "missing"] },
-                                            { $ne: ["$cashRedeemedBy", null] },
-                                            { $ne: ["$cashRedeemedBy", ""] }
-                                        ]
-                                    }
-                                ]
-                            }, 1, 0]
-                        }
-                    }
-                }
-            },
-            {
-                $lookup: {
-                    from: 'batchnumbers',
-                    localField: '_id',
-                    foreignField: '_id',
-                    as: 'batchData'
-                }
-            },
-            { $unwind: '$batchData' },
-            {
-                $project: {
-                    batchNumber: { $ifNull: ['$batchData.BatchNumber', 'Unknown'] },
-                    productName: { $ifNull: ['$batchData.ProductName', 'Unknown'] },
-                    brandId: '$batchData.Brand',
-                    branch: { $ifNull: ['$batchData.Branch', 'Unknown'] },        
-                    quantity: 1,
-                    createdAt: { $ifNull: ['$batchData.createdAt', new Date()] },
-                    redeemablePoints: { $ifNull: ['$batchData.RedeemablePoints', 0] },
-                    value: { $ifNull: ['$batchData.value', 0] },
-                    issuedPoints: { $multiply: ['$quantity', { $ifNull: ['$batchData.RedeemablePoints', 0] }] },
-                    issuedValue: { $multiply: ['$quantity', { $ifNull: ['$batchData.value', 0] }] },
-                    redeemedPoints: { $multiply: ['$pointsRedeemed', { $ifNull: ['$batchData.RedeemablePoints', 0] }] },
-                    redeemedValue: { $multiply: ['$cashRedeemed', { $ifNull: ['$batchData.value', 0] }] }
-                }
-            },
-            {
-                $sort: {
-                    "createdAt": -1
-                }
+  try {
+    // Fetch all batches with BrandStr and ProductStr computed similarly to your getAllBatchNumbers method
+    const batches = await BatchNumber.aggregate([
+      {
+        $addFields: {
+          BrandObjId: {
+            $cond: {
+              if: {
+                $and: [
+                  { $ne: ["$Brand", null] },
+                  { $ne: [{ $type: "$Brand" }, "objectId"] }
+                ]
+              },
+              then: { $toObjectId: "$Brand" },
+              else: "$Brand"
             }
-        ];
-
-        const statistics = await Transaction.aggregate(pipeline);
-        
-        // Format data for bar chart
-        const barChartData = {
-            products: statistics.map(stat => {
-                const productName = productMap.get(stat.productName.toString()) || 'Unknown';
-                const brandName = brandMap.get(stat.brandId.toString()) || 'Unknown';
-                const batchNumber = stat.batchNumber.toString() || 'Unknown';
-                return {
-                    name: `${productName}-${brandName}-${stat.branch}-${batchNumber}`,
-                    id: stat._id.toString(),
-                    createdAt: Math.floor(stat.createdAt.getTime() / 1000)
-                };
-            }),
-            metrics: [
-                {
-                    name: 'Issued Points',
-                    data: statistics.map(stat => stat.issuedPoints || 0)
-                },
-                {
-                    name: 'Issued Cash',
-                    data: statistics.map(stat => stat.issuedValue || 0)
-                },
-                {
-                    name: 'Redeemed Points',
-                    data: statistics.map(stat => stat.redeemedPoints || 0)
-                },
-                {
-                    name: 'Redeemed Cash',
-                    data: statistics.map(stat => stat.redeemedValue || 0)
-                }
+          },
+          ProductNameObjId: {
+            $cond: {
+              if: {
+                $and: [
+                  { $ne: ["$ProductName", null] },
+                  { $ne: [{ $type: "$ProductName" }, "objectId"] }
+                ]
+              },
+              then: { $toObjectId: "$ProductName" },
+              else: "$ProductName"
+            }
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: "products",
+          localField: "BrandObjId",
+          foreignField: "_id",
+          as: "productDataNew"
+        }
+      },
+      {
+        $lookup: {
+          from: "brands",
+          localField: "ProductNameObjId",
+          foreignField: "_id",
+          as: "brandDataNew"
+        }
+      },
+      {
+        $lookup: {
+          from: "brands",
+          localField: "BrandObjId",
+          foreignField: "_id",
+          as: "brandDataOld"
+        }
+      },
+      {
+        $lookup: {
+          from: "products",
+          localField: "ProductNameObjId",
+          foreignField: "_id",
+          as: "productDataOld"
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          BatchNumber: 1,
+          Branch: 1,
+          createdAt: 1,
+          BrandStr: {
+            $cond: [
+              { $gt: [{ $size: "$brandDataNew" }, 0] },
+              { $arrayElemAt: ["$brandDataNew.name", 0] },
+              {
+                $cond: [
+                  { $gt: [{ $size: "$brandDataOld" }, 0] },
+                  { $arrayElemAt: ["$brandDataOld.name", 0] },
+                  "$Brand"
+                ]
+              }
             ]
-        };
+          },
+          ProductStr: {
+            $cond: [
+              { $gt: [{ $size: "$productDataNew" }, 0] },
+              { $arrayElemAt: ["$productDataNew.products", 0] },
+              {
+                $cond: [
+                  { $gt: [{ $size: "$productDataOld" }, 0] },
+                  { $arrayElemAt: ["$productDataOld.products", 0] },
+                  "$ProductName"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ]);
 
-        return res.status(200).json(barChartData);
-    } catch (error) {
-        console.error('Error getting batch statistics:', error);
-        return res.status(500).json({ error: error.message });
-    }
+    const batchIds = batches.map(b => b._id);
+
+    // Aggregate transactions by batchId to get stats
+    const pipeline = [
+      { $match: { batchId: { $in: batchIds } } },
+      {
+        $group: {
+          _id: "$batchId",
+          quantity: { $sum: 1 },
+          pointsRedeemed: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $gt: [{ $type: "$pointsRedeemedBy" }, "missing"] },
+                    { $ne: ["$pointsRedeemedBy", null] },
+                    { $ne: ["$pointsRedeemedBy", ""] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
+          cashRedeemed: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $gt: [{ $type: "$cashRedeemedBy" }, "missing"] },
+                    { $ne: ["$cashRedeemedBy", null] },
+                    { $ne: ["$cashRedeemedBy", ""] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: "batchnumbers",
+          localField: "_id",
+          foreignField: "_id",
+          as: "batchData"
+        }
+      },
+      { $unwind: "$batchData" },
+      {
+        $project: {
+          _id: 1,
+          batchNumber: { $ifNull: ["$batchData.BatchNumber", "Unknown"] },
+          brandId: "$batchData.Brand",
+          productNameId: "$batchData.ProductName",
+          branch: { $ifNull: ["$batchData.Branch", "Unknown"] },
+          quantity: 1,
+          createdAt: { $ifNull: ["$batchData.createdAt", new Date()] },
+          redeemablePoints: { $ifNull: ["$batchData.RedeemablePoints", 0] },
+          value: { $ifNull: ["$batchData.value", 0] },
+          pointsRedeemed: 1,
+          cashRedeemed: 1,
+          issuedPoints: { $multiply: ["$quantity", { $ifNull: ["$batchData.RedeemablePoints", 0] }] },
+          issuedValue: { $multiply: ["$quantity", { $ifNull: ["$batchData.value", 0] }] },
+          redeemedPoints: { $multiply: ["$pointsRedeemed", { $ifNull: ["$batchData.RedeemablePoints", 0] }] },
+          redeemedValue: { $multiply: ["$cashRedeemed", { $ifNull: ["$batchData.value", 0] }] }
+        }
+      },
+      { $sort: { createdAt: -1 } }
+    ];
+
+    const statistics = await Transaction.aggregate(pipeline);
+
+    // Create maps for fast lookup of BrandStr and ProductStr by batch _id
+    const batchMap = new Map();
+    batches.forEach(b => {
+      batchMap.set(b._id.toString(), {
+        BrandStr: b.BrandStr || "Unknown",
+        ProductStr: b.ProductStr || "Unknown",
+        Branch: b.Branch || "Unknown",
+        BatchNumber: b.BatchNumber || "Unknown",
+        createdAt: b.createdAt || new Date()
+      });
+    });
+
+    // Format data for response
+    const barChartData = {
+      products: statistics.map(stat => {
+        const batchInfo = batchMap.get(stat._id.toString()) || {};
+        return {
+          name: `${batchInfo.BrandStr}-${batchInfo.ProductStr}-${batchInfo.Branch}-${batchInfo.BatchNumber}`,
+          id: stat._id.toString(),
+          createdAt: Math.floor(new Date(batchInfo.createdAt).getTime() / 1000)
+        };
+      }),
+      metrics: [
+        {
+          name: "Issued Points",
+          data: statistics.map(stat => stat.issuedPoints || 0)
+        },
+        {
+          name: "Issued Cash",
+          data: statistics.map(stat => stat.issuedValue || 0)
+        },
+        {
+          name: "Redeemed Points",
+          data: statistics.map(stat => stat.redeemedPoints || 0)
+        },
+        {
+          name: "Redeemed Cash",
+          data: statistics.map(stat => stat.redeemedValue || 0)
+        }
+      ]
+    };
+
+    return res.status(200).json(barChartData);
+
+  } catch (error) {
+    console.error("Error getting batch statistics:", error);
+    return res.status(500).json({ error: error.message });
+  }
 };
 
 exports.getBatchStatisticsList = async (req, res) => {
-    try {
-        const { page, limit, branches } = req.body;
-        const skip = (page - 1) * limit;
+  try {
+    const { page = 1, limit = 10, branches = [] } = req.body;
+    const skip = (page - 1) * limit;
 
-        // Get all batch numbers
-        const batches = await BatchNumber.find().select('ProductName _id Brand');
+    logger.debug(`getBatchStatisticsList called with page=${page}, limit=${limit}, branches=${JSON.stringify(branches)}`);
 
-        // Get an array of batch IDs and brand IDs
-        const batchIds = batches.map(batch => batch._id);
-        const productIds = batches.map(batch => batch.ProductName);
-        const brandIds = batches.map(batch => batch.Brand);
-
-        // Get product names for all product IDs
-        const products = await Product.find({ _id: { $in: productIds } }).select('name');
-        const productMap = new Map(products.map(product => [product._id.toString(), product.name]));
-
-        // Get brand names for all brand IDs
-        const brands = await Brand.find({ _id: { $in: brandIds } }).select('brands');
-        const brandMap = new Map(brands.map(brand => [brand._id.toString(), brand.brands]));
-
-        // Pipeline to get distinct branches (without any filters)
-        const branchPipeline = [
-            {
-                $match: {
-                    batchId: { $in: batchIds }
-                }
-            },
-            {
-                $lookup: {
-                    from: 'batchnumbers',
-                    localField: 'batchId',
-                    foreignField: '_id',
-                    as: 'batchData'
-                }
-            },
-            { $unwind: '$batchData' },
-            {
-                $group: {
-                    _id: '$batchData.Branch'
-                }
-            },
-            {
-                $match: {
-                    _id: { $ne: null }
-                }
-            },
-            {
-                $project: {
-                    _id: 0,
-                    branch: '$_id'
-                }
+    // Fetch all batches with required fields and joins
+    const batches = await BatchNumber.aggregate([
+      {
+        $addFields: {
+          BrandObjId: {
+            $cond: {
+              if: {
+                $and: [
+                  { $ne: ["$Brand", null] },
+                  { $ne: [{ $type: "$Brand" }, "objectId"] }
+                ]
+              },
+              then: { $toObjectId: "$Brand" },
+              else: "$Brand"
             }
-        ];
-
-        // Base pipeline with batch filtering
-        const basePipeline = [
-            {
-                $match: {
-                    batchId: { $in: batchIds }
-                }
-            },
-            {
-                $group: {
-                    _id: "$batchId",
-                    quantity: { $sum: 1 },
-                    pointsRedeemed: {
-                        $sum: {
-                            $cond: [{
-                                $or: [
-                                    {
-                                        $and: [
-                                            { $gt: [{ $type: "$pointsRedeemedBy" }, "missing"] },
-                                            { $ne: ["$pointsRedeemedBy", null] },
-                                            { $ne: ["$pointsRedeemedBy", ""] }
-                                        ]
-                                    }
-                                ]
-                            }, 1, 0]
-                        }
-                    },
-                    cashRedeemed: {
-                        $sum: {
-                            $cond: [{
-                                $or: [
-                                    {
-                                        $and: [
-                                            { $gt: [{ $type: "$cashRedeemedBy" }, "missing"] },
-                                            { $ne: ["$cashRedeemedBy", null] },
-                                            { $ne: ["$cashRedeemedBy", ""] }
-                                        ]
-                                    }
-                                ]
-                            }, 1, 0]
-                        }
-                    }
-                }
-            },
-            {
-                $lookup: {
-                    from: 'batchnumbers',
-                    localField: '_id',
-                    foreignField: '_id',
-                    as: 'batchData'
-                }
-            },
-            { $unwind: '$batchData' }
-        ];
-
-        // Add branch filter if provided
-        if (branches.length > 0) {
-            basePipeline.push({
-                $match: {
-                    "batchData.Branch": { $in: branches }
-                }
-            });
+          },
+          ProductNameObjId: {
+            $cond: {
+              if: {
+                $and: [
+                  { $ne: ["$ProductName", null] },
+                  { $ne: [{ $type: "$ProductName" }, "objectId"] }
+                ]
+              },
+              then: { $toObjectId: "$ProductName" },
+              else: "$ProductName"
+            }
+          }
         }
+      },
+      {
+        $lookup: {
+          from: "products",
+          localField: "BrandObjId",
+          foreignField: "_id",
+          as: "productDataNew"
+        }
+      },
+      {
+        $lookup: {
+          from: "brands",
+          localField: "ProductNameObjId",
+          foreignField: "_id",
+          as: "brandDataNew"
+        }
+      },
+      {
+        $lookup: {
+          from: "brands",
+          localField: "BrandObjId",
+          foreignField: "_id",
+          as: "brandDataOld"
+        }
+      },
+      {
+        $lookup: {
+          from: "products",
+          localField: "ProductNameObjId",
+          foreignField: "_id",
+          as: "productDataOld"
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          BatchNumber: 1,
+          Branch: 1,
+          Brand: 1,
+          ProductName: 1,
+          RedeemablePoints: 1,
+          value: 1,
+          createdAt: 1,
+          BrandStr: {
+            $cond: [
+              { $gt: [{ $size: "$brandDataNew" }, 0] },
+              { $arrayElemAt: ["$brandDataNew.name", 0] },
+              {
+                $cond: [
+                  { $gt: [{ $size: "$brandDataOld" }, 0] },
+                  { $arrayElemAt: ["$brandDataOld.name", 0] },
+                  "$Brand"
+                ]
+              }
+            ]
+          },
+          ProductStr: {
+            $cond: [
+              { $gt: [{ $size: "$productDataNew" }, 0] },
+              { $arrayElemAt: ["$productDataNew.products", 0] },
+              {
+                $cond: [
+                  { $gt: [{ $size: "$productDataOld" }, 0] },
+                  { $arrayElemAt: ["$productDataOld.products", 0] },
+                  "$ProductName"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ]);
 
-        // Pipeline for counting total documents
-        const countPipeline = [...basePipeline, { $count: 'total' }];
+    logger.debug(`Fetched ${batches.length} batches`);
 
-        // Pipeline for fetching data with pagination
-        const dataPipeline = [
-            ...basePipeline,
-            {
-                $project: {
-                    batchNumber: { $ifNull: ['$batchData.BatchNumber', 'Unknown'] },
-                    productName: { $ifNull: ['$batchData.ProductName', 'Unknown'] },
-                    brandId: '$batchData.Brand',
-                    branch: { $ifNull: ['$batchData.Branch', 'Unknown'] },
-                    quantity: 1,
-                    createdAt: { $ifNull: ['$batchData.createdAt', new Date()] },
-                    redeemablePoints: { $ifNull: ['$batchData.RedeemablePoints', 0] },
-                    value: { $ifNull: ['$batchData.value', 0] },
-                    issuedPoints: {
-                        $multiply: ['$quantity', { $ifNull: ['$batchData.RedeemablePoints', 0] }]
-                    },
-                    issuedValue: {
-                        $multiply: ['$quantity', { $ifNull: ['$batchData.value', 0] }]
-                    },
-                    redeemedPoints: {
-                        $multiply: ['$pointsRedeemed', { $ifNull: ['$batchData.RedeemablePoints', 0] }]
-                    },
-                    redeemedValue: {
-                        $multiply: ['$cashRedeemed', { $ifNull: ['$batchData.value', 0] }]
-                    }
-                }
-            },
-            { $sort: { createdAt: -1 } },
-            { $skip: skip },
-            { $limit: parseInt(limit) }
-        ];
+    // Convert _id to ObjectId safely
+    const batchIds = batches.map(batch => {
+      if (typeof batch._id === 'string') {
+        return new mongoose.Types.ObjectId(batch._id);
+      }
+      return batch._id;
+    });
 
-        // Execute both pipelines
-        const [countResult, results, distinctBranches] = await Promise.all([
-            Transaction.aggregate(countPipeline),
-            Transaction.aggregate(dataPipeline),
-            Transaction.aggregate(branchPipeline)
-        ]);
+    // Base match only on batchIds (branch filtering will come later)
+    const baseMatch = {
+      batchId: { $in: batchIds }
+    };
 
-        const total = countResult[0]?.total || 0;
-        const totalPages = Math.ceil(total / limit);
+    // Branches filter stages - empty if no branches provided
+    const branchFilterStages = branches.length > 0
+      ? [{ $match: { "batchData.Branch": { $in: branches } } }]
+      : [];
 
-        // Transform into list format with product and brand names
-        const listData = results.map(item => ({
-            name: `${productMap.get(item.productName.toString()) || 'Unknown'}-${brandMap.get(item.brandId.toString()) || 'Unknown'}-${item.branch}-${item.batchNumber.toString() || 'Unknown'}`,
-            branch: item.branch,
-            createdAt: new Date(item.createdAt).toISOString(),
-            issuedPoints: item.issuedPoints || 0,
-            issuedCash: item.issuedValue || 0,
-            redeemedPoints: item.redeemedPoints || 0,
-            redeemedCash: item.redeemedValue || 0
-        }));
+    // Pipeline to get distinct branches
+    const branchPipeline = [
+      { $match: baseMatch },
+      {
+        $lookup: {
+          from: "batchnumbers",
+          localField: "batchId",
+          foreignField: "_id",
+          as: "batchData"
+        }
+      },
+      { $unwind: "$batchData" },
+      ...branchFilterStages,
+      {
+        $group: { _id: "$batchData.Branch" }
+      },
+      {
+        $match: { _id: { $ne: null } }
+      },
+      {
+        $project: { _id: 0, branch: "$_id" }
+      }
+    ];
 
-        // Extract branches array from the distinctBranches result
-        const allBranches = distinctBranches.map(b => b.branch).sort();
-
-        return res.status(200).json({
-            success: true,
-            data: listData,
-            branches: allBranches,
-            pagination: {
-                total,
-                page: parseInt(page),
-                totalPages,
-                limit: parseInt(limit)
+    // Aggregation pipeline for transaction stats
+    const aggregationPipeline = [
+      { $match: baseMatch },
+      {
+        $lookup: {
+          from: "batchnumbers",
+          localField: "batchId",
+          foreignField: "_id",
+          as: "batchData"
+        }
+      },
+      { $unwind: "$batchData" },
+      ...branchFilterStages,
+      {
+        $group: {
+          _id: "$batchId",
+          quantity: { $sum: 1 },
+          pointsRedeemed: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $gt: [{ $type: "$pointsRedeemedBy" }, "missing"] },
+                    { $ne: ["$pointsRedeemedBy", null] },
+                    { $ne: ["$pointsRedeemedBy", ""] }
+                  ]
+                },
+                1,
+                0
+              ]
             }
-        });
+          },
+          cashRedeemed: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $gt: [{ $type: "$cashRedeemedBy" }, "missing"] },
+                    { $ne: ["$cashRedeemedBy", null] },
+                    { $ne: ["$cashRedeemedBy", ""] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          }
+        }
+      }
+    ];
 
-    } catch (error) {
-        console.error('Error in getBatchStatisticsList', error);
-        return res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
+    // Count total documents matching
+    const countPipeline = [...aggregationPipeline, { $count: "total" }];
+
+    // Pagination pipeline
+    const dataPipeline = [
+      ...aggregationPipeline,
+      { $skip: skip },
+      { $limit: parseInt(limit) }
+    ];
+
+    // Run all aggregations in parallel
+    const [countResult, stats, distinctBranches] = await Promise.all([
+      Transaction.aggregate(countPipeline),
+      Transaction.aggregate(dataPipeline),
+      Transaction.aggregate(branchPipeline)
+    ]);
+
+    const total = countResult[0]?.total || 0;
+    const totalPages = Math.ceil(total / limit);
+
+    // Map aggregation stats back to batch details
+    const listData = stats.map(item => {
+      const batch = batches.find(b => b._id.toString() === item._id.toString()) || {};
+      const productStr = batch.ProductStr || "Unknown";
+      const brandStr = batch.BrandStr || "Unknown";
+      const batchNumber = batch.BatchNumber || "Unknown";
+      const branch = batch.Branch || "Unknown";
+      const createdAt = batch.createdAt || new Date();
+      const redeemablePoints = batch.RedeemablePoints || 0;
+      const value = batch.value || 0;
+
+      return {
+        name: `${productStr}-${brandStr}-${branch}-${batchNumber}`,
+        branch: branch,
+        createdAt: new Date(createdAt).toISOString(),
+        issuedPoints: item.quantity * redeemablePoints,
+        issuedCash: item.quantity * value,
+        redeemedPoints: item.pointsRedeemed * redeemablePoints,
+        redeemedCash: item.cashRedeemed * value
+      };
+    });
+
+    // Sort branches alphabetically
+    const allBranches = distinctBranches.map(b => b.branch).sort();
+
+    return res.status(200).json({
+      success: true,
+      data: listData,
+      branches: allBranches,
+      pagination: {
+        total,
+        page: parseInt(page),
+        totalPages,
+        limit: parseInt(limit)
+      }
+    });
+  } catch (error) {
+    logger.error("Error in getBatchStatisticsList", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 };
 
 // Modify the export function to use the list format
 exports.exportBatchStatistics = async (req, res) => {
-    try {
-        const { branches = [] } = req.body;
+  try {
+    const { branches = [] } = req.body;
 
-        // Get all batch numbers
-        const batches = await BatchNumber.find().select('ProductName _id Brand');
-
-        // Get an array of batch IDs and create maps
-        const batchIds = batches.map(batch => batch._id);
-        const productIds = batches.map(batch => batch.ProductName);
-        const brandIds = batches.map(batch => batch.Brand);
-
-        // Get product and brand mappings
-        const [products, brands] = await Promise.all([
-            Product.find({ _id: { $in: productIds } }).select('name'),
-            Brand.find({ _id: { $in: brandIds } }).select('brands')
-        ]);
-
-        const productMap = new Map(products.map(product => [product._id.toString(), product.name]));
-        const brandMap = new Map(brands.map(brand => [brand._id.toString(), brand.brands]));
-
-        // Base pipeline with batch filtering
-        const pipeline = [
-            {
-                $match: {
-                    batchId: { $in: batchIds }
-                }
-            },
-            {
-                $group: {
-                    _id: "$batchId",
-                    quantity: { $sum: 1 },
-                    pointsRedeemed: {
-                        $sum: {
-                            $cond: [{
-                                $or: [
-                                    {
-                                        $and: [
-                                            { $gt: [{ $type: "$pointsRedeemedBy" }, "missing"] },
-                                            { $ne: ["$pointsRedeemedBy", null] },
-                                            { $ne: ["$pointsRedeemedBy", ""] }
-                                        ]
-                                    }
-                                ]
-                            }, 1, 0]
-                        }
-                    },
-                    cashRedeemed: {
-                        $sum: {
-                            $cond: [{
-                                $or: [
-                                    {
-                                        $and: [
-                                            { $gt: [{ $type: "$cashRedeemedBy" }, "missing"] },
-                                            { $ne: ["$cashRedeemedBy", null] },
-                                            { $ne: ["$cashRedeemedBy", ""] }
-                                        ]
-                                    }
-                                ]
-                            }, 1, 0]
-                        }
-                    }
-                }
-            },
-            {
-                $lookup: {
-                    from: 'batchnumbers',
-                    localField: '_id',
-                    foreignField: '_id',
-                    as: 'batchData'
-                }
-            },
-            { $unwind: '$batchData' }
-        ];
-
-        // Add branch filter if provided
-        if (branches.length > 0) {
-            pipeline.push({
-                $match: {
-                    "batchData.Branch": { $in: branches }
-                }
-            });
+    // Step 1: Fetch all batches with resolved BrandStr and ProductStr
+    const batches = await BatchNumber.aggregate([
+      {
+        $addFields: {
+          BrandObjId: {
+            $cond: {
+              if: {
+                $and: [
+                  { $ne: ["$Brand", null] },
+                  { $ne: [{ $type: "$Brand" }, "objectId"] }
+                ]
+              },
+              then: { $toObjectId: "$Brand" },
+              else: "$Brand"
+            }
+          },
+          ProductNameObjId: {
+            $cond: {
+              if: {
+                $and: [
+                  { $ne: ["$ProductName", null] },
+                  { $ne: [{ $type: "$ProductName" }, "objectId"] }
+                ]
+              },
+              then: { $toObjectId: "$ProductName" },
+              else: "$ProductName"
+            }
+          }
         }
+      },
+      {
+        $lookup: {
+          from: "products",
+          localField: "BrandObjId",
+          foreignField: "_id",
+          as: "productDataNew"
+        }
+      },
+      {
+        $lookup: {
+          from: "brands",
+          localField: "ProductNameObjId",
+          foreignField: "_id",
+          as: "brandDataNew"
+        }
+      },
+      {
+        $lookup: {
+          from: "brands",
+          localField: "BrandObjId",
+          foreignField: "_id",
+          as: "brandDataOld"
+        }
+      },
+      {
+        $lookup: {
+          from: "products",
+          localField: "ProductNameObjId",
+          foreignField: "_id",
+          as: "productDataOld"
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          BatchNumber: 1,
+          Branch: 1,
+          createdAt: 1,
+          RedeemablePoints: 1,
+          value: 1,
+          BrandStr: {
+            $cond: [
+              { $gt: [{ $size: "$brandDataNew" }, 0] },
+              { $arrayElemAt: ["$brandDataNew.name", 0] },
+              {
+                $cond: [
+                  { $gt: [{ $size: "$brandDataOld" }, 0] },
+                  { $arrayElemAt: ["$brandDataOld.name", 0] },
+                  "$Brand"
+                ]
+              }
+            ]
+          },
+          ProductStr: {
+            $cond: [
+              { $gt: [{ $size: "$productDataNew" }, 0] },
+              { $arrayElemAt: ["$productDataNew.products", 0] },
+              {
+                $cond: [
+                  { $gt: [{ $size: "$productDataOld" }, 0] },
+                  { $arrayElemAt: ["$productDataOld.products", 0] },
+                  "$ProductName"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ]);
 
-        // Add projection and sorting
-        pipeline.push(
-            {
-                $project: {
-                    batchNumber: { $ifNull: ['$batchData.BatchNumber', 'Unknown'] },
-                    productName: { $ifNull: ['$batchData.ProductName', 'Unknown'] },
-                    brandId: '$batchData.Brand',
-                    branch: { $ifNull: ['$batchData.Branch', 'Unknown'] },
-                    quantity: 1,
-                    createdAt: { $ifNull: ['$batchData.createdAt', new Date()] },
-                    redeemablePoints: { $ifNull: ['$batchData.RedeemablePoints', 0] },
-                    value: { $ifNull: ['$batchData.value', 0] },
-                    issuedPoints: {
-                        $multiply: ['$quantity', { $ifNull: ['$batchData.RedeemablePoints', 0] }]
-                    },
-                    issuedValue: {
-                        $multiply: ['$quantity', { $ifNull: ['$batchData.value', 0] }]
-                    },
-                    redeemedPoints: {
-                        $multiply: ['$pointsRedeemed', { $ifNull: ['$batchData.RedeemablePoints', 0] }]
-                    },
-                    redeemedValue: {
-                        $multiply: ['$cashRedeemed', { $ifNull: ['$batchData.value', 0] }]
-                    }
-                }
-            },
-            { $sort: { createdAt: -1 } }
-        );
+    const batchIds = batches.map(b => b._id);
 
-        // Execute pipeline
-        const results = await Transaction.aggregate(pipeline);
+    // Step 2: Aggregate transactions per batch
+    const pipeline = [
+      { $match: { batchId: { $in: batchIds } } },
+      {
+        $lookup: {
+          from: "batchnumbers",
+          localField: "batchId",
+          foreignField: "_id",
+          as: "batchData"
+        }
+      },
+      { $unwind: "$batchData" },
+    ];
 
-        // Transform data for export
-        const exportData = results.map(item => ({
-            'Name': `${productMap.get(item.productName.toString()) || 'Unknown'}-${brandMap.get(item.brandId.toString()) || 'Unknown'}-${item.branch}-${item.batchNumber}`,
-            'Created Date': new Date(item.createdAt).toISOString(),
-            'Issued Points': item.issuedPoints || 0,
-            'Issued Cash': item.issuedValue || 0,
-            'Redeemed Points': item.redeemedPoints || 0,
-            'Redeemed Cash': item.redeemedValue || 0
-        }));
-
-        const fields = [
-            'Name',
-            'Created Date',
-            'Issued Points',
-            'Issued Cash',
-            'Redeemed Points',
-            'Redeemed Cash'
-        ];
-
-        const parser = new Parser({ fields });
-        const csv = parser.parse(exportData);
-
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', 'attachment; filename=Coupon-Statistics.csv');
-        return res.send(csv);
-
-    } catch (error) {
-        console.error('Error in exportBatchStatistics:', error);
-        return res.status(500).json({
-            success: false,
-            error: error.message
-        });
+    // Branch filtering if any
+    if (branches.length > 0) {
+      pipeline.push({
+        $match: {
+          "batchData.Branch": { $in: branches }
+        }
+      });
     }
+
+    // Continue aggregation
+    pipeline.push(
+      {
+        $group: {
+          _id: "$batchId",
+          quantity: { $sum: 1 },
+          pointsRedeemed: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $gt: [{ $type: "$pointsRedeemedBy" }, "missing"] },
+                    { $ne: ["$pointsRedeemedBy", null] },
+                    { $ne: ["$pointsRedeemedBy", ""] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
+          cashRedeemed: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $gt: [{ $type: "$cashRedeemedBy" }, "missing"] },
+                    { $ne: ["$cashRedeemedBy", null] },
+                    { $ne: ["$cashRedeemedBy", ""] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: "batchnumbers",
+          localField: "_id",
+          foreignField: "_id",
+          as: "batchInfo"
+        }
+      },
+      { $unwind: "$batchInfo" },
+      {
+        $project: {
+          _id: 1,
+          quantity: 1,
+          pointsRedeemed: 1,
+          cashRedeemed: 1,
+          createdAt: "$batchInfo.createdAt",
+          batchNumber: "$batchInfo.BatchNumber",
+          value: { $ifNull: ["$batchInfo.value", 0] },
+          redeemablePoints: { $ifNull: ["$batchInfo.RedeemablePoints", 0] },
+          branch: "$batchInfo.Branch"
+        }
+      },
+      { $sort: { createdAt: -1 } }
+    );
+
+    const transactionStats = await Transaction.aggregate(pipeline);
+
+    // Step 3: Map to export format
+    const batchMap = new Map();
+    batches.forEach(b => {
+      batchMap.set(b._id.toString(), {
+        BrandStr: b.BrandStr || "Unknown",
+        ProductStr: b.ProductStr || "Unknown",
+        Branch: b.Branch || "Unknown",
+        BatchNumber: b.BatchNumber || "Unknown",
+        createdAt: b.createdAt || new Date()
+      });
+    });
+
+    const exportData = transactionStats.map(item => {
+      const batch = batchMap.get(item._id.toString()) || {};
+
+      return {
+        'Name': `${batch.ProductStr}-${batch.BrandStr}-${batch.Branch}-${batch.BatchNumber}`,
+        'Created Date': new Date(batch.createdAt).toISOString(),
+        'Issued Points': item.quantity * item.redeemablePoints,
+        'Issued Cash': item.quantity * item.value,
+        'Redeemed Points': item.pointsRedeemed * item.redeemablePoints,
+        'Redeemed Cash': item.cashRedeemed * item.value
+      };
+    });
+
+    // Step 4: Generate CSV
+    const fields = [
+      'Name',
+      'Created Date',
+      'Issued Points',
+      'Issued Cash',
+      'Redeemed Points',
+      'Redeemed Cash'
+    ];
+    const parser = new Parser({ fields });
+    const csv = parser.parse(exportData);
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=Coupon-Statistics.csv');
+    return res.send(csv);
+
+  } catch (error) {
+    console.error('Error in exportBatchStatistics:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 };
 
 exports.getMonthlyBatchStatistics = async (req, res) => {
