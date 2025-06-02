@@ -24,18 +24,35 @@ exports.createProductCatlog = async (req, res) => {
     }
   
     // Parse and validate price field
-    let parsedPrice;
+    let parsedPrice = [];
     try {
-      parsedPrice = typeof price === 'string' ? JSON.parse(price) : price;
-      if (!Array.isArray(parsedPrice)) throw new Error();
-  
-      // Transform the price array to match the schema
-      parsedPrice = parsedPrice.map(priceObj => {
-        const [[refId, price]] = Object.entries(priceObj);
-        return { refId, price };
-      });
+      const priceData = typeof price === 'string' ? JSON.parse(price) : price;
+      if (typeof priceData !== 'object' || priceData === null) {
+        throw new Error('Price data must be an object');
+      }
+
+      // Transform the price data to match the schema
+      for (const [volume, priceEntries] of Object.entries(priceData)) {
+        if (!Array.isArray(priceEntries)) continue;
+        
+        priceEntries.forEach(entry => {
+          const [[refId, priceValue]] = Object.entries(entry);
+          if (refId && priceValue !== undefined) {
+            parsedPrice.push({
+              volume,
+              refId,
+              price: Number(priceValue)
+            });
+          }
+        });
+      }
+
+      if (parsedPrice.length === 0) {
+        throw new Error('No valid price entries found');
+      }
     } catch (error) {
-      return res.status(400).json({ message: 'Invalid price format' });
+      console.error('Error parsing price data:', error);
+      return res.status(400).json({ message: 'Invalid price format: ' + error.message });
     }
   
     // Create the product catlog document
@@ -87,31 +104,52 @@ exports.createProductCatlog = async (req, res) => {
   };
 
 
-  const processProductCatlogPrices = async (productcatlogId, parsedPrice) => {
+  const processProductCatlogPrices = async (productcatlogId, parsedPrices) => {
     try {
         // Remove existing prices for the product
         await ProductPriceModel.deleteMany({ productOfferId: productcatlogId });
 
+        // Group prices by refId for easier lookup
+        const pricesByRefId = {};
+        parsedPrices.forEach(item => {
+            if (!pricesByRefId[item.refId]) {
+                pricesByRefId[item.refId] = [];
+            }
+            pricesByRefId[item.refId].push({
+                volume: item.volume,
+                price: item.price
+            });
+        });
+
         // Fetch all dealers
         const dealers = await UserModel.find({ accountType: 'Dealer' });
+        const productPrices = [];
 
-        // Prepare price entries for each dealer
-        const productCatlogPrices = dealers.map(dealer => {
-            const priceObj =
-                parsedPrice.find(p => p.refId === dealer.district) ||
-                parsedPrice.find(p => p.refId === dealer.zone) ||
-                parsedPrice.find(p => p.refId === dealer.state) ||
-                parsedPrice.find(p => p.refId === 'All');
+        // For each dealer, find matching prices based on district/zone/state/All
+        for (const dealer of dealers) {
+            // Find the best matching refId for this dealer
+            const refId = [
+                dealer.district,
+                dealer.zone,
+                dealer.state,
+                'All'
+            ].find(id => id && pricesByRefId[id]);
 
-            return priceObj ? {
-                dealerId: dealer._id,
-                productOfferId: productcatlogId,
-                price: priceObj.price
-            } : null;
-        }).filter(entry => entry !== null); // Remove nulls
+            if (refId) {
+                // For each volume price for this refId, create a price entry
+                for (const priceInfo of pricesByRefId[refId]) {
+                    productPrices.push({
+                        productOfferId: productcatlogId,
+                        dealerId: dealer._id,
+                        price: priceInfo.price,
+                        volume: priceInfo.volume
+                    });
+                }
+            }
+        }
 
-        if (productCatlogPrices.length > 0) {
-            await ProductPriceModel.insertMany(productCatlogPrices);
+        if (productPrices.length > 0) {
+            await ProductPriceModel.insertMany(productPrices);
         }
 
         logger.info("Product catalog prices updated successfully.");
@@ -166,39 +204,71 @@ exports.searchProductCatlog = async (req, res) => {
     const total = await productOfferModel.countDocuments(query);
 
     let updatedData = await Promise.all(data.map(async (productCatlog) => {
-      let productPrice = null;
+      let prices = [];
+      const priceArray = []; // Array to store {volume, price} objects
 
       if (accountType === 'SuperUser') {
-        const priceObj = productCatlog.price?.find(p => p.refId === 'All');
-        productPrice = priceObj ? priceObj.price : null;
+        // For SuperUser, use the prices directly from the product catalog
+        prices = productCatlog.price || [];
+        
+        // Track which volumes we've already processed
+        const processedVolumes = new Set();
+        
+        // First pass: Add dealer-specific prices
+        prices.forEach(priceObj => {
+          if (priceObj.volume && priceObj.refId === dealerId) {
+            priceArray.push({
+              volume: priceObj.volume,
+              price: priceObj.price
+            });
+            processedVolumes.add(priceObj.volume);
+          }
+        });
+        
+        // Second pass: Add 'All' prices for volumes not already processed
+        prices.forEach(priceObj => {
+          if (priceObj.volume && priceObj.refId === 'All' && !processedVolumes.has(priceObj.volume)) {
+            priceArray.push({
+              volume: priceObj.volume,
+              price: priceObj.price
+            });
+          }
+        });
       } else {
-        const priceData = await ProductPriceModel.findOne({
+        // For dealers, get their specific prices
+        const dealerPrices = await ProductPriceModel.find({
           productOfferId: productCatlog._id,
           dealerId: dealerId
         });
-        productPrice = priceData ? priceData.price : null;
+        
+        // If no dealer-specific prices found, fall back to 'All' prices
+        if (dealerPrices.length === 0) {
+          const allPrices = await ProductPriceModel.find({
+            productOfferId: productCatlog._id,
+            refId: 'All'
+          });
+          prices = allPrices;
+        } else {
+          prices = dealerPrices;
+        }
+        
+        // Create the price array
+        prices.forEach(price => {
+          if (price.volume) {
+            priceArray.push({
+              volume: price.volume,
+              price: price.price
+            });
+          }
+        });
       }
 
       return {
-        ...productCatlog._doc, 
-        productPrice
+        ...productCatlog._doc,
+        productPrices: priceArray,
+        productPrice: priceArray[0]?.price || 0
       };
     }));
-      /*updatedData = updatedData.map(item => ({
-          _id: item._id,
-          productDescription: item.productOfferDescription,
-          productStatus: item.productOfferStatus,
-          productCategoryStatus: item.productOfferStatus,
-          productImageUrl: item.productOfferImageUrl,
-          productPrice: item.productPrice,
-          cashback: item.cashback,
-          redeemPoints: item.redeemPoints,
-          price: item.price,
-          createdAt: item.createdAt,
-          updatedAt: item.updatedAt,
-          __v: item.__v,
-          offerAvailable: item.offerAvailable
-      }));*/
 
     return res.status(200).json({
       data: updatedData,
@@ -249,45 +319,66 @@ exports.searchProductCatlog = async (req, res) => {
             req.body.productImageUrl = data.Location;
         }
 
-        // Price parsing logic
-        let parsedPrice;
+        // Parse and validate price field
+        let parsedPrice = [];
         try {
             const { price } = req.body;
-            parsedPrice = typeof price === 'string' ? JSON.parse(price) : price;
+            const priceData = typeof price === 'string' ? JSON.parse(price) : price;
 
-            if (!Array.isArray(parsedPrice)) {
-                return res.status(400).json({ message: 'Price must be an array' });
+            if (typeof priceData !== 'object' || priceData === null) {
+                throw new Error('Price data must be an object');
             }
 
-            parsedPrice = parsedPrice.map(priceObj => {
-                try {
-                    const [[refId, price]] = Object.entries(priceObj);
-                    return { refId, price };
-                } catch (e) {
-                    throw new Error('Invalid price object structure');
-                }
-            });
-        } catch (priceError) {
-            console.error('Price parsing error:', priceError);
-            return res.status(400).json({ message: 'Invalid price format' });
+            // Transform the price data to match the schema
+            for (const [volume, priceEntries] of Object.entries(priceData)) {
+                if (!Array.isArray(priceEntries)) continue;
+                
+                priceEntries.forEach(entry => {
+                    const [[refId, priceValue]] = Object.entries(entry);
+                    if (refId && priceValue !== undefined) {
+                        parsedPrice.push({
+                            volume,
+                            refId,
+                            price: Number(priceValue)
+                        });
+                    }
+                });
+            }
+
+            if (parsedPrice.length === 0) {
+                throw new Error('No valid price entries found');
+            }
+        } catch (error) {
+            console.error('Error parsing price data:', error);
+            return res.status(400).json({ message: 'Invalid price format: ' + error.message });
         }
 
-        // Data to update
-        const productCatlogData = {
+        // Prepare update data
+        const updateData = {
             productOfferDescription: req.body.productDescription,
             productOfferStatus: req.body.productStatus,
-            productOfferImageUrl: req.body.productImageUrl,
-            updatedBy: req.body.updatedBy,
-            price: parsedPrice
+            price: parsedPrice,
+            updatedBy: req.body.updatedBy
         };
 
-        // Update the product catlog and return the updated data
-        const productCatlog = await productOfferModel.findByIdAndUpdate(req.params.id, productCatlogData, { new: true });
-        if (!productCatlog) {
-            return res.status(400).json({ message: 'Product catlog not found' });
+        // Add image URL if it was updated
+        if (req.body.productImageUrl) {
+            updateData.productOfferImageUrl = req.body.productImageUrl;
         }
 
-        await processProductCatlogPrices(req.params.id , parsedPrice);
+        // Update the product catalog
+        const productCatlog = await productOfferModel.findByIdAndUpdate(
+            req.params.id,
+            updateData,
+            { new: true, runValidators: true }
+        );
+
+        if (!productCatlog) {
+            return res.status(404).json({ message: 'Product catalog not found' });
+        }
+
+        // Update the product prices
+        await processProductCatlogPrices(req.params.id, parsedPrice);
 
         return res.status(200).json({ data: productCatlog });
     } catch (error) {
@@ -314,4 +405,3 @@ exports.deleteProductCatlog = async (req, res) => {
       res.status(500).json({ message: error.message });
   }
 };
-
