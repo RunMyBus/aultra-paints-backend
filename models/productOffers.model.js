@@ -12,6 +12,7 @@ const productOffersSchema = new mongoose.Schema({
     redeemPoints: { type: Number, required: true, default: 0 },
     price: [
         {
+          volume: { type: String },
           refId: { type: String, required: true },
           price: { type: Number, required: true }
         }

@@ -3,7 +3,8 @@ const mongoose = require('mongoose');
 const productPriceSchema = new mongoose.Schema({
     productOfferId: { type: String, required: true },
     dealerId: { type: String, required: true },
-    price: { type: Number, required: true }
+    price: { type: Number, required: true },
+    volume: { type: String }
 }, {timestamps: true})
 
 const ProductPrice = mongoose.model('ProductPrice', productPriceSchema, 'productPrices');
