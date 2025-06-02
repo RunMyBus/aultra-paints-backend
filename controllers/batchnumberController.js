@@ -58,13 +58,13 @@ preFillZeros = async (number, length) => {
 exports.createBatchNumberWithCouponCheck = async (req, res) => {
     try {
         let userId = req.user.id.toString();
-        const { Branch, ProductName, CreationDate, ExpiryDate, BatchNumbers, BatchNumber } = req.body;
+        const { Branch, Brand, CreationDate, ExpiryDate, BatchNumbers, BatchNumber } = req.body;
 
         let successArray = [];
         let errorArray = [];
 
         for (let batchNumber of BatchNumbers) {
-            const { CouponSeries, Brand, redeemablePoints, value, Volume, Quantity } = batchNumber;
+            const { CouponSeries, ProductName, redeemablePoints, value, Volume, Quantity } = batchNumber;
 
             const startCouponSeries = parseInt(CouponSeries);
             const endCouponSeries = parseInt(CouponSeries) + Quantity - 1;
@@ -145,7 +145,6 @@ exports.createBatchNumberWithCouponCheck = async (req, res) => {
         return res.status(500).json({ error: error.message });
     }
 };
-
 exports.getAllBatchNumbers = async (req, res) => {
     logger.info('Starting getAllBatchNumbers request', {
         page: req.body.page,
@@ -199,111 +198,172 @@ exports.getAllBatchNumbers = async (req, res) => {
 };
 
 exports.getAllBatchNumbers = async (req, res) => {
-    try {
-        const page = parseInt(req.body.page) || 1;
-        const limit = parseInt(req.body.limit) || 10;
-        const skip = (page - 1) * limit;
+  logger.info('Starting getAllBatchNumbers request', {
+    page: req.body.page,
+    limit: req.body.limit,
+    searchQuery: req.body.searchQuery
+  });
 
-        let matchQuery = {};
-        if (req.body.searchQuery) {
-            const searchRegex = new RegExp(req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i");
-            matchQuery = {
-                $or: [
-                    { Branch: { $regex: searchRegex } },
-                    { BatchNumber: { $regex: searchRegex } }
-                ]
-            };
-        }
+  try {
+    const page = parseInt(req.body.page) || 1;
+    const limit = parseInt(req.body.limit) || 10;
+    const skip = (page - 1) * limit;
 
-        const result = await Batch.aggregate([
-            { $match: matchQuery },
-            {
-                $addFields: {
-                    brandId: {
-                        $cond: {
-                            if: { $regexMatch: { input: "$Brand", regex: /^[0-9a-fA-F]{24}$/ } },
-                            then: { $toObjectId: "$Brand" },
-                            else: null
-                        }
-                    }
-                }
-            },
-            {
-                $lookup: {
-                    from: 'brands',
-                    localField: 'brandId',
-                    foreignField: '_id',
-                    as: 'brandsData'
-                }
-            },
-            { $unwind: { path: '$brandsData', preserveNullAndEmptyArrays: true } },
-            {
-                $addFields: {
-                    productId: {
-                        $cond: {
-                            if: { $regexMatch: { input: "$ProductName", regex: /^[0-9a-fA-F]{24}$/ } },
-                            then: { $toObjectId: "$ProductName" },
-                            else: null
-                        }
-                    }
-                }
-            },
-            {
-                $lookup: {
-                    from: 'products',
-                    localField: 'productId',
-                    foreignField: '_id',
-                    as: 'productsData'
-                }
-            },
-            { $unwind: { path: '$productsData', preserveNullAndEmptyArrays: true } },
-            {
-                $project: {
-                    _id: 1,
-                    Branch: 1,
-                    CreationDate: 1,
-                    ExpiryDate: 1,
-                    BatchNumber: 1,
-                    Brand: 1,
-                    BrandName: { $ifNull: ['$brandsData.brands', ''] },
-                    ProductName: 1,
-                    ProductNameStr: { $ifNull: ['$productsData.name', ''] },
-                    value: 1,
-                    Volume: 1,
-                    Quantity: 1,
-                    RedeemablePoints: 1,
-                    startCouponSeries: 1, 
-                    endCouponSeries: 1,   
-                }
-            },
-            { $sort: { createdAt: -1, _id: -1 } },
-            {
-                $facet: {
-                    metadata: [{ $count: "total" }],
-                    data: [
-                        { $skip: skip },
-                        { $limit: limit }
-                    ]
-                }
-            }
-        ]);
-
-        const total = result[0]?.metadata[0]?.total || 0;
-        const branches = result[0]?.data || [];
-
-        return res.status(200).json({
-            total,
-            pages: Math.ceil(total / limit),
-            currentPage: page,
-            branches
-        });
-    } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message: 'Error retrieving branches', error: error.message });
+    let matchQuery = {};
+    if (req.body.searchQuery) {
+      const searchRegex = new RegExp(
+        req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+        'i'
+      );
+      matchQuery = {
+        $or: [
+          { Branch: { $regex: searchRegex } },
+          { BatchNumber: { $regex: searchRegex } }
+        ]
+      };
     }
+
+    const result = await Batch.aggregate([
+      { $match: matchQuery },
+
+      {
+        $addFields: {
+          BrandObjId: {
+            $cond: {
+              if: {
+                $and: [
+                  { $ne: ["$Brand", null] },
+                  { $ne: [{ $type: "$Brand" }, "objectId"] }
+                ]
+              },
+              then: { $toObjectId: "$Brand" },
+              else: "$Brand"
+            }
+          },
+          ProductNameObjId: {
+            $cond: {
+              if: {
+                $and: [
+                  { $ne: ["$ProductName", null] },
+                  { $ne: [{ $type: "$ProductName" }, "objectId"] }
+                ]
+              },
+              then: { $toObjectId: "$ProductName" },
+              else: "$ProductName"
+            }
+          }
+        }
+      },
+
+      {
+        $lookup: {
+          from: "products",
+          localField: "BrandObjId",
+          foreignField: "_id",
+          as: "productDataNew"
+        }
+      },
+      {
+        $lookup: {
+          from: "brands",
+          localField: "ProductNameObjId",
+          foreignField: "_id",
+          as: "brandDataNew"
+        }
+      },
+
+      {
+        $lookup: {
+          from: "brands",
+          localField: "BrandObjId",
+          foreignField: "_id",
+          as: "brandDataOld"
+        }
+      },
+      {
+        $lookup: {
+          from: "products",
+          localField: "ProductNameObjId",
+          foreignField: "_id",
+          as: "productDataOld"
+        }
+      },
+
+      {
+        $project: {
+          Branch: 1,
+          CreationDate: 1,
+          ExpiryDate: 1,
+          BatchNumber: 1,
+          ProductName: 1,
+          Brand: 1,
+          value: 1,
+          Volume: 1,
+          Quantity: 1,
+          RedeemablePoints: 1,
+          startCouponSeries: 1,
+          endCouponSeries: 1,
+
+          BrandStr: {
+            $cond: [
+              { $gt: [{ $size: "$brandDataNew" }, 0] },
+              { $arrayElemAt: ["$brandDataNew.name", 0] },
+              {
+                $cond: [
+                  { $gt: [{ $size: "$brandDataOld" }, 0] },
+                  { $arrayElemAt: ["$brandDataOld.name", 0] },
+                  "$Brand"
+                ]
+              }
+            ]
+          },
+
+          ProductStr: {
+            $cond: [
+              { $gt: [{ $size: "$productDataNew" }, 0] },
+              { $arrayElemAt: ["$productDataNew.products", 0] },
+              {
+                $cond: [
+                  { $gt: [{ $size: "$productDataOld" }, 0] },
+                  { $arrayElemAt: ["$productDataOld.products", 0] },
+                  "$ProductName"
+                ]
+              }
+            ]
+          }
+        }
+      },
+
+      {
+        $facet: {
+          data: [
+            { $sort: { CreationDate: -1 } },
+            { $skip: skip },
+            { $limit: limit }
+          ],
+          metadata: [
+            { $count: "total" }
+          ]
+        }
+      }
+    ]);
+
+    const total = result[0]?.metadata[0]?.total || 0;
+    const branches = result[0]?.data || [];
+
+    return res.status(200).json({
+      total,
+      pages: Math.ceil(total / limit),
+      currentPage: page,
+      branches
+    });
+
+  } catch (error) {
+    logger.error('Error in getAllBatchNumbers', error);
+    return res.status(500).json({ message: 'Error retrieving batch numbers', error: error.message });
+  }
 };
 
-// Get a single branch by BatchNumber
 exports.getBranchByBatchNumber = async (req, res) => {
     const {BatchNumber} = req.params;
 

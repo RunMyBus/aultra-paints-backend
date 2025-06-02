@@ -66,9 +66,14 @@ const getAllProducts = async (req, res) => {
         $addFields: {
           brandObjId: {
             $cond: {
-              if: { $regexMatch: { input: "$brandId", regex: /^[0-9a-fA-F]{24}$/ } },
+              if: {
+                $and: [
+                  { $ne: ["$brandId", null] },
+                  { $ne: [{ $type: "$brandId" }, "objectId"] }
+                ]
+              },
               then: { $toObjectId: "$brandId" },
-              else: null
+              else: "$brandId"
             }
           }
         }
@@ -87,9 +92,10 @@ const getAllProducts = async (req, res) => {
           _id: 1,
           brandId: 1,
           BrandNameStr: { $ifNull: ['$brandData.name', ''] },
-          products: 1,
+          products: 1
         }
       },
+      { $sort: { _id: -1 } }, // Optional: Sort by latest first
       { $skip: (page - 1) * limit },
       { $limit: limit }
     ];
@@ -110,6 +116,7 @@ const getAllProducts = async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
 
 const updateProduct = async (req, res) => {
   const { id } = req.params;
