@@ -13,17 +13,19 @@ const createProduct = async (req, res) => {
       return res.status(400).json({ error: 'Invalid Brand ID' });
     }
 
-    const brand = await Brand.findById(brandId);
+    const objectBrandId = new mongoose.Types.ObjectId(brandId);
+
+    const brand = await Brand.findById(objectBrandId);
     if (!brand) {
       return res.status(404).json({ error: 'Brand not found' });
     }
 
-    const existingProduct = await Product.findOne({ brandId, products });
+    const existingProduct = await Product.findOne({ brandId: objectBrandId, products });
     if (existingProduct) {
       return res.status(400).json({ error: 'Product already exists for this brand' });
     }
 
-    const newProduct = new Product({ brandId, products });
+    const newProduct = new Product({ brandId: objectBrandId, products });
     await newProduct.save();
 
     res.status(201).json(newProduct);
