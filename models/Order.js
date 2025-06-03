@@ -7,6 +7,7 @@ const OrderItemSchema = new mongoose.Schema({
   productOfferDescription: { type: String, required: true },
   productPrice: { type: Number, required: true },
   quantity: { type: Number, required: true },
+  volume: { type: String, required: true },
 });
 
 function createdUpdatedPlugin(schema, options) {
