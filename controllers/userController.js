@@ -578,6 +578,7 @@ exports.exportUsers = async (req, res) => {  // Changed to handle req and res di
             cash: 1,
             status: 1,
             createdAt: 1,
+            dealerCode: 1,
             _id: 0
         });
 
@@ -588,12 +589,13 @@ exports.exportUsers = async (req, res) => {  // Changed to handle req and res di
             Role: user.accountType || '',
             'Reward Points': user.rewardPoints || 0,
             'Cash Reward': user.cash || 0,
+            'Dealer Code': user.dealerCode || '',
             Status: user.status || '',
             'Created Date': user.createdAt ? new Date(user.createdAt).toLocaleDateString().replaceAll('/', '-') : ''
         }));
 
         // CSV Parser options
-        const fields = ['Name', 'Mobile', 'Role', 'Reward Points', 'Cash Reward', 'Status', 'Created Date'];
+        const fields = ['Name', 'Mobile', 'Role', 'Reward Points', 'Cash Reward', 'Status', 'Created Date', 'Dealer Code'];
         const opts = { fields };
         
         // Create parser and convert to CSV

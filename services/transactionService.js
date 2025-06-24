@@ -260,10 +260,10 @@ class TransactionService {
             // fixed check to display only activated coupons
             query.batchId = { $exists: true }
 
-            query.$or = [
-                { pointsRedeemedBy: { $exists: true } },
-                { cashRedeemedBy: { $exists: true } }
-            ];
+            // query.$or = [
+            //     { pointsRedeemedBy: { $exists: true } },
+            //     { cashRedeemedBy: { $exists: true } }
+            // ];
 
             if (searchKey) {
                 query.$or = [
