@@ -15,6 +15,7 @@ const transactionSchema = new mongoose.Schema({
     cashRedeemedBy: { type: String },
     pointsRedeemedAt: { type: Date },
     cashRedeemedAt: { type: Date },
+    upiId: { type: String },
 }, { timestamps: true });
 
 const Transaction = mongoose.model('Transaction', transactionSchema);

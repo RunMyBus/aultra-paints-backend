@@ -112,7 +112,7 @@ exports.redeemCash = async (req, next) => {
         if (user) {
             const updatedTransaction = await Transaction.findOneAndUpdate(
                 { UDID: qr },
-                { $set: { updatedBy: user._id, cashRedeemedBy: req.body.mobile, cashRedeemedAt: new Date() } },
+                { $set: { updatedBy: user._id, cashRedeemedBy: req.body.mobile, cashRedeemedAt: new Date(), upiId: upi } },
                 { new: true }
             );
 
@@ -173,7 +173,7 @@ exports.redeemCash = async (req, next) => {
             // Update the transaction to mark it as processed with the new user's information
             const updatedTransaction = await Transaction.findOneAndUpdate(
                 { UDID: qr },
-                { updatedBy: userData._id, cashRedeemedBy: req.body.mobile },
+                { updatedBy: userData._id, cashRedeemedBy: req.body.mobile, upiId: upi },
                 { new: true }
             );
 
@@ -186,6 +186,7 @@ exports.redeemCash = async (req, next) => {
                 name: userData.name || 'NA',
                 couponCode: updatedTransaction.couponCode,
                 cash: updatedTransaction.value,
+                upiId: upi
             };
 
             await transactionLedger.create({
