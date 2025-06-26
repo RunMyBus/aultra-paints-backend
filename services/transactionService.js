@@ -260,10 +260,10 @@ class TransactionService {
             // fixed check to display only activated coupons
             query.batchId = { $exists: true }
 
-            query.$or = [
-                { pointsRedeemedBy: { $exists: true } },
-                { cashRedeemedBy: { $exists: true } }
-            ];
+            // query.$or = [
+            //     { pointsRedeemedBy: { $exists: true } },
+            //     { cashRedeemedBy: { $exists: true } }
+            // ];
 
             if (searchKey) {
                 query.$or = [
@@ -407,6 +407,7 @@ class TransactionService {
                         createdAt: 1,
                         updatedAt: 1,
                         qr_code: 1,
+                        upiId: 1,
                         pointsRedeemedAt: { $ifNull: ['$pointsRedeemedAt', null] },  // Added this
                         cashRedeemedAt: { $ifNull: ['$cashRedeemedAt', null] }
                     }
@@ -437,8 +438,9 @@ class TransactionService {
                 { label: 'QR Code', value: 'qr_code' },
                 { label: 'Created At', value: 'createdAt' },
                 { label: 'Created By', value: 'createdByName' },
-                { label: 'Points Redeemed At', value: 'pointsRedeemedAt' },
-                { label: 'Cash Redeemed At', value: 'cashRedeemedAt' },
+                { label: 'Points Redeemed On', value: 'pointsRedeemedAt' },
+                { label: 'Cash Redeemed On', value: 'cashRedeemedAt' },
+                { label: 'Cash Remitted To (UPI ID)', value: 'upiId' }
             ];
 
             // Create CSV parser
