@@ -424,7 +424,8 @@ class TransactionService {
                 updatedAt: moment(record.updatedAt).format('D-M-YYYY h:mm A'),
                 pointsRedeemedAt: record.pointsRedeemedAt ? moment(record.pointsRedeemedAt).format('D-M-YYYY h:mm A') : '',
                 cashRedeemedAt: record.cashRedeemedAt ? moment(record.cashRedeemedAt).format('D-M-YYYY h:mm A') : '',
-                batch: `${record.branchName} - ${record.batchNumber}`
+                batch: `${record.branchName} - ${record.batchNumber}`,
+                upiId: record.upiId ? `="${record.upiId}"` : ''
             }));
 
             // Define CSV fields
