@@ -8,6 +8,16 @@ exports.getAllTransactions = async (req, res) => {
 
     try {
         let query = { userId };
+
+        // Apply transactionType filter if provided
+        if (req.body.transactionType) {
+            if (req.body.transactionType === 'points') {
+                query.narration = { $regex: /points/i };
+            } else if (req.body.transactionType === 'cash') {
+                query.narration = { $regex: /cash/i };
+            }
+        }
+        
         // Apply coupon code filter if provided
         if (req.body.couponCode) {
             // Aggregation pipeline to convert number to string and apply regex
@@ -21,9 +31,8 @@ exports.getAllTransactions = async (req, res) => {
                 }
             ];
             const transaction = await Transaction.aggregate(pipeline);
-            //const transaction = await Transaction.findOne({ couponCode: req.body.couponCode });
             if (transaction.length > 0) {
-                query.couponId = {$in: transaction.map(i => i._id)};
+                query.couponId = { $in: transaction.map(i => i._id) };
             }else {
                 return res.status(400).json({ error: 'Invalid coupon code.' });
             }
@@ -44,7 +53,7 @@ exports.getAllTransactions = async (req, res) => {
         const transactionLedger = await TransactionLedger.find(query)
             .skip(skip)
             .limit(limit)
-            .sort({createdAt: -1});
+            .sort({ createdAt: -1 });
 
         const totalTransactions = await TransactionLedger.countDocuments(query);
         if (totalTransactions === 0) {
@@ -56,7 +65,7 @@ exports.getAllTransactions = async (req, res) => {
             pagination: {
                 currentPage: page,
                 totalPages,
-                totalTransactions: totalTransactions,
+                totalTransactions,
             },
         });
     } catch (error) {
