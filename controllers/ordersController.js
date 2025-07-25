@@ -75,8 +75,8 @@ exports.createOrder = async (req, res) => {
     try {
         let userId = req.user._id.toString();
 
-        if (req.user.accountType !== 'Dealer') {
-            return res.status(400).json({ success: false, message: 'Only dealers can place orders.' });
+        if (!['Dealer', 'SalesExecutive'].includes(req.user.accountType)) {
+            return res.status(400).json({ success: false, message: 'Only dealers or sales executives can place orders.' });
         }
 
         const { items, totalPrice } = req.body;
@@ -105,14 +105,18 @@ exports.createOrder = async (req, res) => {
         const orderId = await getNextOrderId();
 
         // Save order
-        const order = new orderModel({
+        let orderObj = {
             orderId,
             items,
             totalPrice: calculatedTotalPrice,
             gstPrice,
             finalPrice,
-            createdBy: userId || ''
-        });
+            createdBy: userId || '',
+        };
+        if (req.body.dealerId) {
+            orderObj.dealerId = req.body.dealerId;
+        }
+        const order = new orderModel(orderObj);
 
         await order.save();
 
@@ -183,7 +187,7 @@ exports.getOrders = async (req, res) => {
             ).lean();
 
             const dealerIds = mappedDealers.map(dealer => dealer._id);
-            query = { createdBy: { $in: dealerIds } };
+            query = { $or: [{ createdBy: { $in: dealerIds } }, { dealerId: { $in: dealerIds } }] };
             totalOrders = await orderModel.countDocuments(query);
             orders = await orderModel
                 .find(query)
@@ -198,7 +202,8 @@ exports.getOrders = async (req, res) => {
         }
         else {
             // For Dealers, fetch only their orders
-            query = { createdBy: user._id };
+            // query = { createdBy: user._id };
+            query = { $or: [{ createdBy: user._id }, { dealerId: user._id }] };
             totalOrders = await orderModel.countDocuments(query);
             orders = await orderModel
                 .find(query)

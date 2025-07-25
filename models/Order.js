@@ -14,6 +14,7 @@ function createdUpdatedPlugin(schema, options) {
   schema.add({
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    dealerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
   });
 
   schema.pre('save', function (next) {

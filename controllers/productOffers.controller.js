@@ -20,23 +20,23 @@ exports.createProductOffer = async (req, res) => {
     }
 
   
-let parsedPrice;
-try {
-    parsedPrice = typeof price === 'string' ? JSON.parse(price) : price;
-    if (!Array.isArray(parsedPrice)) throw new Error();
-    
-    // Transform the price array to match the required schema
-    parsedPrice = parsedPrice.map(priceObj => {
-        const [[refId, price]] = Object.entries(priceObj);
-        return {
-            refId: refId,
-            price: price
-        };
-    });
+    let parsedPrice;
+    try {
+        parsedPrice = typeof price === 'string' ? JSON.parse(price) : price;
+        if (!Array.isArray(parsedPrice)) throw new Error();
+        
+        // Transform the price array to match the required schema
+        parsedPrice = parsedPrice.map(priceObj => {
+            const [[refId, price]] = Object.entries(priceObj);
+            return {
+                refId: refId,
+                price: price
+            };
+        });
 
-} catch {
-    return res.status(400).json({ message: 'Invalid price format' });
-}
+    } catch {
+        return res.status(400).json({ message: 'Invalid price format' });
+    }
 
 
 
@@ -186,9 +186,19 @@ exports.searchProductOffers = async (req, res) => {
         let data = await productOffersModel.find(query).skip((page - 1) * limit).limit(parseInt(limit)).sort({cashback: -1});
         const totalOffers = await productOffersModel.countDocuments(query);
         const updatedData = await Promise.all(data.map(async (productOffer) => {
+            let dealerIds = []
+            if (req.user.accountType === 'SalesExecutive') {
+                let users = await UserModel.find({salesExecutive: req.user.mobile, accountType: 'Dealer'});
+                let dealersIdsSet = users.map(user => user._id.toString());
+                dealersIdsSet.push(dealerId) 
+                dealerIds = {$in: dealersIdsSet};
+            } else {
+                let dealersIdsSet = [dealerId];
+                dealerIds = {$in: dealersIdsSet};
+            }
             const priceData = await ProductPriceModel.findOne({
                 productOfferId: productOffer._id,
-                dealerId: dealerId
+                dealerId: dealerIds
             })
             return {
                 ...productOffer._doc,  // Spread product offer details
