@@ -436,25 +436,32 @@ exports.getParentDealerCodeUser = async (body, res) => {
 
 exports.verifyOtpUpdateUser = async (body, res) => {
     try {
-        let userLoginSMS = await UserLoginSMSModel.findOne({mobile: body.mobile, otp: body.otp, active: true}).sort({createdAt: -1}).limit(1);
-        if (!userLoginSMS) {
-            return res({status: 400, error: 'INVALID OTP'})
-        }
-        if (userLoginSMS.expiryTime < Date.now()) {
-            return res({status: 400, error: 'OTP EXPIRED'})
-        }
-        userLoginSMS.active = false;
-        await userLoginSMS.save();
+        if (body.mobile === config.STATIC_MOBILE_NUMBER || body.mobile === config.STATIC_TEST_MOBILE_NUMBER) {
+            // For static phone numbers, don't check the OTP record in the database
+            if (body.otp !== config.STATIC_OTP) {
+                return res({status: 400, error: 'INVALID OTP'})
+            }
+            let user = await userModel.findOneAndUpdate({mobile: body.painterMobile}, {parentDealerCode: body.dealerCode.toString().trim()}, {new: true});
+            return res({status: 200, data: user});
+        } else {
+            let userLoginSMS = await UserLoginSMSModel.findOne({mobile: body.mobile, otp: body.otp, active: true}).sort({createdAt: -1}).limit(1);
+            if (!userLoginSMS) {
+                return res({status: 400, error: 'INVALID OTP'})
+            }
+            if (userLoginSMS.expiryTime < Date.now()) {
+                return res({status: 400, error: 'OTP EXPIRED'})
+            }
+            userLoginSMS.active = false;
+            await userLoginSMS.save();
 
-        // let user = await User.findOne({mobile: body.mobile});
-        let user = await userModel.findOneAndUpdate({mobile: body.painterMobile}, {parentDealerCode: body.dealerCode.toString().trim()}, {new: true});
-        return res({status: 200, data: user});
+            let user = await userModel.findOneAndUpdate({mobile: body.painterMobile}, {parentDealerCode: body.dealerCode.toString().trim()}, {new: true});
+            return res({status: 200, data: user});
+        }
     } catch (err) {
         console.log(err)
         return res({status: 500, message: "Something went wrong"});
     }
 }
-
 exports.getMyPainters = async (req, res) => {
     try {
         let page = parseInt(req.body.page || 1);

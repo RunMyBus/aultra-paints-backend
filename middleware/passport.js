@@ -3,36 +3,52 @@ const config = process.env;
 const LocalStrategy = require('passport-local');
 const JwtStrategy = require('passport-jwt').Strategy;
 const ExtractJwt = require('passport-jwt').ExtractJwt;
-const User = require('../models/User');  // Import the User model
+const User = require('../models/User'); 
 const bcrypt = require('bcryptjs');
 const UserLoginSMSModel = require("../models/UserLoginSMS");
+const StaticPhoneNumbers = require('../models/staticPhoneNumbers');
 
+// static OTP
+const STATIC_OTP = 123456; 
 
 const localLogin = new LocalStrategy({usernameField: 'mobile', passwordField: 'otp'}, async (mobile, otp, done) => {
-    if (!mobile || !otp) return done.status(400).json({ error: 'Mobile number and OTP are required' });
+    if (!mobile || !otp) {
+        return done.status(400).json({ error: 'Mobile number and OTP are required' });
+    }
     try {
         let user = await User.findOne({mobile: mobile});
         if (!user) {
-            return done({status: 400, message: 'MOBILE NOT FOUND',});
+            return done({status: 400, message: 'MOBILE NOT FOUND'});
         } else {
-            const otpRecord = await UserLoginSMSModel.findOne({ mobile: mobile, otp , active: true });
-            if (!otpRecord)
-                return done({status: 404, message: 'INVALID OTP',});
+            const staticPhoneNumbers = await StaticPhoneNumbers.find();
+            const mobileNumbers = staticPhoneNumbers.map(doc => doc.mobile);
 
-            if (new Date() > otpRecord.expiryTime) {
+            if (mobileNumbers.includes(mobile)) {
+                if (otp === STATIC_OTP) {
+                    return done(null, user);
+                } else {
+                    return done({status: 400, message: 'INVALID OTP'});
+                }
+            } else {
+                const otpRecord = await UserLoginSMSModel.findOne({ mobile: mobile, otp , active: true });
+                if (!otpRecord) {
+                    return done({status: 404, message: 'INVALID OTP'});
+                }
+
+                if (new Date() > otpRecord.expiryTime) {
+                    otpRecord.active = false;
+                    await otpRecord.save();
+                    return done({status: 400, message: 'OTP EXPIRED'});
+                }
                 otpRecord.active = false;
                 await otpRecord.save();
-                return done( {status: 400, message: 'OTP EXPIRED',});
+                return done(null, user);
             }
-            otpRecord.active = false;
-            await otpRecord.save();
-            return done(null, user);
         }
     } catch (error) {
         console.error("Error verifying OTP:", error);
         return done({status: 500, message: 'Failed to verify OTP'});
     }
-
 });
 
 const opts = {
