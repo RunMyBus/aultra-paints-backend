@@ -8,7 +8,9 @@ const {ObjectId} = require("mongodb");
 const sms = require('../services/sms.service');
 const axios = require("axios");
 const transactionLedger = require("../models/TransactionLedger");
+const logger = require("../utils/logger");
 const cashFreePaymentService = require('../services/cashFreePaymentService');
+const BulkPePaymentService = require('../services/bulkPePaymentService');
 const { validateAndCreateOTP } = require('../services/user.service');
 
 async function generateToken(user, next) {
@@ -19,7 +21,7 @@ async function generateToken(user, next) {
         }
         next(token);
     } catch (err) {
-        console.error('TOKEN_ERROR:', err);
+        logger.error('TOKEN_ERROR:', err);
     }
 }
 
@@ -75,10 +77,13 @@ exports.register = async (req, next) => {
 
         return next({ status: 200, message: 'User registered successfully' });
     } catch (err) {
-        console.error(err);
+        logger.error(err);
         return next({ status: 500, message: 'Server error' });
     }
 }
+
+const bulkPePGActivated = config.ACTIVATE_BULKPE_PG;
+const cashFreePGActivated = config.ACTIVATE_CASHFREE_PG;
 
 exports.redeemCash = async (req, next) => {
     try {
@@ -103,7 +108,16 @@ exports.redeemCash = async (req, next) => {
             return next({ status: 400, message: paymentResult.message });
         }*/
 
-        const paymentResult = await cashFreePaymentService.upiPayment(upi, mobile, transaction.value);
+        const beneficiaryName = user?.name || mobile.toString();
+        let paymentResult;
+
+        if (bulkPePGActivated) {
+            paymentResult = await cashFreePaymentService.upiPayment(upi, mobile, transaction.value);
+        } else if (cashFreePGActivated) {
+            paymentResult = await BulkPePaymentService.upiPayment(upi, beneficiaryName, transaction.value);
+        } else {
+            throw new Error('No payment gateway is enabled in environment variables.');
+        }
         if (!paymentResult.success) {
             return next({ status: 400, message: paymentResult.message });
         }
@@ -201,8 +215,8 @@ exports.redeemCash = async (req, next) => {
         }
 
     } catch (err) {
-        console.error(err);
-        return next({ status: 500, message: 'Server error' });
+        logger.error('Error in redeemCash.', { reqBody: req.body, reqParams: req.params, error: err });
+        return next({ status: 500, message: err.message });
     }
 };
 
@@ -232,7 +246,7 @@ exports.smsFunction = async (req, res) => {
         const queryParams = require('querystring').stringify(params);
         const requestUrl = `http://sms.infrainfotech.com/sms-panel/api/http/index.php?${queryParams}`;
 
-        console.log("Request URL:", requestUrl);
+        logger.info("Request URL:", requestUrl);
 
         // Send the HTTP request
         await require('http').get(requestUrl, (response) => {
@@ -244,16 +258,16 @@ exports.smsFunction = async (req, res) => {
 
             // Handle the response completion
             response.on('end', () => {
-                console.log("SMS Response:", data);
+                logger.info("SMS Response:", data);
                 return res({status: 200, message: 'SMS sent successfully', response: data });
             });
         }).on('error', (err) => {
-            console.error("HTTP Error:", err.message);
+            logger.error("HTTP Error:", err.message);
             return res({status: 500,  error: err.message });
         });
 
     } catch (error) {
-        console.error("Error sending SMS:", error);
+        logger.error("Error sending SMS:", error);
         return res({status: 500, error: 'Failed to send SMS' });
     }
 }
@@ -290,11 +304,11 @@ exports.loginWithOTP = async (req, res) => {
             const queryParams = require('querystring').stringify(params);
             const requestUrl = `http://sms.infrainfotech.com/sms-panel/api/http/index.php?${queryParams}`;
             const response = await axios.get(requestUrl);
-            console.log("SMS Response:", response.data);
+            logger.info("SMS Response:", response.data);
         }
         return res({status: 200, message: 'OTP sent successfully.'});
     } catch (error) {
-        console.error("Error sending OTP:", error);
+        logger.error("Error sending OTP:", error);
         return res({status: 500, message: 'Failed to send OTP.'})
     }
 };
