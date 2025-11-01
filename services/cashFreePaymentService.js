@@ -1,5 +1,6 @@
 const axios = require('axios');
 const CashFreeTransaction = require('../models/CashFreeTransaction');
+const CommonFunctions = require('../utils/CommonFuctions');
 const logger = require('../utils/logger');
 const config = process.env;
 
@@ -266,15 +267,8 @@ const pay2Phone = async (mobile, name, cash) => {
     }
 };
 
-async function sanitize(input) {
-    let sanitized = input.replace(/[^a-zA-Z0-9]/g, "_"); // Remove invalid characters
-    sanitized = sanitized.replace(/\s+/g, "_"); // Replace spaces with underscores
-    sanitized = sanitized.replace(/-/g, "_"); // Replace hyphens with underscores
-    return sanitized.slice(0, 50); // Ensure max length of 50 characters
-}
-
 const createBeneficiary = async (upi, mobile) => {
-    let beneficiaryId = await sanitize(upi);
+    let beneficiaryId = await CommonFunctions.sanitize(upi);
     try {
         logger.info('Creating beneficiary details.');
         logger.debug('Creating beneficiary details.', {
@@ -337,7 +331,7 @@ const makeUPIPayment = async (upi, mobile, cash) => {
             logger.error('Error while creating beneficiary.');
             return { status: 400, message: 'Error while creating beneficiary.' }
         } else {
-            let transferId = await sanitize(upi);
+            let transferId = await CommonFunctions.sanitize(upi);
             transferId = (transferId +"_"+ Date.now()).toString();
             logger.info('Transfer id created.');
             logger.debug('Transfer id created.', {
@@ -462,6 +456,8 @@ const upiPayment = async (upi, mobile, cash) => {
                 });
                 return { success: false, message: upiPaymentResult.message };
             }
+        } else {
+            return { success: false, message: 'Insufficient balance. Contact Admin.' };
         }
     } catch (error) {
         console.error('Payment error --- ', error);

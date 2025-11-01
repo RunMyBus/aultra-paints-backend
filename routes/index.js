@@ -9,6 +9,7 @@ const productOffersRoutes = require('./productOffers.route')
 const rewardSchemesRoutes = require('./rewardSchemes.route.js')
 const transferRoutes = require('./transfer.route.js')
 const cashFreeRoutes = require('./cashFreeRoutes')
+const bulkPeRoutes = require('./bulkPeRoutes')
 const transactionLedgerRoutes = require('./transactionLedgerRoute')
 const statesRoutes = require('./stateRoutes');
 const zoneRoutes = require('./zoneRoutes');
@@ -31,6 +32,7 @@ router.use('/productOffers', productOffersRoutes);
 router.use('/rewardSchemes', rewardSchemesRoutes);
 router.use('/transfer', transferRoutes);
 router.use('/cashFree', cashFreeRoutes);
+router.use('/bulkPe', bulkPeRoutes);
 router.use('/transactionLedger', transactionLedgerRoutes);
 router.use('/states', statesRoutes);
 router.use('/zones', zoneRoutes);
