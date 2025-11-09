@@ -1,5 +1,6 @@
 const userModel = require("../models/User");
 const transactionLedger = require("../models/TransactionLedger");
+const transactionLedgerService = require("../services/transactionLedgerService");
 
 exports.transferPoints = async (req, res) => {
     const { rewardPoints } = req.body;
@@ -13,6 +14,7 @@ exports.transferPoints = async (req, res) => {
         let recipientUser;
         let narrationFrom;
         let narrationTo;
+        let uniqueCode;
 
         // Handle different transfer scenarios based on account type
         if (loggedInUser.accountType === 'Painter') {
@@ -41,6 +43,9 @@ exports.transferPoints = async (req, res) => {
             }
             narrationFrom = 'Transferred reward points to Super User';
             narrationTo = 'Received reward points from dealer';
+
+            // Generate unique code only for Dealer → SuperUser transfer
+    uniqueCode = await transactionLedgerService.generateLedgerCode(loggedInUser._id);
         }
         else {
             return res({status: 403, error: 'Unauthorized, either painters and dealers can transfer points'});
@@ -86,14 +91,16 @@ exports.transferPoints = async (req, res) => {
                 narration: narrationFrom,
                 amount: `- ${rewardPoints}`,
                 balance: savedSenderData.rewardPoints,
-                userId: savedSenderData._id
+                userId: savedSenderData._id,
+                ...(uniqueCode ? { uniqueCode } : {})
             });
 
             await transactionLedger.create({
                 narration: narrationTo,
                 amount: `+ ${rewardPoints}`,
                 balance: savedRecipientData.rewardPoints,
-                userId: savedRecipientData._id
+                userId: savedRecipientData._id,
+                 ...(uniqueCode ? { uniqueCode } : {})
             });
 
             return res({status: 200, message: 'Reward points transferred successfully'});
