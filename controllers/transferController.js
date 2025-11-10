@@ -2,6 +2,7 @@ const userModel = require("../models/User");
 const transactionLedger = require("../models/TransactionLedger");
 const transactionLedgerService = require("../services/transactionLedgerService");
 
+
 exports.transferPoints = async (req, res) => {
     const { rewardPoints } = req.body;
     const loggedInUser = req.user;
@@ -32,6 +33,15 @@ exports.transferPoints = async (req, res) => {
             if (!superUserMobile) {
                 return res({status: 400, error: 'Super User mobile not configured'});
             }
+
+               // Check transfer rule: at least 1000 and only multiples of 1000
+if (rewardPoints < 1000 || rewardPoints % 1000 !== 0) {
+    return res({
+        status: 400,
+        error: 'Invalid transfer amount. Dealers can transfer reward points only in multiples of 1000, with a minimum of 1000 points per transfer.',
+    });
+}
+
 
             recipientUser = await userModel.findOne({ 
                 mobile: superUserMobile,
