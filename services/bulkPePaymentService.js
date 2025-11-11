@@ -179,4 +179,5 @@ const upiPayment = async (upi, beneficiaryName, cash) => {
     }
 }
 
-module.exports = { upiPayment, makeUPIPayment };
+module.exports = { fetchBalance, upiPayment, makeUPIPayment };
+
