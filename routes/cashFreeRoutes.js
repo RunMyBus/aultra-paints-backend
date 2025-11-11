@@ -7,6 +7,7 @@ const Cashfree = require('../utils/Cashfree');
 const CashFreeTransaction = require('../models/CashFreeTransaction');
 const logger = require('../utils/logger');
 const bodyParser = require('body-parser');
+const cashFreeController = require('../controllers/cashFreeController');
 
 // Test Payment Processing Endpoint
 router.post('/testPayment', async (req, res) => {
@@ -90,5 +91,9 @@ router.use(passport.authenticate('jwt', { session: false }));
 
 // Get all cash free transactions
 router.get('/getTransactions', getAllTransactions);
+
+
+// Get available balance from BulkPe
+router.get('/fetch-balance', cashFreeController.getAvailableBalance);
 
 module.exports = router;
