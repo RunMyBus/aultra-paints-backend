@@ -94,6 +94,6 @@ router.get('/getTransactions', getAllTransactions);
 
 
 // Get available balance from BulkPe
-router.get('/fetch-balance', cashFreeController.getAvailableBalance);
+router.get('/fetchBulkPeBalance', cashFreeController.getAvailableBalance);
 
 module.exports = router;
