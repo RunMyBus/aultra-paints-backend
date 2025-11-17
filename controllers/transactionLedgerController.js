@@ -4,6 +4,7 @@ const Transaction = require("../models/Transaction");
 // const multer = require('multer');
 // const multerS3 = require('multer-s3');
 const { generateTransactionLedgerPDF } = require('../utils/pdfGenerator');
+const User = require("../models/User");
 
 
 // function decodeBase64File(dataString) {
@@ -32,6 +33,7 @@ const { generateTransactionLedgerPDF } = require('../utils/pdfGenerator');
 
 
 // GET ALL TRANSACTIONS
+
 exports.getAllTransactions = async (req, res) => {
     const page = parseInt(req.body.page) || 1;
     const limit = parseInt(req.body.limit) || 10;
@@ -57,21 +59,25 @@ exports.getAllTransactions = async (req, res) => {
                 {
                     $match: {
                         $expr: {
-                            $regexMatch: { input: { $toString: "$couponCode" }, regex: req.body.couponCode.toString() }
+                            $regexMatch: { 
+                                input: { $toString: "$couponCode" }, 
+                                regex: req.body.couponCode.toString() 
+                            }
                         }
                     }
                 }
             ];
             const transaction = await Transaction.aggregate(pipeline);
+
             if (transaction.length > 0) {
                 query.couponId = { $in: transaction.map(i => i._id) };
-            }else {
+            } else {
                 return res.status(400).json({ error: 'Invalid coupon code.' });
             }
         }
+
         // Apply date filter if provided
         if (req.body.date) {
-            // Expecting date in format YYYY-MM-DD
             const dateStr = req.body.date;
             const startDate = new Date(dateStr + 'T00:00:00.000Z');
             const endDate = new Date(dateStr + 'T23:59:59.999Z');
@@ -82,16 +88,50 @@ exports.getAllTransactions = async (req, res) => {
             };
         }
 
+        // Fetch transactions
         const transactionLedger = await TransactionLedger.find(query)
             .skip(skip)
             .limit(limit)
             .sort({ createdAt: -1 });
 
         const totalTransactions = await TransactionLedger.countDocuments(query);
+
         if (totalTransactions === 0) {
-            return res.json({ transactions: [], pagination: { currentPage: page, totalPages: 0, totalTransactions: 0 } });
+            return res.json({ 
+                transactions: [], 
+                pagination: { 
+                    currentPage: page, 
+                    totalPages: 0, 
+                    totalTransactions: 0 
+                } 
+            });
         }
+
+      
+        //  NEW FEATURE ADDED — dealerName lookup
+
+        for (let txn of transactionLedger) {
+            if (
+                txn.narration === "Received reward points from dealer" &&
+                txn.uniqueCode
+            ) {
+                // Find dealer-side transaction
+                const dealerTxn = await TransactionLedger.findOne({
+                    uniqueCode: txn.uniqueCode,
+                    narration: "Transferred reward points to Super User"
+                });
+
+                if (dealerTxn) {
+                    const dealer = await User.findById(dealerTxn.userId).select("name");
+                    txn._doc.dealerName = dealer ? dealer.name : "Unknown Dealer";
+                } else {
+                    txn._doc.dealerName = "Unknown Dealer";
+                }
+            }
+        }
+
         const totalPages = Math.ceil(totalTransactions / limit);
+
         res.json({
             transactions: transactionLedger,
             pagination: {
@@ -100,10 +140,13 @@ exports.getAllTransactions = async (req, res) => {
                 totalTransactions,
             },
         });
+
     } catch (error) {
+        console.error(error);
         res.status(400).json({ error: 'Error fetching transactions from ledger.' });
     }
 };
+
 
 //Update Transaction Ledger 
 // exports.updateTransactionLedger = async (req, res) => {
