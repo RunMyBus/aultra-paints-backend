@@ -1,0 +1,135 @@
+{
+  "info": {
+    "name": "Aultra Paints - Masters API Collection",
+    "_postman_id": "b1234567-89ab-cdef-0123-456789abcdef",
+    "description": "Master APIs for Sales Order Mobile App",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Account Master",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "fSessionId", "value": "{{fSessionId}}" }
+        ],
+        "url": "http://49.207.12.64/Focus9API/List/Masters/Core__Account"
+      }
+    },
+    {
+      "name": "Branch Master",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "fSessionId", "value": "{{fSessionId}}" }
+        ],
+        "url": "http://49.207.12.64/Focus9API/List/Masters/Core__branch"
+      }
+    },
+    {
+      "name": "Entity Master",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "fSessionId", "value": "{{fSessionId}}" }
+        ],
+        "url": "http://49.207.12.64/Focus9API/List/Masters/Core__entity"
+      }
+    },
+    {
+      "name": "Salesman Master",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "fSessionId", "value": "{{fSessionId}}" }
+        ],
+        "url": "http://49.207.12.64/Focus9API/List/Masters/Core__salesman"
+      }
+    },
+    {
+      "name": "Districts Master",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "fSessionId", "value": "{{fSessionId}}" }
+        ],
+        "url": "http://49.207.12.64/Focus9API/List/Masters/Core__districts"
+      }
+    },
+    {
+      "name": "Route Master",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "fSessionId", "value": "{{fSessionId}}" }
+        ],
+        "url": "http://49.207.12.64/Focus9API/List/Masters/Core__route"
+      }
+    },
+    {
+      "name": "Supply Area Master",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "fSessionId", "value": "{{fSessionId}}" }
+        ],
+        "url": "http://49.207.12.64/Focus9API/List/Masters/Mrp__SupplyArea"
+      }
+    },
+    {
+      "name": "Company Name Master",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "fSessionId", "value": "{{fSessionId}}" }
+        ],
+        "url": "http://49.207.12.64/Focus9API/List/Masters/Core__CompanyName"
+      }
+    },
+    {
+      "name": "Warehouse Master",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "fSessionId", "value": "{{fSessionId}}" }
+        ],
+        "url": "http://49.207.12.64/Focus9API/List/Masters/Core__Warehouse"
+      }
+    },
+    {
+      "name": "Place of Supply Master",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "fSessionId", "value": "{{fSessionId}}" }
+        ],
+        "url": "http://49.207.12.64/Focus9API/List/Masters/Core__State"
+      }
+    },
+    {
+      "name": "Flying Offer A/c",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "fSessionId", "value": "{{fSessionId}}" }
+        ],
+        "url": "http://49.207.12.64/Focus9API/List/Masters/Core__Account"
+      }
+    },
+    {
+      "name": "Product Master",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "fSessionId", "value": "{{fSessionId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"data\": [\n        {\n            \"Query\": \"SELECT iMasterId, sName, sCode from mCore_Product where istatus <>5\"\n        }\n    ]\n}"
+        },
+        "url": "http://49.207.12.64/focus9API/utility/ExecuteSqlQuery"
+      }
+    }
+  ]
+}

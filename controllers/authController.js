@@ -112,9 +112,9 @@ exports.redeemCash = async (req, next) => {
         let paymentResult;
 
         if (bulkPePGActivated) {
-            paymentResult = await cashFreePaymentService.upiPayment(upi, mobile, transaction.value);
-        } else if (cashFreePGActivated) {
             paymentResult = await BulkPePaymentService.upiPayment(upi, beneficiaryName, transaction.value);
+        } else if (cashFreePGActivated) {
+            paymentResult = await cashFreePaymentService.upiPayment(upi, mobile, transaction.value);
         } else {
             throw new Error('No payment gateway is enabled in environment variables.');
         }
