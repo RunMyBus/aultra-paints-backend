@@ -75,7 +75,7 @@ exports.createOrder = async (req, res) => {
     try {
         let userId = req.user._id.toString();
 
-        if (!['Dealer', 'SalesExecutive'].includes(req.user.accountType)) {
+        if (!['SalesExecutive'].includes(req.user.accountType)) { //TODO: allow Dealer to place orders after successful testing with SalesExecutive
             return res.status(400).json({ success: false, message: 'Only dealers or sales executives can place orders.' });
         }
 
