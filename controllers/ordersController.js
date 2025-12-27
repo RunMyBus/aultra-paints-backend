@@ -8,6 +8,8 @@ const path = require('path');
 const fs = require('fs');
 const productOffersModel = require("../models/productOffers.model");
 const userModel = require("../models/User");
+const { pushOrderToFocus8 } = require("../services/focus8Order.service");
+
 
 async function generateInvoicePdf(order, user) {
     // 1. Fetch template from DB
@@ -119,6 +121,10 @@ exports.createOrder = async (req, res) => {
         const order = new orderModel(orderObj);
 
         await order.save();
+
+      // 🔹 PUSH TO FOCUS8 
+        pushOrderToFocus8(order, req.user)
+            .catch(err => logger.error("Focus8 push failed", err.message));
 
         // const pdfBuffer = await generateInvoicePdf(order, req.user);
 
