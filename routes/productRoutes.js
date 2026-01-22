@@ -9,14 +9,12 @@ const {
   deleteProduct,
   getAllProductsForSelect,
   getProductsByName,
-  getUnifiedProductList
+  getUnifiedProductList,
+  getFocusProducts
 } = require('../controllers/productController');
 
 // Route to create a new product
 router.post('/', createProduct);
-
-// Route to get all products for a specific brand by brandId
-router.get('/:brandId', getProductsByBrandId);
 
 // Route to get all products with pagination and brand info
 router.get('/', getAllProducts);
@@ -35,5 +33,11 @@ router.get('/getAllProductsForSelect/:brandId', getAllProductsForSelect);
 
 // Route to get unified product list
 router.get('/unified-products', getUnifiedProductList);
+
+// Route to get product master from Focus
+router.get('/focus-products', getFocusProducts);
+
+// Route to get all products for a specific brand by brandId
+router.get('/:brandId', getProductsByBrandId);
 
 module.exports = router;

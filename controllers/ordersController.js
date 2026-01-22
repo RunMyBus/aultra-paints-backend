@@ -77,13 +77,45 @@ exports.createOrder = async (req, res) => {
     try {
         let userId = req.user._id.toString();
 
-        if (!['SalesExecutive'].includes(req.user.accountType)) { //TODO: allow Dealer to place orders after successful testing with SalesExecutive
+        if (!['Dealer', 'SalesExecutive'].includes(req.user.accountType)) {
             return res.status(400).json({ success: false, message: 'Only dealers or sales executives can place orders.' });
         }
 
-        const { items, totalPrice } = req.body;
+        const { items, totalPrice, entityId } = req.body;
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ success: false, message: 'No items provided for order.' });
+        }
+
+        // Populate missing focusProductId and focusUnitId
+        const itemsMissingFocusData = items.filter(item => !item.focusProductId || !item.focusUnitId);
+
+        if (itemsMissingFocusData.length > 0) {
+            const productIds = itemsMissingFocusData.map(item => item._id).filter(id => id);
+
+            if (productIds.length > 0) {
+                const products = await productOffersModel.find({
+                    _id: { $in: productIds }
+                }).select('focusProductId focusUnitId');
+
+                const productMap = products.reduce((acc, curr) => {
+                    acc[curr._id.toString()] = {
+                        focusProductId: curr.focusProductId,
+                        focusUnitId: curr.focusUnitId
+                    };
+                    return acc;
+                }, {});
+
+                items.forEach(item => {
+                    if (item._id && productMap[item._id.toString()]) {
+                        if (!item.focusProductId) {
+                            item.focusProductId = productMap[item._id.toString()].focusProductId;
+                        }
+                        if (!item.focusUnitId) {
+                            item.focusUnitId = productMap[item._id.toString()].focusUnitId;
+                        }
+                    }
+                });
+            }
         }
 
         // Calculate total price from items
@@ -122,9 +154,25 @@ exports.createOrder = async (req, res) => {
 
         await order.save();
 
-      // 🔹 PUSH TO FOCUS8 
-        pushOrderToFocus8(order, req.user)
-            .catch(err => logger.error("Focus8 push failed", err.message));
+        // Push to Focus8 asynchronously
+        pushOrderToFocus8(order, req.user, entityId)
+            .then(async (focusResult) => {
+                if (focusResult.success) {
+                    order.focusSyncStatus = 'SUCCESS';
+                    order.focusOrderId = focusResult.voucherNo; // Using VoucherNo as the ID reference
+                    order.focusSyncResponse = focusResult.focus8Response;
+                } else {
+                    order.focusSyncStatus = 'FAILED';
+                    order.focusSyncResponse = focusResult.focus8Response;
+                }
+                await order.save();
+            })
+            .catch(async (focusError) => {
+                logger.error('Focus8 Push Failed for Order ' + orderId, focusError);
+                order.focusSyncStatus = 'FAILED';
+                order.focusSyncResponse = focusError.response?.data || { message: focusError.message };
+                await order.save();
+            });
 
         // const pdfBuffer = await generateInvoicePdf(order, req.user);
 

@@ -17,8 +17,9 @@ const productOffersSchema = new mongoose.Schema({
           price: { type: Number, required: true }
         }
     ],
-    offerAvailable: { type: Boolean, default: true }
-  
+    offerAvailable: { type: Boolean, default: true },
+    focusProductId: {type: Number},
+    focusUnitId: {type: Number}
 }, { timestamps: true });
 
 const productOffers = mongoose.model('productOffers', productOffersSchema, 'productOffers');
