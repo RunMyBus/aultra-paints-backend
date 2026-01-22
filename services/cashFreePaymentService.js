@@ -1,4 +1,5 @@
 const axios = require('axios');
+const https = require('https');
 const CashFreeTransaction = require('../models/CashFreeTransaction');
 const CommonFunctions = require('../utils/CommonFuctions');
 const logger = require('../utils/logger');
@@ -30,6 +31,10 @@ if (config.ACTIVATE_CASHFREE === 'true') {
     FUND_SOURCE_ID = config.FUND_SOURCE_ID_QA;
 }
 
+const httpsAgent = new https.Agent({
+    rejectUnauthorized: false
+});
+
 const getToken = async () => {
     try {
         logger.info('Getting token');
@@ -38,6 +43,7 @@ const getToken = async () => {
                 'X-Client-Id': CLIENT_ID,
                 'X-Client-Secret': CLIENT_SECRET,
             },
+            httpsAgent
         });
 
         if (response.data.status === 'SUCCESS') {
@@ -52,7 +58,7 @@ const getToken = async () => {
         logger.error('Error fetching token.', {
             error: error
         });
-        return error.message;
+        throw error;
     }
 };
 
@@ -95,6 +101,7 @@ const getBalance = async (token) => {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
+            httpsAgent
         });
 
         if (response.data.status === 'SUCCESS') {
@@ -115,7 +122,7 @@ const getBalance = async (token) => {
         logger.error('Error fetching balance:', {
             error: error
         });
-        return error.message;
+        throw error;
     }
 };
 
@@ -173,7 +180,8 @@ const makePayment = async (mobile, name, cash, token) => {
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
-                }
+                },
+                httpsAgent
             }
         );
         const responseData = paymentResponse.data;
@@ -234,7 +242,8 @@ const checkTransferStatus = async (referenceId) => {
                 'x-api-version': API_VERSION,
                 'x-client-id': CLIENT_ID,
                 'x-client-secret': CLIENT_SECRET
-            }
+            },
+            httpsAgent
         });
 
     } catch (error) {
@@ -290,7 +299,8 @@ const createBeneficiary = async (upi, mobile) => {
                     'x-client-id': CLIENT_ID,
                     'x-client-secret': CLIENT_SECRET
                 },
-                validateStatus: (status) => true  // Accept all status codes
+                validateStatus: (status) => true,  // Accept all status codes
+                httpsAgent
             }
         );
 
@@ -358,7 +368,8 @@ const makeUPIPayment = async (upi, mobile, cash) => {
                         'x-client-id': CLIENT_ID,
                         'x-client-secret': CLIENT_SECRET
                     },
-                    validateStatus: (status) => true  // Accept all status codes
+                    validateStatus: (status) => true,  // Accept all status codes
+                    httpsAgent
                 }
             );
 
