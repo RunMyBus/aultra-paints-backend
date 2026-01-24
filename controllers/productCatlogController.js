@@ -290,6 +290,7 @@ exports.searchProductCatlog = async (req, res) => {
 exports.updateProductCatlog = async (req, res) => {
   console.log('req.body:', req.body);
   try {
+      const { price, focusProductId, focusUnitId } = req.body;
     const existingProductCatlog = await productOfferModel.findOne({
       productOfferDescription: req.body.productDescription,
       _id: { $ne: req.params.id }
@@ -326,7 +327,6 @@ exports.updateProductCatlog = async (req, res) => {
     // Parse and validate price field
     let parsedPrice = [];
     try {
-      const { price, focusProductId, focusUnitId } = req.body;
       const priceData = typeof price === 'string' ? JSON.parse(price) : price;
 
       if (typeof priceData !== 'object' || priceData === null) {
