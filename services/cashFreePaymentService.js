@@ -1,5 +1,4 @@
 const axios = require('axios');
-const https = require('https');
 const CashFreeTransaction = require('../models/CashFreeTransaction');
 const CommonFunctions = require('../utils/CommonFuctions');
 const logger = require('../utils/logger');
@@ -22,7 +21,7 @@ if (config.ACTIVATE_CASHFREE === 'true') {
     UPI_BASE_URL = config.UPI_BASE_URL;
     GET_TRANSFER = config.GET_TRANSFERS;
     FUND_SOURCE_ID = config.FUND_SOURCE_ID;
-}else {
+} else {
     CLIENT_ID = config.X_CLIENT_ID_QA;
     CLIENT_SECRET = config.X_CLIENT_SECRET_QA;
     BASE_URL = config.BASE_URL_QA;
@@ -30,10 +29,6 @@ if (config.ACTIVATE_CASHFREE === 'true') {
     GET_TRANSFER = config.GET_TRANSFERS_QA;
     FUND_SOURCE_ID = config.FUND_SOURCE_ID_QA;
 }
-
-const httpsAgent = new https.Agent({
-    rejectUnauthorized: false
-});
 
 const getToken = async () => {
     try {
@@ -43,7 +38,6 @@ const getToken = async () => {
                 'X-Client-Id': CLIENT_ID,
                 'X-Client-Secret': CLIENT_SECRET,
             },
-            httpsAgent
         });
 
         if (response.data.status === 'SUCCESS') {
@@ -101,7 +95,6 @@ const getBalance = async (token) => {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            httpsAgent
         });
 
         if (response.data.status === 'SUCCESS') {
@@ -128,7 +121,7 @@ const getBalance = async (token) => {
 
 const updateToDB = (transferStatus) => {
     return CashFreeTransaction.findOneAndUpdate(
-        {transfer_id: transferStatus.data.transfer_id},
+        { transfer_id: transferStatus.data.transfer_id },
         [
             {
                 $set: {
@@ -151,7 +144,7 @@ const updateToDB = (transferStatus) => {
                     updated_on: transferStatus.data.updated_on || null
                 }
             }
-        ], { returnDocument: "after"});
+        ], { returnDocument: "after" });
 };
 
 const makePayment = async (mobile, name, cash, token) => {
@@ -160,7 +153,7 @@ const makePayment = async (mobile, name, cash, token) => {
             token = await this.getToken();
         }
 
-        const transferId = (mobile +"_"+ Date.now()).toString();
+        const transferId = (mobile + "_" + Date.now()).toString();
 
         const paymentResponse = await axios.post(
             `${BASE_URL}/v1.2/directTransfer`,
@@ -180,20 +173,19 @@ const makePayment = async (mobile, name, cash, token) => {
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
-                },
-                httpsAgent
+                }
             }
         );
         const responseData = paymentResponse.data;
         let cashFreeTransaction = null;
-        if (responseData.data != null ){
+        if (responseData.data != null) {
             cashFreeTransaction = CashFreeTransaction.create({
                 transfer_id: transferId,
                 cf_transfer_id: responseData.data.referenceId,
                 status: responseData.status,
                 status_description: responseData.message
             });
-        }else {
+        } else {
             cashFreeTransaction = CashFreeTransaction.create({
                 transfer_id: transferId,
                 status: responseData.status,
@@ -242,8 +234,7 @@ const checkTransferStatus = async (referenceId) => {
                 'x-api-version': API_VERSION,
                 'x-client-id': CLIENT_ID,
                 'x-client-secret': CLIENT_SECRET
-            },
-            httpsAgent
+            }
         });
 
     } catch (error) {
@@ -264,9 +255,9 @@ const pay2Phone = async (mobile, name, cash) => {
             console.log(paymentResult);
             if (paymentResult.status === '400') {
                 return { success: false, message: paymentResult.message, data: paymentResult.data };
-            }else if (paymentResult.status === '200' || paymentResult.status === '201' || paymentResult.status === '202') {
+            } else if (paymentResult.status === '200' || paymentResult.status === '201' || paymentResult.status === '202') {
                 return { success: true, message: paymentResult.message };
-            }else {
+            } else {
                 return { success: false, message: paymentResult.message };
             }
         }
@@ -300,7 +291,6 @@ const createBeneficiary = async (upi, mobile) => {
                     'x-client-secret': CLIENT_SECRET
                 },
                 validateStatus: (status) => true,  // Accept all status codes
-                httpsAgent
             }
         );
 
@@ -342,7 +332,7 @@ const makeUPIPayment = async (upi, mobile, cash) => {
             return { status: 400, message: 'Error while creating beneficiary.' }
         } else {
             let transferId = await CommonFunctions.sanitize(upi);
-            transferId = (transferId +"_"+ Date.now()).toString();
+            transferId = (transferId + "_" + Date.now()).toString();
             logger.info('Transfer id created.');
             logger.debug('Transfer id created.', {
                 transferId: transferId
@@ -369,12 +359,11 @@ const makeUPIPayment = async (upi, mobile, cash) => {
                         'x-client-secret': CLIENT_SECRET
                     },
                     validateStatus: (status) => true,  // Accept all status codes
-                    httpsAgent
                 }
             );
 
             if (upiPaymentResponse.status === 200) {
-                if (upiPaymentResponse.data.status === 'FAILED' && ( upiPaymentResponse.data.status_code === 'INVALID_BENE_VPA' || upiPaymentResponse.data.status_code === 'INVALID_ACCOUNT_FAIL')) {
+                if (upiPaymentResponse.data.status === 'FAILED' && (upiPaymentResponse.data.status_code === 'INVALID_BENE_VPA' || upiPaymentResponse.data.status_code === 'INVALID_ACCOUNT_FAIL')) {
                     logger.error(`Error while making payment to ${upi}, ${mobile}, amount: ${cash}`, {
                         error: upiPaymentResponse.data ? upiPaymentResponse.data : upiPaymentResponse.toString()
                     });
@@ -390,7 +379,7 @@ const makeUPIPayment = async (upi, mobile, cash) => {
             } else {
                 const responseData = upiPaymentResponse.data;
                 let cashFreeTransaction = null;
-                if (responseData != null ) {
+                if (responseData != null) {
                     cashFreeTransaction = await CashFreeTransaction.create({
                         transfer_id: transferId,
                         cf_transfer_id: responseData.cf_transfer_id,
@@ -458,10 +447,10 @@ const upiPayment = async (upi, mobile, cash) => {
                     error: upiPaymentResult
                 });
                 return { success: false, message: upiPaymentResult.message };
-            }else if (upiPaymentResult.status === 200) {
+            } else if (upiPaymentResult.status === 200) {
                 logger.info('UPI payment successful.');
                 return { success: true, message: upiPaymentResult.message };
-            }else {
+            } else {
                 logger.error('Error while making upi payment.', {
                     error: upiPaymentResult
                 });

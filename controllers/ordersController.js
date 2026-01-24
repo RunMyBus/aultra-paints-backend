@@ -81,7 +81,7 @@ exports.createOrder = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Only dealers or sales executives can place orders.' });
         }
 
-        const { items, totalPrice, entityId } = req.body;
+        const { items, totalPrice, entityId = 1 } = req.body;
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ success: false, message: 'No items provided for order.' });
         }

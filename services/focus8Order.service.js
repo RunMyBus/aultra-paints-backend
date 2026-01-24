@@ -13,20 +13,29 @@ const FOCUS8_COMPANY_CODE = process.env.FOCUS8_COMPANY_CODE;
  * ===============================
  */
 async function loginToFocus8() {
-    const res = await axios.post(`${FOCUS8_BASE_URL}/login`, {
-        url: null,
-        data: [{
-            UserName: FOCUS8_USERNAME,
-            Password: FOCUS8_PASSWORD,
-            CompanyCode: FOCUS8_COMPANY_CODE
-        }]
-    });
+    try {
+        const res = await axios.post(`${FOCUS8_BASE_URL}/login`, {
+            url: null,
+            data: [{
+                UserName: FOCUS8_USERNAME,
+                Password: FOCUS8_PASSWORD,
+                CompanyCode: FOCUS8_COMPANY_CODE
+            }]
+        });
 
-    if (!res.data?.data?.length) {
-        throw new Error("Focus8 login failed");
+        if (!res.data?.data?.length) {
+            logger.error("FOCUS8 :: Login failed - Unexpected response structure", { response: res.data });
+            throw new Error("Focus8 login failed");
+        }
+
+        return res.data.data[0].fSessionId;
+    } catch (error) {
+        logger.error("FOCUS8 :: Login error", {
+            message: error.message,
+            response: error.response?.data
+        });
+        throw error;
     }
-
-    return res.data.data[0].fSessionId;
 }
 
 let fSessionId = null;
@@ -38,27 +47,44 @@ let fSessionId = null;
  */
 async function focusRequest(url, data) {
     async function execute() {
-        const sid = await getFocusSessionId();
-        return await axios.post(url, data, { headers: { fSessionId: sid } });
+        try {
+            const sid = await getFocusSessionId();
+            return await axios.post(url, data, { headers: { fSessionId: sid } });
+        } catch (error) {
+            logger.error(`FOCUS8 :: HTTP request failed for ${url} | Error: ${error.message}`, {
+                status: error.response?.status,
+                data: error.response?.data
+            });
+            throw error;
+        }
     }
 
     let response = await execute();
 
     // Check for "Invalid Session" result
     if (
-        response.data?.result === -1 &&
-        response.data?.message?.toLowerCase().includes("invalid session")
+        (response.data?.result === -1 && response.data?.message?.toLowerCase().includes("invalid session")) ||
+        (response.data?.result === 501 && response.data?.message?.toLowerCase().includes("not a valid session"))
     ) {
         logger.info("FOCUS8 :: Session invalid/expired. Retrying login...");
         fSessionId = null; // Clear cached session
         response = await execute();
     }
 
+    // Log unexpected responses (where result is not success) 
+    // result 1 is typically success for Focus 8 APIs
+    if (response.data && response.data.result !== 1) {
+        logger.warn(`FOCUS8 :: API returned non-success result from ${url}`, {
+            result: response.data.result,
+            message: response.data.message,
+            fullResponse: response.data
+        });
+    }
+
     return response;
 }
 
 async function getFocusSessionId() {
-    fSessionId = '9Y0-2101202621462247128881042';
     if (!fSessionId) {
         console.log("FOCUS8 :: Logging in");
         fSessionId = await loginToFocus8();
@@ -231,6 +257,23 @@ async function getProductMaster() {
 
 /**
  * ===============================
+ * GET ENTITY MASTER
+ * ===============================
+ */
+async function getEntityMaster() {
+    console.log("FOCUS8 :: Getting entity master");
+    const res = await focusRequest(
+        `${FOCUS8_BASE_URL}/utility/ExecuteSqlQuery`,
+        {
+            data: [{ Query: "SELECT iMasterId, sName, sCode from mCore_Entity where istatus <>5" }]
+        }
+    );
+
+    return res.data?.data?.[0]?.Table || [];
+}
+
+/**
+ * ===============================
  * PUSH SALES ORDER TO FOCUS8
  * ===============================
  */
@@ -248,7 +291,7 @@ async function pushOrderToFocus8(order, user, entityId) {
         const bodyItems = order.items.map(item => {
             return {
                 Item__Id: item.focusProductId,
-                Unit__Id: item.focusUnitId || 1,
+                // Unit__Id: item.focusUnitId || 1,
                 Quantity: item.quantity,
                 Rate: item.productPrice,
             };
@@ -264,7 +307,7 @@ async function pushOrderToFocus8(order, user, entityId) {
                     Salesman__Id,
                     Districts__Id,
                     Entity__Id,
-                    // Warehouse__Id,
+                    Warehouse__Id: 3, //TODO: Remove after focus makes this non mandatory.
                     'Company Name__Id': Entity__Id,
                     IsIGST
                 },
@@ -308,5 +351,6 @@ async function pushOrderToFocus8(order, user, entityId) {
 
 module.exports = {
     getProductMaster,
+    getEntityMaster,
     pushOrderToFocus8
 };
