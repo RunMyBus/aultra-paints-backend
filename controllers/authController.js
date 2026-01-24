@@ -111,9 +111,9 @@ exports.redeemCash = async (req, next) => {
         const beneficiaryName = user?.name || mobile.toString();
         let paymentResult;
 
-        if (bulkPePGActivated) {
+        if (bulkPePGActivated === 'true') {
             paymentResult = await BulkPePaymentService.upiPayment(upi, beneficiaryName, transaction.value);
-        } else if (cashFreePGActivated) {
+        } else if (cashFreePGActivated === 'true') {
             paymentResult = await cashFreePaymentService.upiPayment(upi, mobile, transaction.value);
         } else {
             throw new Error('No payment gateway is enabled in environment variables.');

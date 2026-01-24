@@ -3,6 +3,7 @@ const Product = require('../models/Product');
 const Brand = require('../models/Brand'); // assuming Brand still exists and is referenced
 const Transaction = require("../models/Transaction");
 const { getAllUnifiedProducts } = require('../services/productService');
+const { getProductMaster, getEntityMaster } = require('../services/focus8Order.service');
 
 // Create a new product and associate it with a brand
 const createProduct = async (req, res) => {
@@ -258,6 +259,26 @@ const getUnifiedProductList = async (req, res) => {
   }
 };
 
+const getFocusProducts = async (req, res) => {
+  try {
+    const products = await getProductMaster();
+    res.status(200).json({ success: true, data: products });
+  } catch (error) {
+    console.error('Error fetching products from Focus:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch products from Focus', error: error.message });
+  }
+};
+
+const getFocusEntities = async (req, res) => {
+  try {
+    const entities = await getEntityMaster();
+    res.status(200).json({ success: true, data: entities });
+  } catch (error) {
+    console.error('Error fetching entities from Focus:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch entities from Focus', error: error.message });
+  }
+};
+
 module.exports = {
   createProduct,
   getProductsByBrandId,
@@ -266,5 +287,7 @@ module.exports = {
   deleteProduct,
   getAllProductsForSelect,
   getProductsByName,
-  getUnifiedProductList
+  getUnifiedProductList,
+  getFocusProducts,
+  getFocusEntities
 };

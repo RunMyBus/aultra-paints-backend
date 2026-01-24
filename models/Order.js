@@ -3,11 +3,13 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const OrderItemSchema = new mongoose.Schema({
-  _id: { type: String, required: true }, // Reference to productOffer or productCatalog
+  _id: { type: mongoose.Schema.Types.ObjectId, required: true }, // Reference to productOffer or productCatalog
   productOfferDescription: { type: String, required: true },
   productPrice: { type: Number, required: true },
   quantity: { type: Number, required: true },
   volume: { type: String, required: true },
+  focusProductId: { type: Number },
+  focusUnitId: { type: Number },
 });
 
 function createdUpdatedPlugin(schema, options) {
@@ -36,13 +38,18 @@ function createdUpdatedPlugin(schema, options) {
 // Define the schema for the order
 const orderSchema = new Schema({
   orderId: { type: String, required: true, index: true },
-  items: { type: [ OrderItemSchema ], required: true },
+  items: { type: [OrderItemSchema], required: true },
   totalPrice: { type: Number, required: true },
   gstPrice: { type: Number, required: true },
   finalPrice: { type: Number, required: true },
   status: { type: String, required: true, default: 'PENDING' },
   isVerified: { type: Boolean, default: false },
   isRejected: { type: Boolean, default: false },
+
+  // Focus Integration Fields
+  focusSyncStatus: { type: String, enum: ['PENDING', 'SUCCESS', 'FAILED'], default: 'PENDING' },
+  focusOrderId: { type: String }, // ID returned by Focus
+  focusSyncResponse: { type: Object }
 }, { timestamps: true });
 orderSchema.plugin(createdUpdatedPlugin);
 
