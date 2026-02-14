@@ -81,6 +81,10 @@ exports.createOrder = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Only dealers or sales executives can place orders.' });
         }
 
+        if (req.user.accountType === 'SalesExecutive' && !req.body.dealerId) {
+            return res.status(400).json({success: false, message: 'Dealer id is required when sales executive is placing order.'});
+        }
+
         const { items, totalPrice, entityId = 1 } = req.body;
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ success: false, message: 'No items provided for order.' });
@@ -138,6 +142,16 @@ exports.createOrder = async (req, res) => {
 
         const orderId = await getNextOrderId();
 
+        // Determine order status based on who is creating the order
+        let orderStatus = 'PENDING';
+        let isVerified = false;
+        
+        if (req.user.accountType === 'SalesExecutive') {
+            // Sales Executive orders are automatically verified
+            orderStatus = 'VERIFIED';
+            isVerified = true;
+        }
+
         // Save order
         let orderObj = {
             orderId,
@@ -146,6 +160,8 @@ exports.createOrder = async (req, res) => {
             gstPrice,
             finalPrice,
             createdBy: userId || '',
+            status: orderStatus,
+            isVerified: isVerified
         };
         if (req.body.dealerId) {
             orderObj.dealerId = req.body.dealerId;
@@ -154,36 +170,53 @@ exports.createOrder = async (req, res) => {
 
         await order.save();
 
-        // Push to Focus8 asynchronously
-        pushOrderToFocus8(order, req.user, entityId)
-            .then(async (focusResult) => {
-                if (focusResult.success) {
-                    order.focusSyncStatus = 'SUCCESS';
-                    order.focusOrderId = focusResult.voucherNo; // Using VoucherNo as the ID reference
-                    order.focusSyncResponse = focusResult.focus8Response;
-                } else {
+        let orderCreatedForDetails;
+
+        if (req.body.dealerId) {
+            orderCreatedForDetails = await userModel.findById(req.body.dealerId);
+        } else {
+            orderCreatedForDetails = req.user;
+        }
+
+        // Only push to Focus8 if the order is verified (i.e., created by SalesExecutive)
+        // Dealer orders will be pushed to Focus8 after approval
+        if (req.user.accountType === 'SalesExecutive') {
+            pushOrderToFocus8(order, orderCreatedForDetails, entityId)
+                .then(async (focusResult) => {
+                    if (focusResult.success) {
+                        order.focusSyncStatus = 'SUCCESS';
+                        order.focusOrderId = focusResult.voucherNo; // Using VoucherNo as the ID reference
+                        order.focusSyncResponse = focusResult.focus8Response;
+                    } else {
+                        order.focusSyncStatus = 'FAILED';
+                        order.focusSyncResponse = focusResult.focus8Response;
+                    }
+                    await order.save();
+                })
+                .catch(async (focusError) => {
+                    logger.error('Focus8 Push Failed for Order ' + orderId, focusError);
                     order.focusSyncStatus = 'FAILED';
-                    order.focusSyncResponse = focusResult.focus8Response;
-                }
-                await order.save();
-            })
-            .catch(async (focusError) => {
-                logger.error('Focus8 Push Failed for Order ' + orderId, focusError);
-                order.focusSyncStatus = 'FAILED';
-                order.focusSyncResponse = focusError.response?.data || { message: focusError.message };
-                await order.save();
-            });
+                    order.focusSyncResponse = focusError.response?.data || { message: focusError.message };
+                    await order.save();
+                });
+        }
 
         // const pdfBuffer = await generateInvoicePdf(order, req.user);
 
         return res.status(200).json({
             success: true,
+            message: req.user.accountType === 'SalesExecutive' 
+                ? 'Order created and verified successfully.' 
+                : 'Order created successfully. Awaiting sales executive approval.',
             order: {
+                orderId,
                 items,
                 totalPrice: calculatedTotalPrice,
                 gstPrice,
                 finalPrice,
-                gstPercentage: parseFloat(config.GST_PERCENTAGE)
+                gstPercentage: parseFloat(config.GST_PERCENTAGE),
+                status: orderStatus,
+                isVerified: isVerified
             },
             // invoicePdfBase64: pdfBuffer.toString('base64')
         });
@@ -283,7 +316,7 @@ exports.getOrders = async (req, res) => {
 
 exports.updateOrderStatus = async (req, res) => {
     try {
-        const { orderId, isVerified } = req.body;
+        const { orderId, isVerified, entityId = 1 } = req.body;
         const user = req.user;
 
         // Check if the user is a SalesExecutive
@@ -349,6 +382,35 @@ exports.updateOrderStatus = async (req, res) => {
                 context: { userId: user._id } // This will be used by the updatedBy plugin
             }
         );
+
+        // If order is verified, push to Focus8
+        if (isVerified === 1) {
+            // Get the dealer who created the order to use their details for Focus8
+            const dealer = await userModel.findById(order.createdBy);
+            
+            if (dealer) {
+                pushOrderToFocus8(updatedOrder, dealer, entityId)
+                    .then(async (focusResult) => {
+                        if (focusResult.success) {
+                            updatedOrder.focusSyncStatus = 'SUCCESS';
+                            updatedOrder.focusOrderId = focusResult.voucherNo;
+                            updatedOrder.focusSyncResponse = focusResult.focus8Response;
+                        } else {
+                            updatedOrder.focusSyncStatus = 'FAILED';
+                            updatedOrder.focusSyncResponse = focusResult.focus8Response;
+                        }
+                        await updatedOrder.save();
+                    })
+                    .catch(async (focusError) => {
+                        logger.error('Focus8 Push Failed for Order ' + orderId, focusError);
+                        updatedOrder.focusSyncStatus = 'FAILED';
+                        updatedOrder.focusSyncResponse = focusError.response?.data || { message: focusError.message };
+                        await updatedOrder.save();
+                    });
+            } else {
+                logger.error('Dealer not found for order ', { orderId });
+            }
+        }
 
         return res.status(200).json({
             success: true,

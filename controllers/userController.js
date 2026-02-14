@@ -501,10 +501,20 @@ exports.getUserDealer = async (dealerCode, res) => {
     }
 }
 
-exports.getDealers = async (body, res) => {
+exports.getDealers = async (req, res) => {
     try {
+        const user = req.user;
+        const body = req.body;
+        
         let query = { accountType: 'Dealer' };
-        query['$or'] = [];
+        
+        // If the requesting user is a SalesExecutive, filter dealers by their mobile
+        if (user && user.accountType === 'SalesExecutive') {
+            query.salesExecutive = user.mobile;
+            query.status = 'active'; // Only show active dealers
+        }
+        
+        // Add search query filter if provided
         if (body.searchQuery) {
             query['$or'] = [
                 { 'name': { $regex: new RegExp(body.searchQuery.trim(), "i") } },

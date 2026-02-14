@@ -341,7 +341,22 @@ async function pushOrderToFocus8(order, user, entityId) {
 
     } catch (error) {
         logger.error(
-            `FOCUS8 :: FAILED | OrderId=${order.orderId} | Reason=${error.message}`
+            `FOCUS8 :: FAILED | OrderId=${order.orderId} | Reason=${error.message}`,
+            {
+                orderId: order.orderId,
+                errorMessage: error.message,
+                errorResponse: error.response?.data || 'No response data',
+                payload: payload,
+                orderData: {
+                    items: order.items,
+                    user: {
+                        mobile: user.mobile,
+                        name: user.name,
+                        dealerCode: user.dealerCode
+                    },
+                    entityId: entityId
+                }
+            }
         );
 
         throw error;
@@ -349,8 +364,89 @@ async function pushOrderToFocus8(order, user, entityId) {
 }
 
 
+/**
+ * ===============================
+ * GET PRICEBOOK DATA
+ * ===============================
+ * Fetches dealer-specific pricing from Focus8 pricebook
+ * @param {Array<number>} priceBookIds - Array of price book IDs to query (e.g., [10, 13])
+ * @returns {Array} Array of price records with iProductId, iAccountId, fVal1, iStartDate, etc.
+ */
+async function getPriceBookData(priceBookIds = ['10', '13']) {
+    try {
+        const priceBookIdList = priceBookIds.map(id => `'${id}'`).join(',');
+        const query = `select iProductId, iAccountId, fVal1, iStartDate, iPriceBookId from mCore_SellingPriceBookDetails where iPriceBookId in (${priceBookIdList}) and bMarkDeleted=0`;
+        
+        logger.info(`FOCUS8 :: Fetching pricebook data for priceBookIds: ${priceBookIdList}`);
+        
+        const res = await focusRequest(
+            `${FOCUS8_BASE_URL}/utility/ExecuteSqlQuery`,
+            {
+                data: [{ Query: query }]
+            }
+        );
+
+        const priceRecords = res.data?.data?.[0]?.Table || [];
+        
+        logger.info(`FOCUS8 :: Retrieved ${priceRecords.length} price records from pricebook`);
+        
+        return priceRecords;
+    } catch (error) {
+        logger.error("FOCUS8 :: Error fetching pricebook data", {
+            message: error.message,
+            response: error.response?.data
+        });
+        // Return empty array on error to allow fallback to catalog prices
+        return [];
+    }
+}
+
+/**
+ * ===============================
+ * GET DEALER ACCOUNT ID FROM FOCUS8
+ * ===============================
+ * Fetches the Focus8 iMasterId (account ID) for a dealer by their dealer code
+ * @param {string} dealerCode - The dealer's code
+ * @returns {number|null} The iMasterId or null if not found
+ */
+async function getDealerAccountId(dealerCode) {
+    try {
+        if (!dealerCode) {
+            return null;
+        }
+
+        const query = `SELECT iMasterId FROM vmCore_Account WHERE istatus <> 5 AND iAccountType = 5 AND sCode = '${dealerCode}'`;
+        
+        const res = await focusRequest(
+            `${FOCUS8_BASE_URL}/utility/ExecuteSqlQuery`,
+            {
+                data: [{ Query: query }]
+            }
+        );
+
+        const accounts = res.data?.data?.[0]?.Table || [];
+        
+        if (accounts.length > 0) {
+            logger.info(`FOCUS8 :: Found account ID ${accounts[0].iMasterId} for dealer code ${dealerCode}`);
+            return Number(accounts[0].iMasterId);
+        }
+        
+        logger.warn(`FOCUS8 :: No account found for dealer code ${dealerCode}`);
+        return null;
+    } catch (error) {
+        logger.error("FOCUS8 :: Error fetching dealer account ID", {
+            dealerCode,
+            message: error.message,
+            response: error.response?.data
+        });
+        return null;
+    }
+}
+
 module.exports = {
     getProductMaster,
     getEntityMaster,
-    pushOrderToFocus8
+    pushOrderToFocus8,
+    getPriceBookData,
+    getDealerAccountId
 };
