@@ -6,20 +6,21 @@ const { decodeBase64Image } = require('../services/utils.service');
 const ProductPriceModel = require('../models/ProductPrice');
 const UserModel = require('../models/User');
 const logger = require('../utils/logger');
+const { getPriceBookData, getDealerAccountId } = require('../services/focus8Order.service');
 
 
 // Create Product Catlog
 exports.createProductCatlog = async (req, res) => {
-  console.log('req body ---- ', req.body);
   let { productDescription, productStatus, price, focusProductId, focusUnitId = 1 } = req.body;
 
-  let imageData = null;
-  if (req.body.productImage) {
-    // Decode the base64 image
-    imageData = await decodeBase64Image(req.body.productImage);
-    if (imageData instanceof Error) {
-      return res.status(400).json({ message: 'Invalid image data' });
-    }
+  if (!req.body.productImage) {
+    return res.status(400).json({ message: 'Product  image is required' });
+  }
+
+  // Decode the base64 image
+  const imageData = await decodeBase64Image(req.body.productImage);
+  if (imageData instanceof Error) {
+    return res.status(400).json({ message: 'Invalid image data' });
   }
 
   // Parse and validate price field
@@ -108,6 +109,44 @@ exports.createProductCatlog = async (req, res) => {
 };
 
 
+/**
+ * Helper function to get the effective price from Focus8 pricebook
+ * @param {number} focusProductId - The Focus8 product ID
+ * @param {number} focusAccountId - The Focus8 account ID (iMasterId)
+ * @param {Array} priceBookRecords - All pricebook records from Focus8
+ * @param {number} catalogPrice - Fallback price from product catalog
+ * @returns {number} The effective price
+ */
+const getEffectivePriceFromFocus = (focusProductId, focusAccountId, priceBookRecords, catalogPrice) => {
+  if (!focusProductId || !focusAccountId || !priceBookRecords || priceBookRecords.length === 0) {
+    return catalogPrice;
+  }
+
+  const currentDate = Math.floor(Date.now() / 1000 / 60 / 60 / 24); // Days since epoch
+
+  // Filter records matching product and account
+  const matchingRecords = priceBookRecords.filter(record => 
+    Number(record.iProductId) === Number(focusProductId) && 
+    Number(record.iAccountId) === Number(focusAccountId) /*&&
+    Number(record.iStartDate) <= currentDate // Only prices that are already effective*/ //TODO: Enable this after focus updates the iStartDate
+  );
+
+  if (matchingRecords.length === 0) {
+    return catalogPrice;
+  }
+
+  // Sort by iStartDate descending (latest first)
+  matchingRecords.sort((a, b) => Number(b.iStartDate) - Number(a.iStartDate));
+
+  // Return the latest price (fVal1)
+  const effectivePrice = Number(matchingRecords[0].fVal1);
+  
+  logger.info(`FOCUS8 :: Found custom price for product ${focusProductId}, account ${focusAccountId}: ${effectivePrice}`);
+  
+  return effectivePrice || catalogPrice;
+};
+
+
 const processProductCatlogPrices = async (productcatlogId, parsedPrices) => {
   try {
     // Remove existing prices for the product
@@ -186,7 +225,6 @@ exports.searchProductCatlog = async (req, res) => {
   try {
     const page = parseInt(req.body.page || 1);
     const limit = parseInt(req.body.limit || 10);
-    const dealerId = req.user._id.toString();
     const accountType = req.user.accountType;
     let query = {};
 
@@ -207,6 +245,52 @@ exports.searchProductCatlog = async (req, res) => {
 
     const total = await productOfferModel.countDocuments(query);
 
+    // Determine which dealer's prices to fetch
+    // If dealerId is provided in request (e.g., Sales Executive creating order for dealer), use that
+    // Otherwise, use the logged-in user's ID (for direct dealer access)
+    let targetDealerId = req.body.dealerId || req.user._id.toString();
+    let dealerCode = null;
+    let dealerUser = null;
+
+    // Fetch dealer details if we need Focus8 pricing
+    if (accountType === 'Dealer' || (accountType === 'SalesExecutive' && req.body.dealerId)) {
+      try {
+        dealerUser = await UserModel.findById(targetDealerId);
+        if (dealerUser && dealerUser.dealerCode) {
+          dealerCode = dealerUser.dealerCode;
+        } else {
+          logger.warn(`No dealerCode found for user ${targetDealerId}`);
+        }
+      } catch (error) {
+        logger.error('Error fetching dealer details', {
+          targetDealerId,
+          error: error.message
+        });
+      }
+    }
+
+    // Fetch Focus8 pricebook data and dealer account ID
+    let priceBookRecords = [];
+    let focusAccountId = null;
+    
+    if (dealerCode) {
+      try {
+        // Fetch dealer's Focus8 account ID and pricebook data in parallel
+        [focusAccountId, priceBookRecords] = await Promise.all([
+          getDealerAccountId(dealerCode),
+          getPriceBookData(['10', '13'])
+        ]);
+        
+        logger.info(`FOCUS8 :: Dealer ${dealerCode} has account ID: ${focusAccountId}, fetched ${priceBookRecords.length} pricebook records`);
+      } catch (error) {
+        logger.error('FOCUS8 :: Error fetching pricebook data for dealer', {
+          dealerCode,
+          error: error.message
+        });
+        // Continue with catalog prices on error
+      }
+    }
+
     let updatedData = await Promise.all(data.map(async (productCatlog) => {
       let prices = [];
       const priceArray = []; // Array to store {volume, price} objects
@@ -218,9 +302,9 @@ exports.searchProductCatlog = async (req, res) => {
         // Track which volumes we've already processed
         const processedVolumes = new Set();
 
-        // First pass: Add dealer-specific prices
+        // First pass: Add dealer-specific prices (if targetDealerId is provided)
         prices.forEach(priceObj => {
-          if (priceObj.volume && priceObj.refId === dealerId) {
+          if (priceObj.volume && priceObj.refId === targetDealerId) {
             priceArray.push({
               volume: priceObj.volume,
               price: priceObj.price
@@ -238,11 +322,24 @@ exports.searchProductCatlog = async (req, res) => {
             });
           }
         });
+      } else if (accountType === 'SalesExecutive' && !req.body.dealerId) {
+        // For Sales Executives WITHOUT dealerId, show all volumes with 'All' prices from the product catalog
+        // This allows them to see all available volumes and prices when browsing
+        prices = productCatlog.price || [];
+        
+        prices.forEach(priceObj => {
+          if (priceObj.volume && priceObj.refId === 'All') {
+            priceArray.push({
+              volume: priceObj.volume,
+              price: priceObj.price
+            });
+          }
+        });
       } else {
-        // For dealers, get their specific prices
+        // For dealers OR Sales Executives WITH dealerId, get dealer-specific prices
         const dealerPrices = await ProductPriceModel.find({
           productOfferId: productCatlog._id,
-          dealerId: dealerId
+          dealerId: targetDealerId
         });
 
         // If no dealer-specific prices found, fall back to 'All' prices
@@ -256,12 +353,25 @@ exports.searchProductCatlog = async (req, res) => {
           prices = dealerPrices;
         }
 
-        // Create the price array
+        // Create the price array with Focus8 pricebook integration
         prices.forEach(price => {
           if (price.volume) {
+            let finalPrice = price.price; // Default to catalog price
+            
+            // Try to get custom price from Focus8 pricebook if available
+            if (focusAccountId && productCatlog.focusProductId && priceBookRecords.length > 0) {
+              finalPrice = getEffectivePriceFromFocus(
+                productCatlog.focusProductId,
+                focusAccountId,
+                priceBookRecords,
+                price.price // Fallback to catalog price
+              );
+            }
+            
             priceArray.push({
               volume: price.volume,
-              price: price.price
+              price: finalPrice,
+              source: finalPrice !== price.price ? 'focus8' : 'catalog' // For debugging
             });
           }
         });
@@ -282,6 +392,10 @@ exports.searchProductCatlog = async (req, res) => {
     });
   } catch (err) {
     console.error("Error in searchProductCatlog:", err);
+    logger.error("Error in searchProductCatlog", {
+      error: err.message,
+      stack: err.stack
+    });
     return res.status(500).json({ message: "Something went wrong" });
   }
 };
