@@ -1,9 +1,9 @@
 {
 	"info": {
-		"_postman_id": "20f3fc22-063c-46a5-8c92-346c060c2ec6",
+		"_postman_id": "0d4dcc6f-df45-4bdb-98c1-5f70bfa18325",
 		"name": "AULTRA-PAINTS-LOCAL",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "38785881"
+		"_exporter_id": "37314111"
 	},
 	"item": [
 		{
@@ -16,7 +16,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\r\n    \"mobile\": \"9999999998\"\r\n}",
+							"raw": "{\r\n    \"mobile\": \"9248013556\"\r\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -46,7 +46,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\r\n    \"mobile\": \"9999999998\",\r\n    \"otp\" : 996633\r\n}",
+							"raw": "{\r\n    \"mobile\": \"9248013556\",\r\n    \"otp\" : 123456\r\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -225,7 +225,7 @@
 							"bearer": [
 								{
 									"key": "token",
-									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoic3VyeWEiLCJtb2JpbGUiOiI3OTk1OTY5NjU2IiwiX2lkIjoiNjc4NzAxODQzZmI4OTMzN2FhMzBjYmM1IiwiaWF0IjoxNzM2OTk5MjI5fQ.rbkGBgu0BV32WqKgYAIDWqbIb54aY57kIZk7XX_fJTY",
+									"value": "{{token}}",
 									"type": "string"
 								}
 							]
@@ -493,9 +493,6 @@
 			"item": [
 				{
 					"name": "getAllUsers",
-					"protocolProfileBehavior": {
-						"disableBodyPruning": true
-					},
 					"request": {
 						"auth": {
 							"type": "bearer",
@@ -515,15 +512,6 @@
 								"type": "text"
 							}
 						],
-						"body": {
-							"mode": "raw",
-							"raw": "",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
 						"url": {
 							"raw": "http://localhost:4300/api/users/all",
 							"protocol": "http",
@@ -813,6 +801,197 @@
 						}
 					},
 					"response": []
+				},
+				{
+					"name": "getMyPainters",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4300/api/users/getMyPainters",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"users",
+								"getMyPainters"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "getParentDealerCodeUser",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"dealerCode\": \"9966992346\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/users/getParentDealerCodeUser",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"users",
+								"getParentDealerCodeUser"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "verifyOtpUpdateUser",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"mobile\": \"9966992346\",\n    \"painterMobile\": \"9390015863\",\n    \"otp\": \"422104\",\n    \"dealerCode\": \"DEALERTEST2\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/users/verifyOtpUpdateUser",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"users",
+								"verifyOtpUpdateUser"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "getDealers",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiRE9OREFQQVRJIFNBSURJUkVERFkiLCJtb2JpbGUiOiI5MjQ4MDEzNTU2IiwiX2lkIjoiNjdmOWY5NjYzZmJmY2VjYTRhMmQ2MzJiIiwiaWF0IjoxNzcxMDcwMzk3fQ.bbiKHDVc9pKgz52sha2uDl4RBE7FWHOEPNDJcgr-zPI",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"searchQuery\": \"\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/users/getDealers",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"users",
+								"getDealers"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "http://localhost:4300/api/users/export",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"searchQuery\": \"\",\n    \"accountType\": \"All\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/users/export",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"users",
+								"export"
+							]
+						}
+					},
+					"response": []
 				}
 			]
 		},
@@ -989,6 +1168,48 @@
 								"api",
 								"products",
 								"6785930943b7d6774077cd4a"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "getFocusProducts",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4300/api/products/focus-products",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"products",
+								"focus-products"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "getFocusEntities",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4300/api/products/focus-entities",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"products",
+								"focus-entities"
 							]
 						}
 					},
@@ -1186,7 +1407,7 @@
 							}
 						},
 						"url": {
-							"raw": "http://localhost:4300/api/transaction/mark-processed/12",
+							"raw": "http://localhost:4300/api/transaction/mark-processed/rzX9xhskqone3oHQ",
 							"protocol": "http",
 							"host": [
 								"localhost"
@@ -1196,7 +1417,160 @@
 								"api",
 								"transaction",
 								"mark-processed",
-								"12"
+								"rzX9xhskqone3oHQ"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "redeemPoints",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"qrCodeUrl\": \"https://www.sureassure.com/pa?tx=XOP674NDPGNV2Y-Z\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/transaction/redeemPoints",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"transaction",
+								"redeemPoints"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "extractValueFromUrl",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"qrCodeUrl\": \"https://redeem.aultrapaints.com/redeem.html?tx=WE-4XYLQ-*L2DG8O\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/transaction/extractValueFromUrl",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"transaction",
+								"extractValueFromUrl"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "export2CSV",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"cashRedeemedBy\": \"\",\n    \"couponCode\": \"\",\n    \"limit\": 10,\n    \"page\": 1,\n    \"pointsRedeemedBy\": \"\",\n    \"salesExecutiveMobile\": \"\",\n    \"searchKey\": \"\",\n    \"showUsedCoupons\": false,\n    \"userId\": null\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/transaction/export",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"transaction",
+								"export"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "getTransactionLedger",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"page\": 1,\n    \"limit\": 100,\n    \"couponCode\": \"\",\n    \"date\": \"\"\n    // \"transactionType\": \"cash\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/transactionLedger/getTransactions",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"transactionLedger",
+								"getTransactions"
 							]
 						}
 					},
@@ -1209,9 +1583,6 @@
 			"item": [
 				{
 					"name": "getProductOffers",
-					"protocolProfileBehavior": {
-						"disableBodyPruning": true
-					},
 					"request": {
 						"auth": {
 							"type": "bearer",
@@ -1223,11 +1594,11 @@
 								}
 							]
 						},
-						"method": "GET",
+						"method": "POST",
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "",
+							"raw": "{\n    \"page\": 1,\n    \"limit\": 10,\n    \"dealerId\": \"67e2105ea08d0e30d86b1415\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -1291,7 +1662,22 @@
 								{
 									"key": "productOfferImage",
 									"type": "file",
-									"src": "postman-cloud:///1efd48c5-3313-4b20-be49-222d6c9ce3e1"
+									"src": "/home/divyesh/Documents/Aultra-Paints/money.png"
+								},
+								{
+									"key": "cashback",
+									"value": "30",
+									"type": "text"
+								},
+								{
+									"key": "redeemPoints",
+									"value": "40",
+									"type": "text"
+								},
+								{
+									"key": "price",
+									"value": "[{\"AP001\":100},{\"TN001\":110},{\"Z004\":140}]",
+									"type": "text"
 								}
 							]
 						},
@@ -1463,7 +1849,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\r\n  \"page\": 1,\r\n  \"limit\": 10,\r\n  \"searchQuery\": \"something\"\r\n}\r\n",
+							"raw": "{\r\n  \"page\": 1,\r\n  \"limit\": 10\r\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -1741,6 +2127,642 @@
 					"response": []
 				}
 			]
+		},
+		{
+			"name": "Transfer",
+			"item": [
+				{
+					"name": "transferToDealer",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiRGVhbGVyIHRlc3QiLCJtb2JpbGUiOiI5OTk5OTk5OTkyIiwiX2lkIjoiNjdiZGI3MWY5MTE5YjliYjljMjQwMGJlIiwiaWF0IjoxNzYyNjgxNDA3fQ.a2o09gme5hotAirQIAjMDWedeYdxF6f4y6SdK-23iIk",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"rewardPoints\": 40\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/transfer/toDealer",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"transfer",
+								"toDealer"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Order",
+			"item": [
+				{
+					"name": "createOrder",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"entityId\": 2,\n    \"items\": [\n        {\n            \"_id\": \"6994637e6c5c472e24be69b1\",\n            \"volume\": \"1LTRS\",\n            \"productOfferDescription\": \"AULTRA PRIMER INT & EXT\",\n            \"productPrice\": 76,\n            \"quantity\": 2,\n            \"subtotal\": 152\n        },\n        {\n            \"_id\": \"6994637e6c5c472e24be69b1\",\n            \"volume\": \"10LTRS\",\n            \"productOfferDescription\": \"AULTRA PRIMER INT & EXT\",\n            \"productPrice\": 594,\n            \"quantity\": 2,\n            \"subtotal\": 1188\n        }\n    ],\n    \"totalPrice\": 1340,\n    \"dealerId\": \"67bd6151fb00cd876fa41b01\" // if sales executive is creating order\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/order/create",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"order",
+								"create"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "getOrders",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiTUVLQUxBIFJBSkFTSEVLSEFSIFJFRERZIiwibW9iaWxlIjoiODY4Njk4ODE0OSIsIl9pZCI6IjY3ZjYyZmI1M2ZiZmNlY2E0YTJkM2U4YyIsImlhdCI6MTc3MDM5MDQ1Nn0.mkgAHlr5Ew2-ctDBiZiSWvyb7nNiz3-UMn5VpeeI8xQ",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"page\": 1,\n    \"limit\": 10\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/order/orders",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"order",
+								"orders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "updateOrderStatus",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"orderId\": \"ORD23\",\n    \"isVerified\": 1,\n    \"entityId\": 4\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/order/updateOrderStatus",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"order",
+								"updateOrderStatus"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Chart",
+			"item": [
+				{
+					"name": "batch-statistics",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4300/api/chart/batch-statistics",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"chart",
+								"batch-statistics"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "batch-timeline",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4300/api/chart/batch-timeline?batchId=67c6bba5635e603f261c5dbf",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"chart",
+								"batch-timeline"
+							],
+							"query": [
+								{
+									"key": "batchId",
+									"value": "67c6bba5635e603f261c5dbf"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "batch-statistics-list",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"page\": 1,\n    \"limit\": 50,\n    \"branches\": [\"Dachepally\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/chart/batch-statistics-list",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"chart",
+								"batch-statistics-list"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "export-batch-statistics",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"branches\": []\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/chart/export-batch-statistics",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"chart",
+								"export-batch-statistics"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Product Catlog",
+			"item": [
+				{
+					"name": "createProductCatlog",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"productDescription\": \"AULTRA PRIMER INT & EXT\",\n    \"productStatus\": \"Active\",\n    \"price\": {\n        \"1LTRS\": [\n            {\n                \"All\": 89\n            }\n        ],\n        \"4LTRS\": [\n            {\n                \"All\": 339\n            }\n        ],\n        \"10LTRS\": [\n            {\n                \"All\": 699\n            }\n        ],\n        \"20LTRS\": [\n            {\n                \"All\": 1296\n            }\n        ],\n        \"50LTRS\": [\n            {\n                \"All\": 3249\n            }\n        ]\n    },\n    \"productImage\": \"\",\n    \"focusProductMapping\": [\n        {\n            \"volume\": \"1LTRS\",\n            \"focusProductId\": 455,\n            \"focusUnitId\": 1\n        },\n        {\n            \"volume\": \"4LTRS\",\n            \"focusProductId\": 454,\n            \"focusUnitId\": 1\n        },\n        {\n            \"volume\": \"10LTRS\",\n            \"focusProductId\": 453,\n            \"focusUnitId\": 1\n        },\n        {\n            \"volume\": \"20LTRS\",\n            \"focusProductId\": 452,\n            \"focusUnitId\": 1\n        },\n        {\n            \"volume\": \"50LTRS\",\n            \"focusProductId\": 456,\n            \"focusUnitId\": 1\n        }\n    ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/productCatlog/create",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"productCatlog",
+								"create"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "testProductPrice",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"productOfferId\": \"67bb2eeb4db569bfc6bb8478\",\n    \"prices\": [\n        {\n            \"refId\": \"AP001\",\n            \"price\": 80\n        },\n        {\n            \"refId\": \"SZN001\",\n            \"price\": 100\n        },\n        {\n            \"refId\": \"WZN001\",\n            \"price\": 110\n        },\n        {\n            \"refId\": \"GNT001\",\n            \"price\": 120\n        },\n        {\n            \"refId\": \"VJA001\",\n            \"price\": 95\n        },\n        {\n            \"refId\": \"ALL\",\n            \"price\": 150\n        }\n    ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/productOffers/testProductPrice",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"productOffers",
+								"testProductPrice"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "search",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"page\": 1,\n    \"limit\": 10,\n    \"searchQuery\": \"\",\n    \"dealerId\": \"67bd6151fb00cd876fa41b01\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/productCatlog/search",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"productCatlog",
+								"search"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Payments",
+			"item": [
+				{
+					"name": "test bulkPe payment",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"N Divyesh\",\n    \"upi\": \"9966992346@upi\",\n    \"cash\": 50\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/bulkPe/testUPIPayment",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"bulkPe",
+								"testUPIPayment"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "testPayment",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"mobile\": 9390015863,\n    \"name\": \"N Divyesh\",\n    \"cash\": 1.00\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/cashFree/testPayment",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"cashFree",
+								"testPayment"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "testUpiPayment",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"upi\": \"7981427666-2@axl\",\n    \"mobile\": \"7981427666\",\n    \"cash\": 1\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:4300/api/cashFree/testUPIPayment",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"cashFree",
+								"testUPIPayment"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "getCashFreeTransactions",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4300/api/cashFree/getTransactions?page=1&limit=15",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4300",
+							"path": [
+								"api",
+								"cashFree",
+								"getTransactions"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "15"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "http://localhost:4300/api/auth/test",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"transfer\": \"yakub.paints_ibl_1744083547994\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:4300/api/auth/test",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4300",
+					"path": [
+						"api",
+						"auth",
+						"test"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "token",
+			"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiU3VwZXIgVXNlciAxIiwibW9iaWxlIjoiOTk5OTk5OTk5MSIsIl9pZCI6IjY3OGI1ZDRkYmRkNjkyZTU1MTg2ZTk5NiIsImlhdCI6MTc2OTAxMzczMn0.F9Pn9qLWh3Wq2mbpHPt1YY_rpvZvM8dGtDjNKrUit6U"
 		}
 	]
 }
