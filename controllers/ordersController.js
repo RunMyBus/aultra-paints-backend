@@ -99,23 +99,52 @@ exports.createOrder = async (req, res) => {
             if (productIds.length > 0) {
                 const products = await productOffersModel.find({
                     _id: { $in: productIds }
-                }).select('focusProductId focusUnitId');
+                }).select('focusProductId focusUnitId focusProductMapping productOfferDescription');
 
                 const productMap = products.reduce((acc, curr) => {
                     acc[curr._id.toString()] = {
                         focusProductId: curr.focusProductId,
-                        focusUnitId: curr.focusUnitId
+                        focusUnitId: curr.focusUnitId,
+                        focusProductMapping: curr.focusProductMapping,
+                        productOfferDescription: curr.productOfferDescription
                     };
                     return acc;
                 }, {});
 
                 items.forEach(item => {
                     if (item._id && productMap[item._id.toString()]) {
-                        if (!item.focusProductId) {
-                            item.focusProductId = productMap[item._id.toString()].focusProductId;
-                        }
-                        if (!item.focusUnitId) {
-                            item.focusUnitId = productMap[item._id.toString()].focusUnitId;
+                        const productData = productMap[item._id.toString()];
+                        
+                        // Check if product has volume-specific mapping (grouping)
+                        if (productData.focusProductMapping && productData.focusProductMapping.length > 0 && item.volume) {
+                            // Find the mapping for this specific volume
+                            const volumeMapping = productData.focusProductMapping.find(
+                                mapping => mapping.volume === item.volume
+                            );
+                            
+                            if (volumeMapping) {
+                                if (!item.focusProductId) {
+                                    item.focusProductId = volumeMapping.focusProductId;
+                                    logger.info(`ORDER :: Using volume-specific Focus Product ID ${volumeMapping.focusProductId} for volume ${item.volume}`);
+                                }
+                                if (!item.focusUnitId) {
+                                    item.focusUnitId = volumeMapping.focusUnitId || 1;
+                                }
+                            } else {
+                                logger.warn(`ORDER :: No volume mapping found for volume ${item.volume} in product ${item._id}`);
+                                // Fall back to legacy fields if volume mapping not found
+                                if (!item.focusProductId && productData.focusProductId) {
+                                    item.focusProductId = productData.focusProductId;
+                                }
+                                if (!item.focusUnitId && productData.focusUnitId) {
+                                    item.focusUnitId = productData.focusUnitId;
+                                }
+                            }
+                        } else {
+                            return res.status(400).json({
+                                success: false,
+                                message: `No focus product mapping found for product ${item.productOfferDescription}`
+                            });
                         }
                     }
                 });

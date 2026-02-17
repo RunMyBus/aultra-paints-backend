@@ -11,7 +11,7 @@ const { getPriceBookData, getDealerAccountId } = require('../services/focus8Orde
 
 // Create Product Catlog
 exports.createProductCatlog = async (req, res) => {
-  let { productDescription, productStatus, price, focusProductId, focusUnitId = 1 } = req.body;
+  let { productDescription, productStatus, price, focusProductId, focusUnitId = 1, focusProductMapping } = req.body;
 
   if (!req.body.productImage) {
     return res.status(400).json({ message: 'Product  image is required' });
@@ -55,6 +55,55 @@ exports.createProductCatlog = async (req, res) => {
     return res.status(400).json({ message: 'Invalid price format: ' + error.message });
   }
 
+  // Parse and validate focusProductMapping if provided
+  let parsedFocusMapping = null;
+  if (focusProductMapping) {
+    try {
+      const mappingData = typeof focusProductMapping === 'string' 
+        ? JSON.parse(focusProductMapping) 
+        : focusProductMapping;
+
+      if (!Array.isArray(mappingData)) {
+        throw new Error('focusProductMapping must be an array');
+      }
+
+      // Validate mapping structure
+      parsedFocusMapping = mappingData.map(mapping => {
+        if (!mapping.volume || !mapping.focusProductId) {
+          throw new Error('Each mapping must have volume and focusProductId');
+        }
+        return {
+          volume: mapping.volume,
+          focusProductId: Number(mapping.focusProductId),
+          focusUnitId: mapping.focusUnitId ? Number(mapping.focusUnitId) : 1
+        };
+      });
+
+      // Validate that all volumes in price have corresponding mapping
+      const priceVolumes = [...new Set(parsedPrice.map(p => p.volume))];
+      const mappingVolumes = parsedFocusMapping.map(m => m.volume);
+      const missingVolumes = priceVolumes.filter(v => !mappingVolumes.includes(v));
+      
+      if (missingVolumes.length > 0) {
+        throw new Error(`Missing focus product mapping for volumes: ${missingVolumes.join(', ')}`);
+      }
+
+      // Check for duplicate volumes in mapping
+      const volumeCounts = {};
+      mappingVolumes.forEach(v => {
+        volumeCounts[v] = (volumeCounts[v] || 0) + 1;
+      });
+      const duplicates = Object.keys(volumeCounts).filter(v => volumeCounts[v] > 1);
+      if (duplicates.length > 0) {
+        throw new Error(`Duplicate volumes in focus product mapping: ${duplicates.join(', ')}`);
+      }
+
+    } catch (error) {
+      console.error('Error parsing focus product mapping:', error);
+      return res.status(400).json({ message: 'Invalid focus product mapping: ' + error.message });
+    }
+  }
+
   // Create the product catlog document
   const productCatlog = new productOfferModel({
     productOfferDescription: productDescription,
@@ -62,7 +111,8 @@ exports.createProductCatlog = async (req, res) => {
     price: parsedPrice,
     offerAvailable: false,
     focusProductId: focusProductId ? Number(focusProductId) : null,
-    focusUnitId: focusUnitId ? Number(focusUnitId) : null
+    focusUnitId: focusUnitId ? Number(focusUnitId) : null,
+    focusProductMapping: parsedFocusMapping || undefined
   });
 
   try {
@@ -357,11 +407,26 @@ exports.searchProductCatlog = async (req, res) => {
         prices.forEach(price => {
           if (price.volume) {
             let finalPrice = price.price; // Default to catalog price
+            let volumeFocusProductId = null;
             
-            // Try to get custom price from Focus8 pricebook if available
-            if (focusAccountId && productCatlog.focusProductId && priceBookRecords.length > 0) {
+            // Check if product has volume-specific focus product mapping (grouping)
+            if (productCatlog.focusProductMapping && productCatlog.focusProductMapping.length > 0) {
+              // Find the mapping for this specific volume
+              const volumeMapping = productCatlog.focusProductMapping.find(
+                mapping => mapping.volume === price.volume
+              );
+              
+              if (volumeMapping && volumeMapping.focusProductId) {
+                volumeFocusProductId = volumeMapping.focusProductId;
+                logger.info(`FOCUS8 :: Using volume-specific mapping for ${productCatlog.productOfferDescription} - ${price.volume}: Focus Product ID ${volumeFocusProductId}`);
+              }
+            } else if (productCatlog.focusProductId) {
+              volumeFocusProductId = productCatlog.focusProductId;
+            }
+            
+            if (focusAccountId && volumeFocusProductId && priceBookRecords.length > 0) {
               finalPrice = getEffectivePriceFromFocus(
-                productCatlog.focusProductId,
+                volumeFocusProductId,
                 focusAccountId,
                 priceBookRecords,
                 price.price // Fallback to catalog price
@@ -371,6 +436,7 @@ exports.searchProductCatlog = async (req, res) => {
             priceArray.push({
               volume: price.volume,
               price: finalPrice,
+              focusProductId: volumeFocusProductId, // Include for order creation
               source: finalPrice !== price.price ? 'focus8' : 'catalog' // For debugging
             });
           }
@@ -404,7 +470,7 @@ exports.searchProductCatlog = async (req, res) => {
 exports.updateProductCatlog = async (req, res) => {
   console.log('req.body:', req.body);
   try {
-      const { price, focusProductId, focusUnitId } = req.body;
+    const { price, focusProductId, focusUnitId, focusProductMapping } = req.body;
     const existingProductCatlog = await productOfferModel.findOne({
       productOfferDescription: req.body.productDescription,
       _id: { $ne: req.params.id }
@@ -471,6 +537,54 @@ exports.updateProductCatlog = async (req, res) => {
       return res.status(400).json({ message: 'Invalid price format: ' + error.message });
     }
 
+    // Parse and validate focusProductMapping if provided
+    let parsedFocusMapping = null;
+    if (focusProductMapping) {
+      try {
+        const mappingData = typeof focusProductMapping === 'string' 
+          ? JSON.parse(focusProductMapping) 
+          : focusProductMapping;
+
+        if (!Array.isArray(mappingData)) {
+          throw new Error('focusProductMapping must be an array');
+        }
+
+        // Validate mapping structure
+        parsedFocusMapping = mappingData.map(mapping => {
+          if (!mapping.volume || !mapping.focusProductId) {
+            throw new Error('Each mapping must have volume and focusProductId');
+          }
+          return {
+            volume: mapping.volume,
+            focusProductId: Number(mapping.focusProductId),
+            focusUnitId: mapping.focusUnitId ? Number(mapping.focusUnitId) : 1
+          };
+        });
+
+        // Validate that all volumes in price have corresponding mapping
+        const priceVolumes = [...new Set(parsedPrice.map(p => p.volume))];
+        const mappingVolumes = parsedFocusMapping.map(m => m.volume);
+        const missingVolumes = priceVolumes.filter(v => !mappingVolumes.includes(v));
+        
+        if (missingVolumes.length > 0) {
+          throw new Error(`Missing focus product mapping for volumes: ${missingVolumes.join(', ')}`);
+        }
+
+        // Check for duplicate volumes in mapping
+        const volumeCounts = {};
+        mappingVolumes.forEach(v => {
+          volumeCounts[v] = (volumeCounts[v] || 0) + 1;
+        });
+        const duplicates = Object.keys(volumeCounts).filter(v => volumeCounts[v] > 1);
+        if (duplicates.length > 0) {
+          throw new Error(`Duplicate volumes in focus product mapping: ${duplicates.join(', ')}`);
+        }
+      } catch (error) {
+        console.error('Error parsing focus product mapping:', error);
+        return res.status(400).json({ message: 'Invalid focus product mapping: ' + error.message });
+      }
+    }
+
     // Prepare update data
     const updateData = {
       productOfferDescription: req.body.productDescription,
@@ -480,6 +594,11 @@ exports.updateProductCatlog = async (req, res) => {
       focusProductId: focusProductId ? Number(focusProductId) : null,
       focusUnitId: focusUnitId ? Number(focusUnitId) : null
     };
+
+    // Add focusProductMapping if provided
+    if (parsedFocusMapping !== null) {
+      updateData.focusProductMapping = parsedFocusMapping;
+    }
 
     // Add image URL if it was updated
     if (req.body.productImageUrl) {

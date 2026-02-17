@@ -3,7 +3,6 @@ const mongoose = require('mongoose');
 const productOffersSchema = new mongoose.Schema({
     productOfferImageUrl: { type: String },
     productOfferDescription: { type: String, required: true },
-    // productOfferTitle: { type: String, required: true }, -->
     validUntil: { type: Date },
     productOfferStatus: { type: String, required: true },
     updatedBy: { type: String },
@@ -19,7 +18,12 @@ const productOffersSchema = new mongoose.Schema({
     ],
     offerAvailable: { type: Boolean, default: true },
     focusProductId: {type: Number},
-    focusUnitId: {type: Number}
+    focusUnitId: {type: Number},
+    focusProductMapping: [{
+        volume: { type: String, required: true },
+        focusProductId: { type: Number, required: true },
+        focusUnitId: { type: Number, default: 1 }
+    }]
 }, { timestamps: true });
 
 const productOffers = mongoose.model('productOffers', productOffersSchema, 'productOffers');
