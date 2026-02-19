@@ -111,7 +111,7 @@ exports.createOrder = async (req, res) => {
                     return acc;
                 }, {});
 
-                items.forEach(item => {
+                for (const item of items) {
                     if (item._id && productMap[item._id.toString()]) {
                         const productData = productMap[item._id.toString()];
                         
@@ -147,7 +147,7 @@ exports.createOrder = async (req, res) => {
                             });
                         }
                     }
-                });
+                }
             }
         }
 
