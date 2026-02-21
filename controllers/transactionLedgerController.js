@@ -225,6 +225,7 @@ exports.generateTransactionLedgerTemplate = async (req, res) => {
     }
 
     let transferorUserId = transaction.userId;
+    let txnForPdf = transaction;
 
     if (
       transaction.narration === 'Received reward points from dealer' &&
@@ -234,10 +235,12 @@ exports.generateTransactionLedgerTemplate = async (req, res) => {
       const senderTxn = await TransactionLedger.findOne({
         uniqueCode: transaction.uniqueCode,
         narration: 'Transferred reward points to Super User',
-      }).select('userId');
+      });
 
       if (senderTxn) {
         transferorUserId = senderTxn.userId;
+        // Use the dealer's ledger entry so balance is correct (dealer's balance after deduction)
+        txnForPdf = senderTxn;
       } else {
         // Fallback: extract dealerCode from uniqueCode and find the user
         const dealerCode = transaction.uniqueCode.split('_')[0];
@@ -253,13 +256,12 @@ exports.generateTransactionLedgerTemplate = async (req, res) => {
     const transferorUser = await User.findById(transferorUserId).select('name');
     const userName = transferorUser?.name || '';
 
-    //  Always wrap in array for the PDF generator
-    const pdfBuffer = await generateTransactionLedgerPDF(transferorUserId, [transaction], userName);
+    const pdfBuffer = await generateTransactionLedgerPDF(transferorUserId, [txnForPdf], userName);
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
       'Content-Disposition',
-      `inline; filename="CreditNote-${transaction.uniqueCode}.pdf"`
+      `inline; filename="CreditNote-${txnForPdf.uniqueCode}.pdf"`
     );
     res.end(pdfBuffer);
   } catch (error) {

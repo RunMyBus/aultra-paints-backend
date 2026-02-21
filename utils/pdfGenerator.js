@@ -20,7 +20,7 @@ exports.generateTransactionLedgerPDF = async (userId, transactions, userName = '
   `).join('');
 
   const totalCredits = transactions.reduce(
-    (sum, t) => sum + Number(t.amount?.replace('+', '') || 0),
+    (sum, t) => sum + Math.abs(Number(t.amount?.replace(/[^0-9.-]/g, '') || 0)),
     0
   );
 
