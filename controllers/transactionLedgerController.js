@@ -224,8 +224,11 @@ exports.generateTransactionLedgerTemplate = async (req, res) => {
       return res.status(404).json({ error: 'Transaction ledger entry not found.' });
     }
 
+    const transactionUser = await User.findById(transaction.userId).select('name');
+    const userName = transactionUser?.name || '';
+
     //  Always wrap in array for the PDF generator
-    const pdfBuffer = await generateTransactionLedgerPDF(transaction.userId, [transaction]);
+    const pdfBuffer = await generateTransactionLedgerPDF(transaction.userId, [transaction], userName);
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
