@@ -224,11 +224,37 @@ exports.generateTransactionLedgerTemplate = async (req, res) => {
       return res.status(404).json({ error: 'Transaction ledger entry not found.' });
     }
 
-    const transactionUser = await User.findById(transaction.userId).select('name');
-    const userName = transactionUser?.name || '';
+    let transferorUserId = transaction.userId;
+
+    if (
+      transaction.narration === 'Received reward points from dealer' &&
+      transaction.uniqueCode
+    ) {
+      // Look up the sender's (dealer's) ledger entry that shares the same uniqueCode
+      const senderTxn = await TransactionLedger.findOne({
+        uniqueCode: transaction.uniqueCode,
+        narration: 'Transferred reward points to Super User',
+      }).select('userId');
+
+      if (senderTxn) {
+        transferorUserId = senderTxn.userId;
+      } else {
+        // Fallback: extract dealerCode from uniqueCode and find the user
+        const dealerCode = transaction.uniqueCode.split('_')[0];
+        if (dealerCode) {
+          const dealerUser = await User.findOne({ dealerCode }).select('_id');
+          if (dealerUser) {
+            transferorUserId = dealerUser._id;
+          }
+        }
+      }
+    }
+
+    const transferorUser = await User.findById(transferorUserId).select('name');
+    const userName = transferorUser?.name || '';
 
     //  Always wrap in array for the PDF generator
-    const pdfBuffer = await generateTransactionLedgerPDF(transaction.userId, [transaction], userName);
+    const pdfBuffer = await generateTransactionLedgerPDF(transferorUserId, [transaction], userName);
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
