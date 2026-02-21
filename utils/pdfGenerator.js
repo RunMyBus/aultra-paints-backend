@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
 
-exports.generateTransactionLedgerPDF = async (userId, transactions) => {
+exports.generateTransactionLedgerPDF = async (userId, transactions, userName = '') => {
   const templatePath = path.join(__dirname, '../templates/creditNoteTemplate.html');
   console.log(' Template path:', templatePath);
 
@@ -32,7 +32,8 @@ exports.generateTransactionLedgerPDF = async (userId, transactions) => {
     .replace('{{date}}', new Date().toLocaleDateString())
     .replace('{{creditNoteNo}}', creditNoteNo)
     .replace('{{totalTransactions}}', transactions.length)
-    .replace('{{totalCredits}}', totalCredits);
+    .replace('{{totalCredits}}', totalCredits)
+    .replace('{{recipientName}}', userName);
 
   const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
   const page = await browser.newPage();
