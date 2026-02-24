@@ -369,15 +369,13 @@ async function pushOrderToFocus8(order, user, entityId) {
  * GET PRICEBOOK DATA
  * ===============================
  * Fetches dealer-specific pricing from Focus8 pricebook
- * @param {Array<number>} priceBookIds - Array of price book IDs to query (e.g., [10, 13])
  * @returns {Array} Array of price records with iProductId, iAccountId, fVal1, iStartDate, etc.
  */
-async function getPriceBookData(priceBookIds = ['10', '13']) {
+async function getPriceBookData() {
     try {
-        const priceBookIdList = priceBookIds.map(id => `'${id}'`).join(',');
-        const query = `select iProductId, iAccountId, fVal1, iStartDate, iPriceBookId from mCore_SellingPriceBookDetails where iPriceBookId in (${priceBookIdList}) and bMarkDeleted=0`;
+        const query = `select iProductId, iAccountId, fVal1, iStartDate, iPriceBookId from Udv_SellingPriceBookDetails;`;
         
-        logger.info(`FOCUS8 :: Fetching pricebook data for priceBookIds: ${priceBookIdList}`);
+        logger.info(`FOCUS8 :: Fetching pricebook data.`);
         
         const res = await focusRequest(
             `${FOCUS8_BASE_URL}/utility/ExecuteSqlQuery`,

@@ -160,6 +160,26 @@ exports.createProductCatlog = async (req, res) => {
 
 
 /**
+ * Helper function to parse Focus8 date string
+ * @param {string|number} dateStr - Date string in DD-MM-YYYY format or timestamp
+ * @returns {number} Days since epoch
+ */
+const parseFocusDate = (dateStr) => {
+  if (!dateStr) return 0;
+  
+  if (typeof dateStr === 'string' && dateStr.includes('-')) {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const date = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00Z`);
+      return Math.floor(date.getTime() / (1000 * 60 * 60 * 24));
+    }
+  }
+  
+  if (!isNaN(dateStr)) return Number(dateStr);
+  return 0;
+};
+
+/**
  * Helper function to get the effective price from Focus8 pricebook
  * @param {number} focusProductId - The Focus8 product ID
  * @param {number} focusAccountId - The Focus8 account ID (iMasterId)
@@ -177,8 +197,8 @@ const getEffectivePriceFromFocus = (focusProductId, focusAccountId, priceBookRec
   // Filter records matching product and account
   const matchingRecords = priceBookRecords.filter(record => 
     Number(record.iProductId) === Number(focusProductId) && 
-    Number(record.iAccountId) === Number(focusAccountId) /*&&
-    Number(record.iStartDate) <= currentDate // Only prices that are already effective*/ //TODO: Enable this after focus updates the iStartDate
+    Number(record.iAccountId) === Number(focusAccountId) &&
+    parseFocusDate(record.iStartDate) <= currentDate // Only prices that are already effective
   );
 
   if (matchingRecords.length === 0) {
@@ -186,7 +206,7 @@ const getEffectivePriceFromFocus = (focusProductId, focusAccountId, priceBookRec
   }
 
   // Sort by iStartDate descending (latest first)
-  matchingRecords.sort((a, b) => Number(b.iStartDate) - Number(a.iStartDate));
+  matchingRecords.sort((a, b) => parseFocusDate(b.iStartDate) - parseFocusDate(a.iStartDate));
 
   // Return the latest price (fVal1)
   const effectivePrice = Number(matchingRecords[0].fVal1);
@@ -328,7 +348,7 @@ exports.searchProductCatlog = async (req, res) => {
         // Fetch dealer's Focus8 account ID and pricebook data in parallel
         [focusAccountId, priceBookRecords] = await Promise.all([
           getDealerAccountId(dealerCode),
-          getPriceBookData(['10', '13'])
+          getPriceBookData()
         ]);
         
         logger.info(`FOCUS8 :: Dealer ${dealerCode} has account ID: ${focusAccountId}, fetched ${priceBookRecords.length} pricebook records`);
