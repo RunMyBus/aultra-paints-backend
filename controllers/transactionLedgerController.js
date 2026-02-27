@@ -1,36 +1,8 @@
 const TransactionLedger = require("../models/TransactionLedger");
 const Transaction = require("../models/Transaction");
-// const AWS = require('aws-sdk');
-// const multer = require('multer');
-// const multerS3 = require('multer-s3');
 const { generateTransactionLedgerPDF } = require('../utils/pdfGenerator');
 const User = require("../models/User");
-
-
-// function decodeBase64File(dataString) {
-//   try {
-//     const matches = dataString.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-//     if (!matches || matches.length !== 3) {
-//       throw new Error('Invalid base64 file data');
-//     }
-
-//     return {
-//       type: matches[1],
-//       data: Buffer.from(matches[2], 'base64'),
-//     };
-//   } catch (err) {
-//     return new Error('Invalid base64 data');
-//   }
-// }
-
-
-// // AWS S3 Setup
-// const s3 = new AWS.S3({
-//   region: process.env.AWS_REGION,
-//   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-//   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-// });
-
+const { REWARD_SCHEME } = require('../config/rewardConstants');
 
 // GET ALL TRANSACTIONS
 
@@ -147,73 +119,6 @@ exports.getAllTransactions = async (req, res) => {
     }
 };
 
-
-//Update Transaction Ledger 
-// exports.updateTransactionLedger = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const userId = req.user.id;
-
-//     const {
-//       narration,
-//       amount,
-//       balance,
-//       couponId,
-//       uniqueCode,
-//       file, 
-//     } = req.body;
-
-//     // Find the ledger record
-//     const existingLedger = await TransactionLedger.findOne({ _id: id, userId });
-//     if (!existingLedger) {
-//       return res.status(404).json({ error: 'Transaction ledger not found for this user.' });
-//     }
-
-//     // Update standard fields dynamically
-//     if (narration !== undefined) existingLedger.narration = narration;
-//     if (amount !== undefined) existingLedger.amount = amount;
-//     if (balance !== undefined) existingLedger.balance = balance;
-//     if (couponId !== undefined) existingLedger.couponId = couponId;
-//     if (uniqueCode !== undefined) existingLedger.uniqueCode = uniqueCode;
-
-//     //  Upload new PDF to S3 (if provided)
-//     if (file) {
-//       const fileData = decodeBase64File(file);
-//       if (fileData instanceof Error) {
-//         return res.status(400).json({ message: 'Invalid PDF file data.' });
-//       }
-
-//       // Ensure the uploaded file is a PDF
-//       if (fileData.type !== 'application/pdf') {
-//         return res.status(400).json({ message: 'Only PDF files are allowed.' });
-//       }
-
-//       //  Upload the file to AWS S3
-//       const params = {
-//         Bucket: process.env.AWS_BUCKET_TRANSACTION_LEDGER,
-//         Key: `TransactionLedger/${existingLedger._id}.pdf`,
-//         Body: fileData.data,
-//         ContentType: fileData.type,
-//         ACL: 'public-read',
-//       };
-
-//       const uploadResult = await s3.upload(params).promise();
-//       existingLedger.fileUrl = uploadResult.Location;
-//     }
-
-//     //  Save the updated document
-//     await existingLedger.save();
-
-//     res.json({
-//       message: 'Transaction ledger updated successfully.',
-//       transaction: existingLedger,
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({ error: 'Error updating transaction ledger.' });
-//   }
-// };
-
 exports.generateTransactionLedgerTemplate = async (req, res) => {
   try {
     const transactionLedgerId = req.params.transactionLedgerId;
@@ -256,7 +161,39 @@ exports.generateTransactionLedgerTemplate = async (req, res) => {
     const transferorUser = await User.findById(transferorUserId).select('name');
     const userName = transferorUser?.name || '';
 
-    const pdfBuffer = await generateTransactionLedgerPDF(transferorUserId, [txnForPdf], userName);
+    // Reward Scheme Calculation for Credit Note (Not saved to DB)
+    const amountVal = Math.abs(Number(txnForPdf.amount?.replace(/[^0-9.-]/g, '') || 0));
+
+    // Create a display-friendly version of the transaction (no + or - in amount)
+    const displayTxn = {
+      ...(txnForPdf.toObject ? txnForPdf.toObject() : txnForPdf),
+      amount: amountVal.toString(),
+    };
+
+    const transactionsForPdf = [displayTxn];
+
+    if (
+      (txnForPdf.narration === 'Transferred reward points to Super User' ||
+        txnForPdf.narration === 'Received reward points from dealer') &&
+      txnForPdf.uniqueCode
+    ) {
+      let rewardPoints = 0;
+      let rewardPercentage = '0%';
+
+      const scheme = REWARD_SCHEME.find((s) => amountVal === s.threshold);
+
+      if (scheme) {
+        rewardPoints = Math.round(amountVal * (scheme.percentage / 100));
+        rewardPercentage = `${scheme.percentage}%`;
+      }
+
+      if (rewardPoints > 0) {
+        displayTxn.rewardPoints = rewardPoints;
+        displayTxn.rewardPercentage = rewardPercentage;
+      }
+    }
+
+    const pdfBuffer = await generateTransactionLedgerPDF(transferorUserId, transactionsForPdf, userName);
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
