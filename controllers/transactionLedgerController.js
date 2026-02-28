@@ -180,7 +180,7 @@ exports.generateTransactionLedgerTemplate = async (req, res) => {
       let rewardPoints = 0;
       let rewardPercentage = '0%';
 
-      const scheme = REWARD_SCHEME.find((s) => amountVal === s.threshold);
+      const scheme = REWARD_SCHEME.find((s) => amountVal >= s.threshold);
 
       if (scheme) {
         rewardPoints = Math.round(amountVal * (scheme.percentage / 100));
@@ -190,6 +190,60 @@ exports.generateTransactionLedgerTemplate = async (req, res) => {
       if (rewardPoints > 0) {
         displayTxn.rewardPoints = rewardPoints;
         displayTxn.rewardPercentage = rewardPercentage;
+
+        // ── Idempotent Super User deduction ────────────────────────────────
+        // Find the sender's (dealer's) ledger entry for this uniqueCode and
+        // atomically mark it as issued so we never deduct twice.
+        const senderEntry = await TransactionLedger.findOneAndUpdate(
+          {
+            uniqueCode: txnForPdf.uniqueCode,
+            narration: 'Transferred reward points to Super User',
+            creditNoteIssued: { $ne: true },  // only match if NOT yet issued
+          },
+          { $set: { creditNoteIssued: true } },
+          { new: true }
+        );
+
+        if (senderEntry) {
+          // First time credit note is generated for this transfer — deduct from Super User
+          const superUserMobile = process.env.SUPER_USER_MOBILE;
+          const superUser = await User.findOne({ mobile: superUserMobile, accountType: 'SuperUser' });
+
+          if (superUser) {
+            // Deduct only the original transferred amount (amountVal), NOT the reward-scheme bonus
+            const updatedSuperUser = await User.findOneAndUpdate(
+              { _id: superUser._id },
+              [
+                {
+                  $set: {
+                    rewardPoints: {
+                      $subtract: [{ $ifNull: ['$rewardPoints', 0] }, amountVal],
+                    },
+                  },
+                },
+              ],
+              { new: true }
+            );
+
+            // Insert a ledger record for the deduction so it is fully traceable
+            await TransactionLedger.create({
+              narration: 'Credit Note reward deduction',
+              amount: `- ${amountVal}`,
+              balance: updatedSuperUser.rewardPoints,
+              userId: superUser._id.toString(),
+              uniqueCode: `CN_${txnForPdf.uniqueCode}`, // prefixed to keep it unique
+            });
+
+            console.log(
+              `✅ Credit Note deduction applied: -${amountVal} pts from Super User (${superUser.mobile}). New balance: ${updatedSuperUser.rewardPoints}`
+            );
+          } else {
+            console.warn('⚠️  Super User not found; skipping credit note deduction.');
+          }
+        } else {
+          console.log(`ℹ️  Credit Note already issued for uniqueCode: ${txnForPdf.uniqueCode}. Skipping deduction.`);
+        }
+        // ──────────────────────────────────────────────────────────────────
       }
     }
 
