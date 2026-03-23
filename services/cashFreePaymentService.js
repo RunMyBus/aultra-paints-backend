@@ -457,6 +457,10 @@ const upiPayment = async (upi, mobile, cash) => {
                 return { success: false, message: upiPaymentResult.message };
             }
         } else {
+            logger.warn('Insufficient balance. Skipping payment.', {
+                availableBalance: balance,
+                requiredAmount: cash
+            });
             return { success: false, message: 'Insufficient balance. Contact Admin.' };
         }
     } catch (error) {

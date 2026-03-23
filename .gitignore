@@ -7,3 +7,6 @@ package-lock.json
 node_modules/
 coverage/
 logs/
+docs/
+.agent
+.vscode/

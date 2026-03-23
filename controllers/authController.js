@@ -12,6 +12,7 @@ const logger = require("../utils/logger");
 const cashFreePaymentService = require('../services/cashFreePaymentService');
 const BulkPePaymentService = require('../services/bulkPePaymentService');
 const { validateAndCreateOTP } = require('../services/user.service');
+const { getDealerAccountId } = require('../services/focus8Order.service');
 
 async function generateToken(user, next) {
     try {
@@ -84,6 +85,7 @@ exports.register = async (req, next) => {
 
 const bulkPePGActivated = config.ACTIVATE_BULKPE_PG;
 const cashFreePGActivated = config.ACTIVATE_CASHFREE_PG;
+const redeemEligibleAccountTypes = (config.REDEEM_ELIGIBLE_ACCOUNT_TYPES || 'Dealer').split(',').map(t => t.trim());
 
 exports.redeemCash = async (req, next) => {
     try {
@@ -92,6 +94,21 @@ exports.redeemCash = async (req, next) => {
 
         // Find the user by mobile number
         let user = await User.findOne({ mobile });
+
+        // Only registered Dealers present in both our DB and Focus8 can redeem cash
+        if (!user) {
+            return next({ status: 403, message: 'Only registered users can redeem. User not found.' });
+        }
+        if (!redeemEligibleAccountTypes.includes(user.accountType)) {
+            return next({ status: 403, message: `Only ${redeemEligibleAccountTypes.join(', ')} are eligible to redeem cash.` });
+        }
+        if (!user.dealerCode) {
+            return next({ status: 403, message: 'Dealer code not set. Contact support.' });
+        }
+        const focusAccountId = await getDealerAccountId(user.dealerCode);
+        if (!focusAccountId) {
+            return next({ status: 403, message: 'Dealer not found in Focus8. Contact support.' });
+        }
 
         // Find the transaction by the QR code
         const transaction = await Transaction.findOne({ UDID: qr });
@@ -122,97 +139,50 @@ exports.redeemCash = async (req, next) => {
             return next({ status: 400, message: paymentResult.message });
         }
 
-        // If the user is found, update the transaction and user
-        if (user) {
-            const updatedTransaction = await Transaction.findOneAndUpdate(
-                { UDID: qr },
-                { $set: { updatedBy: user._id, cashRedeemedBy: req.body.mobile, cashRedeemedAt: new Date(), upiId: upi } },
-                { new: true }
-            );
+        const updatedTransaction = await Transaction.findOneAndUpdate(
+            { UDID: qr },
+            { $set: { updatedBy: user._id, cashRedeemedBy: req.body.mobile, cashRedeemedAt: new Date(), upiId: upi } },
+            { new: true }
+        );
 
-            if (!updatedTransaction) {
-                return next({status: 404, message: `Transaction with QR code ${qr} not found after update.` });
-            }
-
-            // const redeemablePointsCount = updatedTransaction.redeemablePoints || 0;
-            const cashValue = updatedTransaction.value || 0;
-
-            const userData = await User.findOneAndUpdate(
-                { _id: updatedTransaction.updatedBy },
-                {
-                    $inc: {
-                        // rewardPoints: redeemablePointsCount,
-                        cash: cashValue,
-                    }
-                },
-                { new: true }
-            );
-
-            if (!userData) {
-                return next({status: 404, message: 'User not found for the transaction update.' });
-            }
-
-            const ledgerEntry = {
-                name: userData.name || mobile.toString(),
-                mobile: userData.mobile,
-                // redeemablePoints: updatedTransaction.redeemablePoints,
-                couponCode: updatedTransaction.couponCode,
-                cash: updatedTransaction.value,
-            };
-
-            await transactionLedger.create({
-                narration: `Scanned coupon code ${updatedTransaction.couponCode} and redeemed cash.`,
-                amount: `+ ${updatedTransaction.value}`,
-                balance: userData.cash,
-                userId: userData._id,
-                couponId: updatedTransaction._id
-            });
-            return next({ status: 200, message: "Coupon redeemed and payment initiated successfully!", data: ledgerEntry });
-
-        } else {
-            // If the user does not exist, create a new user and save the redeemed points and cash
-            // const redeemablePointsCount = transaction.redeemablePoints || 0;
-            const cashValue = transaction.value || 0;
-
-            const newUser = new User({
-                name: mobile.toString() || 'NA',
-                mobile: mobile,
-                // rewardPoints: redeemablePointsCount,
-                cash: cashValue,
-                upiID: upi
-            });
-
-            const userData = await newUser.save();
-
-            // Update the transaction to mark it as processed with the new user's information
-            const updatedTransaction = await Transaction.findOneAndUpdate(
-                { UDID: qr },
-                { updatedBy: userData._id, cashRedeemedBy: req.body.mobile, upiId: upi },
-                { new: true }
-            );
-
-            if (!updatedTransaction) {
-                return next({ status: 404, message: `Transaction with QR code ${qr} not found after creating new user.` });
-            }
-
-            const data = {
-                mobile: userData.mobile,
-                name: userData.name || 'NA',
-                couponCode: updatedTransaction.couponCode,
-                cash: updatedTransaction.value,
-                upiId: upi
-            };
-
-            await transactionLedger.create({
-                narration: `Scanned coupon ${updatedTransaction.couponCode} and redeemed cash.`,
-                amount: `+ ${updatedTransaction.value}`,
-                balance: userData.cash,
-                userId: userData._id,
-                couponId: updatedTransaction._id
-            });
-
-            return next({ status: 200, message: "Coupon redeemed and payment initiated successfully!", data: data });
+        if (!updatedTransaction) {
+            return next({status: 404, message: `Transaction with QR code ${qr} not found after update.` });
         }
+
+        // const redeemablePointsCount = updatedTransaction.redeemablePoints || 0;
+        const cashValue = updatedTransaction.value || 0;
+
+        const userData = await User.findOneAndUpdate(
+            { _id: updatedTransaction.updatedBy },
+            {
+                $inc: {
+                    // rewardPoints: redeemablePointsCount,
+                    cash: cashValue,
+                }
+            },
+            { new: true }
+        );
+
+        if (!userData) {
+            return next({status: 404, message: 'User not found for the transaction update.' });
+        }
+
+        const ledgerEntry = {
+            name: userData.name || mobile.toString(),
+            mobile: userData.mobile,
+            // redeemablePoints: updatedTransaction.redeemablePoints,
+            couponCode: updatedTransaction.couponCode,
+            cash: updatedTransaction.value,
+        };
+
+        await transactionLedger.create({
+            narration: `Scanned coupon code ${updatedTransaction.couponCode} and redeemed cash.`,
+            amount: `+ ${updatedTransaction.value}`,
+            balance: userData.cash,
+            userId: userData._id,
+            couponId: updatedTransaction._id
+        });
+        return next({ status: 200, message: "Coupon redeemed and payment initiated successfully!", data: ledgerEntry });
 
     } catch (err) {
         logger.error('Error in redeemCash.', { reqBody: req.body, reqParams: req.params, error: err });

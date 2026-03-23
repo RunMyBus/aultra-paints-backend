@@ -59,7 +59,15 @@ async function focusRequest(url, data) {
         }
     }
 
-    let response = await execute();
+    const startTime = Date.now();
+    let response;
+    try {
+        response = await execute();
+    } catch (error) {
+        const durationMs = Date.now() - startTime;
+        logger.error(`FOCUS8 :: Request to ${url} failed after ${durationMs}ms`, { durationMs, url });
+        throw error;
+    }
 
     // Check for "Invalid Session" result
     if (
@@ -71,7 +79,10 @@ async function focusRequest(url, data) {
         response = await execute();
     }
 
-    // Log unexpected responses (where result is not success) 
+    const durationMs = Date.now() - startTime;
+    logger.info(`FOCUS8 :: ${url} responded in ${durationMs}ms`, { durationMs, url, payload: data, result: response.data?.result });
+
+    // Log unexpected responses (where result is not success)
     // result 1 is typically success for Focus 8 APIs
     if (response.data && response.data.result !== 1) {
         logger.warn(`FOCUS8 :: API returned non-success result from ${url}`, {
@@ -309,7 +320,8 @@ async function pushOrderToFocus8(order, user, entityId) {
                     Entity__Id,
                     Warehouse__Id: 3, //TODO: Remove after focus makes this non mandatory.
                     'Company Name__Id': Entity__Id,
-                    IsIGST
+                    IsIGST,
+                    MobileAppOrderId: order.orderId || ''
                 },
                 Body: bodyItems,
                 Footer: []
@@ -363,6 +375,61 @@ async function pushOrderToFocus8(order, user, entityId) {
     }
 }
 
+
+/**
+ * ===============================
+ * FORMAT DATE FOR FOCUS8 SQL (DD-MM-YYYY)
+ * ===============================
+ */
+function formatDateForFocus8(date) {
+    const d = new Date(date);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+}
+
+/**
+ * ===============================
+ * GET SO MOBILE APP ORDERS (LAST 6 MONTHS)
+ * ===============================
+ */
+async function getSOMobileAppOrders() {
+    const today = formatDateForFocus8(new Date());
+    const query = `SELECT * FROM udv_SOMobileApp WHERE CONVERT(DATE, [Date], 105) BETWEEN DATEADD(MONTH, -6, CONVERT(DATE, '${today}', 105)) AND CONVERT(DATE, '${today}', 105) ORDER BY CONVERT(DATE, [Date], 105) DESC`;
+
+    const res = await focusRequest(
+        `${FOCUS8_BASE_URL}/utility/ExecuteSqlQuery`,
+        { data: [{ Query: query }] }
+    );
+
+    return res.data?.data?.[0]?.Table || [];
+}
+
+/**
+ * ===============================
+ * GET DC INVOICE ROWS FOR AN ORDER
+ * ===============================
+ * Fetches delivery challan rows for a given order within a 15-day window
+ * after the order creation date.
+ * Links via MobileAppOrderId (primary) or DocNo (focusOrderId fallback).
+ */
+async function getDCInvoiceForOrder(mobileAppOrderId, orderDate, focusOrderId) {
+    const formattedDate = formatDateForFocus8(orderDate);
+    const conditions = [];
+    if (mobileAppOrderId) conditions.push(`MobileAppOrderId = '${mobileAppOrderId}'`);
+    if (focusOrderId) conditions.push(`DocNo = '${focusOrderId}'`);
+    const whereClause = conditions.length ? `AND (${conditions.join(' OR ')})` : '';
+
+    const query = `SELECT * FROM udv_DCInvoice WHERE CONVERT(DATE, [Date], 105) BETWEEN CONVERT(DATE, '${formattedDate}', 105) AND DATEADD(DAY, 15, CONVERT(DATE, '${formattedDate}', 105)) ${whereClause}`;
+
+    const res = await focusRequest(
+        `${FOCUS8_BASE_URL}/utility/ExecuteSqlQuery`,
+        { data: [{ Query: query }] }
+    );
+
+    return res.data?.data?.[0]?.Table || [];
+}
 
 /**
  * ===============================
@@ -441,10 +508,44 @@ async function getDealerAccountId(dealerCode) {
     }
 }
 
+/**
+ * ===============================
+ * GET DEALER FINANCIAL DATA FROM FOCUS8
+ * ===============================
+ * Fetches closing balance and credit limit for a dealer by their dealer code
+ * @param {string} dealerCode - The dealer's code
+ * @returns {{ closingBalance: number|null, creditLimit: number|null }}
+ */
+async function getDealerFinancialData(dealerCode) {
+    if (!dealerCode) return { closingBalance: null, creditLimit: null };
+
+    const [balanceRes, creditRes] = await Promise.allSettled([
+        focusRequest(`${FOCUS8_BASE_URL}/utility/ExecuteSqlQuery`, {
+            data: [{ Query: `SELECT ClosingBalance FROM udv_customerBalance WHERE [Account Code] = '${dealerCode}'` }]
+        }),
+        focusRequest(`${FOCUS8_BASE_URL}/utility/ExecuteSqlQuery`, {
+            data: [{ Query: `SELECT fCreditLimit FROM vmCore_Account WHERE istatus <> 5 AND iAccountType = 5 AND sCode = '${dealerCode}'` }]
+        })
+    ]);
+
+    const closingBalance = balanceRes.status === 'fulfilled'
+        ? (balanceRes.value.data?.data?.[0]?.Table?.[0]?.ClosingBalance ?? null)
+        : null;
+
+    const creditLimit = creditRes.status === 'fulfilled'
+        ? (creditRes.value.data?.data?.[0]?.Table?.[0]?.fCreditLimit ?? null)
+        : null;
+
+    return { closingBalance, creditLimit };
+}
+
 module.exports = {
     getProductMaster,
     getEntityMaster,
     pushOrderToFocus8,
     getPriceBookData,
-    getDealerAccountId
+    getDealerAccountId,
+    getDealerFinancialData,
+    getSOMobileAppOrders,
+    getDCInvoiceForOrder
 };

@@ -46,6 +46,12 @@ const orderSchema = new Schema({
   isVerified: { type: Boolean, default: false },
   isRejected: { type: Boolean, default: false },
 
+  // Status History
+  statusHistory: [{
+    status: { type: String, required: true },
+    changedAt: { type: Date, default: Date.now }
+  }],
+
   // Focus Integration Fields
   focusSyncStatus: { type: String, enum: ['PENDING', 'SUCCESS', 'FAILED'], default: 'PENDING' },
   focusOrderId: { type: String }, // ID returned by Focus

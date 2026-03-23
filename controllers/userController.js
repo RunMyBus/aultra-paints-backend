@@ -6,6 +6,7 @@ const redeemedUserModel = require("../models/redeemedUser.model");
 const UserLoginSMSModel = require("../models/UserLoginSMS");
 const axios = require("axios");
 const { validateAndCreateOTP } = require('../services/user.service');
+const { getDealerFinancialData } = require('../services/focus8Order.service');
 const { Parser } = require('json2csv');
 
 exports.getAll = async (body, res) => {
@@ -219,11 +220,19 @@ exports.userUpdate = async (id, body, res) => {
 
 exports.getUser = async (id, res) => {
     try {
-        const data = await userModel.findOne({_id: new ObjectId(id)}, {password: 0, token: 0});
+        const doc = await userModel.findOne({_id: new ObjectId(id)}, {password: 0, token: 0});
+        const data = doc.toObject();
         data.rewards = [
             {"title": "Redeemed Points", "description": "Redeemed Points Confirmation", "count": data.rewardPoints},
             {"title": "Earned Cash Reward", "description": "Earned Cash Reward Confirmation", "count": data.cash},
         ];
+
+        if (data.accountType === 'Dealer' && data.dealerCode) {
+            const { closingBalance, creditLimit } = await getDealerFinancialData(data.dealerCode);
+            data.closingBalance = closingBalance;
+            data.creditLimit = creditLimit;
+        }
+
         return res({status: 200, data: data})
     } catch (err) {
         return res({status: 500, message: err})
