@@ -7,6 +7,8 @@ const User = require("../models/User");
 const transactionLedger = require("../models/TransactionLedger");
 const { Parser } = require('json2csv');
 const moment = require('moment');
+const { getDealerAccountId } = require('./focus8Order.service');
+const redeemEligibleAccountTypes = (config.REDEEM_ELIGIBLE_ACCOUNT_TYPES || 'Dealer').split(',').map(t => t.trim());
 
 class TransactionService {
     async getTransactions(body) {
@@ -511,6 +513,18 @@ class TransactionService {
     };
 
     async redeemCouponPoints(req, res) {
+        // Only Dealers present in both our DB and Focus8 are eligible to redeem points
+        if (!redeemEligibleAccountTypes.includes(req.user.accountType)) {
+            return res.status(403).json({ message: `Only ${redeemEligibleAccountTypes.join(', ')} are eligible to redeem points.` });
+        }
+        if (!req.user.dealerCode) {
+            return res.status(403).json({ message: 'Dealer code not set. Contact support.' });
+        }
+        const focusAccountId = await getDealerAccountId(req.user.dealerCode);
+        if (!focusAccountId) {
+            return res.status(403).json({ message: 'Dealer not found in Focus8. Contact support.' });
+        }
+
         const { qrCodeUrl } = req.body;  // Assuming qr is passed as a URL parameter
 
         const qr = await this.extractValueFromUrl(qrCodeUrl);

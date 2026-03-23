@@ -8,7 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const productOffersModel = require("../models/productOffers.model");
 const userModel = require("../models/User");
-const { pushOrderToFocus8 } = require("../services/focus8Order.service");
+const { pushOrderToFocus8, getSOMobileAppOrders, getDCInvoiceForOrder, getProductMaster } = require("../services/focus8Order.service");
 
 
 async function generateInvoicePdf(order, user) {
@@ -190,7 +190,8 @@ exports.createOrder = async (req, res) => {
             finalPrice,
             createdBy: userId || '',
             status: orderStatus,
-            isVerified: isVerified
+            isVerified: isVerified,
+            statusHistory: [{ status: orderStatus, changedAt: new Date() }]
         };
         if (req.body.dealerId) {
             orderObj.dealerId = req.body.dealerId;
@@ -309,6 +310,10 @@ exports.getOrders = async (req, res) => {
                 .find(query)
                 .populate({
                     path: 'createdBy',
+                    select: 'name dealerCode mobile accountType'
+                })
+                .populate({
+                    path: 'dealerId',
                     select: 'name dealerCode mobile'
                 })
                 .sort({ createdAt: -1 })
@@ -330,15 +335,139 @@ exports.getOrders = async (req, res) => {
                 .lean();
         }
         const totalPages = Math.ceil(totalOrders / limit);
+
+        // Enrich orders with Focus8 SO data (last 6 months)
+        let focusRowsByOrderId = {};
+        try {
+            const soRows = await getSOMobileAppOrders();
+            soRows.forEach(row => {
+                const key = row['MobileAppOrderId'];
+                if (!key) return;
+                if (!focusRowsByOrderId[key]) focusRowsByOrderId[key] = [];
+                focusRowsByOrderId[key].push(row);
+            });
+        } catch (err) {
+            logger.warn('FOCUS8 :: Failed to fetch udv_SOMobileApp for order list enrichment', { message: err.message });
+        }
+
+        const enrichedOrders = orders.map(order => ({
+            ...order,
+            focusData: focusRowsByOrderId[order.orderId] || []
+        }));
+
         return res.status(200).json({
             success: true,
-            orders,
+            orders: enrichedOrders,
             total: totalOrders,
             pages: totalPages,
             currentPage: page
         });
     } catch (error) {
         logger.error('Error fetching orders ', error);
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.getOrderDetails = async (req, res) => {
+    try {
+        const user = req.user;
+        const { orderId } = req.params;
+
+        const order = await orderModel
+            .findOne({ orderId })
+            .populate({ path: 'createdBy', select: 'name mobile accountType dealerCode' })
+            .populate({ path: 'dealerId', select: 'name dealerCode mobile' })
+            .lean();
+
+        if (!order) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+
+        // Access control
+        if (user.accountType === 'Dealer') {
+            const ownerId = order.dealerId?._id?.toString() || order.createdBy?._id?.toString();
+            if (ownerId !== user._id.toString()) {
+                return res.status(403).json({ success: false, message: 'Access denied' });
+            }
+        } else if (user.accountType === 'SalesExecutive') {
+            const mappedDealers = await userModel.find(
+                { salesExecutive: user.mobile, accountType: 'Dealer', status: 'active' },
+                '_id'
+            ).lean();
+            const dealerIds = mappedDealers.map(d => d._id.toString());
+            const createdById = order.createdBy?._id?.toString();
+            const dealerId = order.dealerId?._id?.toString();
+            if (!dealerIds.includes(createdById) && !dealerIds.includes(dealerId)) {
+                return res.status(403).json({ success: false, message: 'Access denied' });
+            }
+        }
+
+        if (order.focusSyncStatus === 'SUCCESS' && order.focusOrderId) {
+            try {
+                const [dcRows, productMaster] = await Promise.all([
+                    getDCInvoiceForOrder(order.orderId, order.createdAt, order.focusOrderId),
+                    getProductMaster()
+                ]);
+
+                // Build focusProductId -> Item Name map
+                const idToName = {};
+                productMaster.forEach(p => { idToName[p.iMasterId] = p.sName; });
+
+                // Sum dispatched qty per Item Name from DC invoice
+                const dcQtyByName = {};
+                dcRows.forEach(row => {
+                    const name = row['Item Name'];
+                    if (!name) return;
+                    dcQtyByName[name] = (dcQtyByName[name] || 0) + Number(row['Quantity'] || 0);
+                });
+
+                // Compare each order item's ordered qty vs dispatched qty
+                let fullyDispatched = 0;
+                let partiallyDispatched = 0;
+
+                const itemsWithStatus = order.items.map(item => {
+                    const itemName = idToName[item.focusProductId];
+                    const dcQty = itemName ? (dcQtyByName[itemName] || 0) : 0;
+                    let itemStatus = order.status;
+                    if (dcQty >= item.quantity) {
+                        itemStatus = 'DISPATCHED';
+                        fullyDispatched++;
+                    } else if (dcQty > 0) {
+                        itemStatus = 'IN-PARCEL';
+                        partiallyDispatched++;
+                    }
+                    return { ...item, dispatchStatus: itemStatus, dispatchedQty: dcQty };
+                });
+
+                order.items = itemsWithStatus;
+
+                let derivedStatus = order.status;
+                if (fullyDispatched === itemsWithStatus.length) {
+                    derivedStatus = 'DISPATCHED';
+                } else if (fullyDispatched > 0 || partiallyDispatched > 0) {
+                    derivedStatus = 'IN-PARCEL';
+                }
+
+                // Persist the derived status to MongoDB if it changed
+                if (derivedStatus !== order.status) {
+                    await orderModel.findOneAndUpdate(
+                        { orderId },
+                        {
+                            status: derivedStatus,
+                            $push: { statusHistory: { status: derivedStatus, changedAt: new Date() } }
+                        },
+                        { new: false }
+                    );
+                    order.status = derivedStatus;
+                }
+            } catch (err) {
+                logger.warn(`FOCUS8 :: Failed to fetch DC invoice for order ${orderId}`, { message: err.message });
+            }
+        }
+
+        return res.status(200).json({ success: true, order });
+    } catch (error) {
+        logger.error('Error fetching order details', error);
         return res.status(400).json({ success: false, message: error.message });
     }
 };
@@ -387,13 +516,15 @@ exports.updateOrderStatus = async (req, res) => {
             updateData = {
                 status: 'VERIFIED',
                 isVerified: true,
-                isRejected: false
+                isRejected: false,
+                $push: { statusHistory: { status: 'VERIFIED', changedAt: new Date() } }
             };
         } else if (isVerified === 0) {
             updateData = {
                 status: 'REJECTED',
                 isVerified: false,
-                isRejected: true
+                isRejected: true,
+                $push: { statusHistory: { status: 'REJECTED', changedAt: new Date() } }
             };
         } else {
             return res.status(400).json({
