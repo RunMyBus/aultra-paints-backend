@@ -54,7 +54,8 @@ const orderSchema = new Schema({
 
   // Focus Integration Fields
   focusSyncStatus: { type: String, enum: ['PENDING', 'SUCCESS', 'FAILED'], default: 'PENDING' },
-  focusOrderId: { type: String }, // ID returned by Focus
+  focusOrderId: { type: String }, // SO VoucherNo returned by Focus
+  focusDCInvoiceId: { type: [String], default: [] }, // DC VoucherNo(s) from delivery challan
   focusSyncResponse: { type: Object }
 }, { timestamps: true });
 orderSchema.plugin(createdUpdatedPlugin);

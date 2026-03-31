@@ -246,7 +246,9 @@ exports.createOrder = async (req, res) => {
                 finalPrice,
                 gstPercentage: parseFloat(config.GST_PERCENTAGE),
                 status: orderStatus,
-                isVerified: isVerified
+                isVerified: isVerified,
+                focusOrderId: null,
+                focusDCInvoiceId: []
             },
             // invoicePdfBase64: pdfBuffer.toString('base64')
         });
@@ -405,7 +407,7 @@ exports.getOrderDetails = async (req, res) => {
         if (order.focusSyncStatus === 'SUCCESS' && order.focusOrderId) {
             try {
                 const [dcRows, productMaster] = await Promise.all([
-                    getDCInvoiceForOrder(order.orderId, order.createdAt, order.focusOrderId),
+                    getDCInvoiceForOrder(order.orderId, order.createdAt),
                     getProductMaster()
                 ]);
 
@@ -448,21 +450,34 @@ exports.getOrderDetails = async (req, res) => {
                     derivedStatus = 'IN-PARCEL';
                 }
 
-                // Persist the derived status to MongoDB if it changed
-                if (derivedStatus !== order.status) {
-                    await orderModel.findOneAndUpdate(
-                        { orderId },
-                        {
-                            status: derivedStatus,
-                            $push: { statusHistory: { status: derivedStatus, changedAt: new Date() } }
-                        },
-                        { new: false }
-                    );
-                    order.status = derivedStatus;
+                // Extract unique DC invoice IDs from fetched rows
+                const dcInvoiceIds = [...new Set(dcRows.map(r => r['DocNo']).filter(Boolean))];
+                const existingIds = (order.focusDCInvoiceId || []).slice().sort().join(',');
+                const idsChanged = dcInvoiceIds.slice().sort().join(',') !== existingIds;
+                order.focusDCInvoiceId = dcInvoiceIds;
+
+                // Persist status and/or DC invoice IDs if anything changed
+                if (derivedStatus !== order.status || idsChanged) {
+                    const updateDoc = { focusDCInvoiceId: dcInvoiceIds };
+                    if (derivedStatus !== order.status) {
+                        updateDoc.status = derivedStatus;
+                        updateDoc.$push = { statusHistory: { status: derivedStatus, changedAt: new Date() } };
+                        order.status = derivedStatus;
+                    }
+                    await orderModel.findOneAndUpdate({ orderId }, updateDoc, { new: false });
                 }
             } catch (err) {
                 logger.warn(`FOCUS8 :: Failed to fetch DC invoice for order ${orderId}`, { message: err.message });
             }
+        }
+
+        // Enrich with Focus8 SO data (same as /orders list)
+        try {
+            const soRows = await getSOMobileAppOrders();
+            order.focusData = soRows.filter(row => row['MobileAppOrderId'] === order.orderId);
+        } catch (err) {
+            logger.warn(`FOCUS8 :: Failed to fetch SO data for order ${orderId}`, { message: err.message });
+            order.focusData = [];
         }
 
         return res.status(200).json({ success: true, order });
