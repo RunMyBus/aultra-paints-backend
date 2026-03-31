@@ -289,6 +289,7 @@ async function getEntityMaster() {
  * ===============================
  */
 async function pushOrderToFocus8(order, user, entityId) {
+    let payload;
     try {
         const {
             CustomerAC__Id,
@@ -310,7 +311,7 @@ async function pushOrderToFocus8(order, user, entityId) {
 
         const Entity__Id = entityId;
 
-        const payload = {
+        payload = {
             data: [{
                 Header: {
                     CustomerAC__Id,
@@ -412,13 +413,12 @@ async function getSOMobileAppOrders() {
  * ===============================
  * Fetches delivery challan rows for a given order within a 15-day window
  * after the order creation date.
- * Links via MobileAppOrderId (primary) or DocNo (focusOrderId fallback).
+ * Links via MobileAppOrderId (primary).
  */
-async function getDCInvoiceForOrder(mobileAppOrderId, orderDate, focusOrderId) {
+async function getDCInvoiceForOrder(mobileAppOrderId, orderDate) {
     const formattedDate = formatDateForFocus8(orderDate);
     const conditions = [];
     if (mobileAppOrderId) conditions.push(`MobileAppOrderId = '${mobileAppOrderId}'`);
-    if (focusOrderId) conditions.push(`DocNo = '${focusOrderId}'`);
     const whereClause = conditions.length ? `AND (${conditions.join(' OR ')})` : '';
 
     const query = `SELECT * FROM udv_DCInvoice WHERE CONVERT(DATE, [Date], 105) BETWEEN CONVERT(DATE, '${formattedDate}', 105) AND DATEADD(DAY, 15, CONVERT(DATE, '${formattedDate}', 105)) ${whereClause}`;
