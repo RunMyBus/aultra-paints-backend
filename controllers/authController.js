@@ -85,7 +85,7 @@ exports.register = async (req, next) => {
 
 const bulkPePGActivated = config.ACTIVATE_BULKPE_PG;
 const cashFreePGActivated = config.ACTIVATE_CASHFREE_PG;
-const redeemEligibleAccountTypes = (config.REDEEM_ELIGIBLE_ACCOUNT_TYPES || 'Dealer').split(',').map(t => t.trim());
+const redeemEligibleAccountTypes = (config.CASH_REDEEM_ELIGIBLE_ACCOUNT_TYPES || 'Dealer').split(',').map(t => t.trim());
 
 exports.redeemCash = async (req, next) => {
     try {

@@ -8,7 +8,7 @@ const transactionLedger = require("../models/TransactionLedger");
 const { Parser } = require('json2csv');
 const moment = require('moment');
 const { getDealerAccountId } = require('./focus8Order.service');
-const redeemEligibleAccountTypes = (config.REDEEM_ELIGIBLE_ACCOUNT_TYPES || 'Dealer').split(',').map(t => t.trim());
+const redeemEligibleAccountTypes = (config.POINTS_REDEEM_ELIGIBLE_ACCOUNT_TYPES || 'Dealer').split(',').map(t => t.trim());
 
 class TransactionService {
     async getTransactions(body) {
