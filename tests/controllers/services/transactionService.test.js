@@ -1,6 +1,6 @@
 // Must be set before requiring transactionService — redeemEligibleAccountTypes is
 // captured as a module-level constant at require() time.
-process.env.REDEEM_ELIGIBLE_ACCOUNT_TYPES = 'Dealer';
+process.env.POINTS_REDEEM_ELIGIBLE_ACCOUNT_TYPES = 'Dealer,Painter';
 global.config = process.env;
 
 const TransactionService = require('../../../services/transactionService');
@@ -35,6 +35,8 @@ const DEALER_ID = new mongoose.Types.ObjectId();
 
 const STATIC_USER = { _id: STATIC_USER_ID, mobile: '9999999998' };
 const DEALER_USER = { _id: DEALER_ID, mobile: '9000000001', accountType: 'Dealer', dealerCode: 'D001', rewardPoints: 500 };
+const PAINTER_ID = new mongoose.Types.ObjectId();
+const PAINTER_USER = { _id: PAINTER_ID, mobile: '9000000002', accountType: 'Painter', dealerCode: 'P001', rewardPoints: 200 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -132,10 +134,10 @@ describe('TransactionService', () => {
             };
         }
 
-        // ─── Dealer eligibility guard ─────────────────────────────────────
+        // ─── Eligibility guard ────────────────────────────────────────────
 
-        test('should return 403 if user is not a Dealer', async () => {
-            const req = makeReq({ accountType: 'Painter' });
+        test('should return 403 if user account type is not eligible for points redemption', async () => {
+            const req = makeReq({ accountType: 'SubDealer' });
             const res = makeRes();
 
             await TransactionService.redeemCouponPoints(req, res);
@@ -230,6 +232,38 @@ describe('TransactionService', () => {
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 message: expect.stringContaining('Successfully'),
                 data: expect.objectContaining({ rewardPoints: 150, couponCode: 'C001' })
+            }));
+        });
+
+        test('should redeem points and return 200 for a valid Painter', async () => {
+            const req = { user: { ...PAINTER_USER }, body: { qrCodeUrl: QR_URL } };
+            const res = makeRes();
+
+            const mockDoc = { _id: 'txn2', UDID: 'TEST-UDID-001', couponCode: 'C002', pointsRedeemedBy: undefined };
+            const updatedTxn = { ...mockDoc, pointsRedeemedBy: PAINTER_USER.mobile, redeemablePoints: 100, updatedBy: PAINTER_ID };
+            const updatedUser = { ...PAINTER_USER, rewardPoints: 300 };
+
+            getDealerAccountId.mockResolvedValue(55);
+            Transaction.findOne = jest.fn().mockResolvedValue(mockDoc);
+            User.findOne = jest.fn().mockResolvedValue(STATIC_USER);
+            Transaction.findOneAndUpdate = jest.fn().mockResolvedValue(updatedTxn);
+            User.findOneAndUpdate = jest.fn().mockResolvedValue(updatedUser);
+            transactionLedger.create = jest.fn().mockResolvedValue({});
+
+            await TransactionService.redeemCouponPoints(req, res);
+
+            expect(getDealerAccountId).toHaveBeenCalledWith('P001');
+            expect(Transaction.findOneAndUpdate).toHaveBeenCalledWith(
+                { UDID: 'TEST-UDID-001' },
+                expect.objectContaining({ $set: expect.objectContaining({ pointsRedeemedBy: PAINTER_USER.mobile }) }),
+                { new: true }
+            );
+            expect(User.findOneAndUpdate).toHaveBeenCalled();
+            expect(transactionLedger.create).toHaveBeenCalled();
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                message: expect.stringContaining('Successfully'),
+                data: expect.objectContaining({ rewardPoints: 100, couponCode: 'C002' })
             }));
         });
     });

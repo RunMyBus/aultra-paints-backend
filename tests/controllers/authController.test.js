@@ -2,7 +2,7 @@
 // at require() time, so setting them after is too late.
 process.env.ACTIVATE_CASHFREE_PG = 'true';
 process.env.ACTIVATE_BULKPE_PG = 'false';
-process.env.REDEEM_ELIGIBLE_ACCOUNT_TYPES = 'Dealer';
+process.env.CASH_REDEEM_ELIGIBLE_ACCOUNT_TYPES = 'Dealer';
 global.config = process.env;
 
 const authController = require('../../controllers/authController');
