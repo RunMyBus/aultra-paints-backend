@@ -3,13 +3,14 @@ const config = process.env;
 const LocalStrategy = require('passport-local');
 const JwtStrategy = require('passport-jwt').Strategy;
 const ExtractJwt = require('passport-jwt').ExtractJwt;
-const User = require('../models/User'); 
-const bcrypt = require('bcryptjs');
+const User = require('../models/User');
 const UserLoginSMSModel = require("../models/UserLoginSMS");
 const StaticPhoneNumbers = require('../models/staticPhoneNumbers');
+const { JWT_SECRET, IS_PROD } = require('../config/secrets');
 
-// static OTP
-const STATIC_OTP = 123456; 
+// Static OTP bypass — gated to non-prod environments only.
+const STATIC_OTP_ENABLED = !IS_PROD && process.env.STATIC_OTP_ENABLED !== 'false';
+const STATIC_OTP = String(process.env.STATIC_OTP || 123456);
 
 const localLogin = new LocalStrategy({usernameField: 'mobile', passwordField: 'otp'}, async (mobile, otp, done) => {
     if (!mobile || !otp) {
@@ -20,11 +21,11 @@ const localLogin = new LocalStrategy({usernameField: 'mobile', passwordField: 'o
         if (!user) {
             return done({status: 400, message: 'MOBILE NOT FOUND'});
         } else {
-            const staticPhoneNumbers = await StaticPhoneNumbers.find();
+            const staticPhoneNumbers = STATIC_OTP_ENABLED ? await StaticPhoneNumbers.find() : [];
             const mobileNumbers = staticPhoneNumbers.map(doc => doc.mobile);
 
-            if (mobileNumbers.includes(mobile)) {
-                if (otp === STATIC_OTP) {
+            if (STATIC_OTP_ENABLED && mobileNumbers.includes(mobile)) {
+                if (String(otp) === STATIC_OTP) {
                     return done(null, user);
                 } else {
                     return done({status: 400, message: 'INVALID OTP'});
@@ -53,7 +54,7 @@ const localLogin = new LocalStrategy({usernameField: 'mobile', passwordField: 'o
 
 const opts = {
     jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-    secretOrKey: 'aultra-paints',
+    secretOrKey: JWT_SECRET,
 };
 
 const jwtLogin = new JwtStrategy(

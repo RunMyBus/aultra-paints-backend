@@ -3,6 +3,7 @@ const AWS = require('aws-sdk');
 const {decodeBase64Image} = require('../services/utils.service');
 const s3 = require("../config/aws");
 const multer = require("multer");
+const { escapeRegex, clampLimit, clampPage } = require('../utils/validators');
 
 exports.createRewardScheme = async (req, res) => {
     const {rewardSchemeStatus} = req.body;
@@ -49,15 +50,17 @@ exports.createRewardScheme = async (req, res) => {
 }
 
 exports.searchRewardSchemes = async (req, res) => {
-    const { page = 1, limit = 10, searchQuery = '' } = req.body;
-    
+    const { searchQuery = '' } = req.body;
+    const page = clampPage(req.body.page);
+    const limit = clampLimit(req.body.limit);
+
     try {
         const skip = (page - 1) * limit;
-        const query = searchQuery ? { name: { $regex: searchQuery, $options: 'i' } } : {};
+        const query = searchQuery ? { name: { $regex: escapeRegex(String(searchQuery)), $options: 'i' } } : {};
 
         const data = await rewardSchemesModel.find(query)
             .skip(skip)
-            .limit(Number(limit))
+            .limit(limit)
             .sort({ createdAt: -1 });
 
         const totalSchemes = await rewardSchemesModel.countDocuments(query);

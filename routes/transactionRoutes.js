@@ -4,15 +4,11 @@ const transactionController = require('../controllers/transactionController');
 const passport = require('../middleware/passport');
 
 router.use(passport.authenticate('jwt', { session: false }));
+const { requireRole, ADMIN, STAFF } = require('../middleware/authorize');
 
-// Existing route to get all transactions for a batch
-router.post('/', transactionController.getAllTransactions);
-
-router.post('/export', transactionController.exportTransactions);
-
-// New route to mark transaction as processed
+router.post('/', requireRole(STAFF), transactionController.getAllTransactions);
+router.post('/export', requireRole(ADMIN), transactionController.exportTransactions);
 router.patch('/mark-processed/:qr', transactionController.markTransactionAsProcessed);
-
 router.post('/redeemPoints', transactionController.redeemPoints);
 
 module.exports = router;

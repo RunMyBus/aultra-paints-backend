@@ -12,10 +12,11 @@ const logger = require("../utils/logger");
 const cashFreePaymentService = require('../services/cashFreePaymentService');
 const BulkPePaymentService = require('../services/bulkPePaymentService');
 const { validateAndCreateOTP } = require('../services/user.service');
+const { JWT_SECRET } = require('../config/secrets');
 
 async function generateToken(user, next) {
     try {
-        const token = jwt.sign(user, 'aultra-paints');
+        const token = jwt.sign(user, JWT_SECRET);
         if (user) {
             await User.findByIdAndUpdate(user._id, {token})
         }
@@ -45,32 +46,23 @@ exports.login = async (req, next) => {
 }
 
 exports.register = async (req, next) => {
-    const { name, email, password, mobile } = req.body; 
+    // Whitelist fields — never allow the client to set rewardPoints, cash,
+    // token, accountType, or any server-controlled flag on self-signup.
+    const { isValidMobile } = require('../utils/validators');
     try {
-        // Check if the user already exists by email
-        // let user = await User.findOne({ email });
-        // if (user) {
-        //     return next({ status: 400, message: 'User already exists with this email' });
-        // }
+        if (!mobile || !isValidMobile(mobile)) {
+            return next({ status: 400, message: 'Valid mobile number is required' });
+        }
 
-        // Check if the mobile number already exists
-        user = await User.findOne({ mobile });
-        if (user) {
+        const existing = await User.findOne({ mobile });
+        if (existing) {
             return next({ status: 400, message: 'Mobile number already exists' });
         }
 
-        // Ensure mobile number is provided
-        if (!mobile) {
-            return next({ status: 400, message: 'Mobile number is required' });
-        }
-
-        // const salt = await bcrypt.genSalt(10);
-        // const hashedPassword = await bcrypt.hash(password, salt);
-
-        // Create a new user instance
-        user = new User({
-            name,
-            mobile, 
+        const user = new User({
+            name: typeof name === 'string' ? name.trim().slice(0, 100) : undefined,
+            email: typeof email === 'string' ? email.trim().slice(0, 120) : undefined,
+            mobile,
         });
 
         await user.save();
@@ -90,43 +82,59 @@ exports.redeemCash = async (req, next) => {
         const { mobile, upi } = req.body;
         const qr = req.params.qrCodeID;
 
-        // Find the user by mobile number
+        const { isValidMobile, isValidUpi } = require('../utils/validators');
+        if (!isValidMobile(mobile)) return next({ status: 400, message: 'Invalid mobile.' });
+        if (!isValidUpi(upi)) return next({ status: 400, message: 'Invalid UPI ID.' });
+
         let user = await User.findOne({ mobile });
 
-        // Find the transaction by the QR code
-        const transaction = await Transaction.findOne({ UDID: qr });
+        // Atomic claim — close the race where two concurrent redemptions
+        // both saw cashRedeemedBy as undefined and both succeeded.
+        // Payment is initiated only after the claim succeeds.
+        const transaction = await Transaction.findOneAndUpdate(
+            { UDID: qr, cashRedeemedBy: { $exists: false } },
+            { $set: { cashRedeemedBy: mobile, cashRedeemedAt: new Date(), upiId: upi } },
+            { new: true }
+        );
+
         if (!transaction) {
-            return next({status: 404, message: `Transaction not found for QR code: ${qr}` });
+            const existing = await Transaction.findOne({ UDID: qr }).select('_id cashRedeemedBy');
+            if (!existing) return next({ status: 404, message: `Transaction not found for QR code: ${qr}` });
+            return next({ status: 409, message: 'Coupon already redeemed.' });
         }
-
-        if (transaction.cashRedeemedBy !== undefined) {
-            return next({status: 400, message: 'Coupon already redeemed.' });
-        }
-
-        /*const paymentResult = await cashFreePaymentService.pay2Phone(mobile, name, transaction.value);
-        if (!paymentResult.success) {
-            return next({ status: 400, message: paymentResult.message });
-        }*/
 
         const beneficiaryName = user?.name || mobile.toString();
         let paymentResult;
 
-        if (bulkPePGActivated === 'true') {
-            paymentResult = await BulkPePaymentService.upiPayment(upi, beneficiaryName, transaction.value);
-        } else if (cashFreePGActivated === 'true') {
-            paymentResult = await cashFreePaymentService.upiPayment(upi, mobile, transaction.value);
-        } else {
-            throw new Error('No payment gateway is enabled in environment variables.');
+        try {
+            if (bulkPePGActivated === 'true') {
+                paymentResult = await BulkPePaymentService.upiPayment(upi, beneficiaryName, transaction.value);
+            } else if (cashFreePGActivated === 'true') {
+                paymentResult = await cashFreePaymentService.upiPayment(upi, mobile, transaction.value);
+            } else {
+                throw new Error('No payment gateway is enabled in environment variables.');
+            }
+        } catch (payErr) {
+            // Release the claim so the coupon can be retried.
+            await Transaction.updateOne(
+                { _id: transaction._id },
+                { $unset: { cashRedeemedBy: '', cashRedeemedAt: '', upiId: '' } }
+            );
+            throw payErr;
         }
+
         if (!paymentResult.success) {
+            await Transaction.updateOne(
+                { _id: transaction._id },
+                { $unset: { cashRedeemedBy: '', cashRedeemedAt: '', upiId: '' } }
+            );
             return next({ status: 400, message: paymentResult.message });
         }
 
-        // If the user is found, update the transaction and user
         if (user) {
             const updatedTransaction = await Transaction.findOneAndUpdate(
                 { UDID: qr },
-                { $set: { updatedBy: user._id, cashRedeemedBy: req.body.mobile, cashRedeemedAt: new Date(), upiId: upi } },
+                { $set: { updatedBy: user._id } },
                 { new: true }
             );
 

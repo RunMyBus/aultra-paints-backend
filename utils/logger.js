@@ -3,6 +3,13 @@ const readline = require('readline');
 const pmx = require('pmx')
 const path = require('path');
 const requestContext = require('./requestContext');
+const { redact } = require('./redact');
+
+const redactFormat = winston.format((info) => {
+    const { level, message, timestamp, ...rest } = info;
+    const cleaned = redact(rest);
+    return Object.assign({}, cleaned, { level, message, timestamp });
+})();
 
 // Ensure logs directory exists
 const fs = require('fs');
@@ -14,6 +21,7 @@ const logger = winston.createLogger({
     level: process.env.LOG_LEVEL || 'info',
     format: winston.format.combine(
         winston.format.timestamp(),
+        redactFormat,
         winston.format.printf(({ level, message, timestamp, ...metadata }) => {
             const pid = process.pid;
             const context = requestContext.get();
@@ -80,6 +88,7 @@ pmx.action('set-log-level', (level, reply) => {
 if (process.env.NODE_ENV !== 'production') {
     logger.add(new winston.transports.Console({
         format: winston.format.combine(
+            redactFormat,
             winston.format.colorize(),
             winston.format.printf(({ level, message, timestamp, ...metadata }) => {
                 const pid = process.pid;

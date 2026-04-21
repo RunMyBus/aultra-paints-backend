@@ -7,6 +7,7 @@ const User = require("../models/User");
 const transactionLedger = require("../models/TransactionLedger");
 const { Parser } = require('json2csv');
 const moment = require('moment');
+const { escapeRegex, clampLimit, clampPage } = require('../utils/validators');
 
 class TransactionService {
     async getTransactions(body) {
@@ -17,8 +18,8 @@ class TransactionService {
         });
 
         try {
-            const page = parseInt(body.page || 1);
-            const limit = parseInt(body.limit || 10);
+            const page = clampPage(body.page);
+            const limit = clampLimit(body.limit);
             const skip = (page - 1) * limit;
 
             const { searchKey, pointsRedeemedBy, cashRedeemedBy, couponCode, showUsedCoupons, salesExecutiveMobile  } = body;
@@ -46,10 +47,11 @@ class TransactionService {
             // }
 
             if (searchKey) {
+                const safeKey = escapeRegex(String(searchKey));
                 query.$or = [
                     { couponCode: parseInt(searchKey) },
-                    { pointsRedeemedBy: { $regex: searchKey, $options: 'i' } },
-                    { cashRedeemedBy: { $regex: searchKey, $options: 'i' } }
+                    { pointsRedeemedBy: { $regex: safeKey, $options: 'i' } },
+                    { cashRedeemedBy: { $regex: safeKey, $options: 'i' } }
                 ];
                 logger.debug('Search query built', {
                     searchQuery: query.$or,
@@ -141,11 +143,11 @@ class TransactionService {
 
             
             if (pointsRedeemedBy) {
-                query.pointsRedeemedBy = { $regex: pointsRedeemedBy, $options: 'i' };
+                query.pointsRedeemedBy = { $regex: escapeRegex(String(pointsRedeemedBy)), $options: 'i' };
             }
 
             if (cashRedeemedBy) {
-                query.cashRedeemedBy = { $regex: cashRedeemedBy, $options: 'i' };
+                query.cashRedeemedBy = { $regex: escapeRegex(String(cashRedeemedBy)), $options: 'i' };
             }
 
             if (couponCode) {
@@ -266,10 +268,11 @@ class TransactionService {
             // ];
 
             if (searchKey) {
+                const safeKey = escapeRegex(String(searchKey));
                 query.$or = [
                     { couponCode: parseInt(searchKey) },
-                    { pointsRedeemedBy: { $regex: searchKey, $options: 'i' } },
-                    { cashRedeemedBy: { $regex: searchKey, $options: 'i' } }
+                    { pointsRedeemedBy: { $regex: safeKey, $options: 'i' } },
+                    { cashRedeemedBy: { $regex: safeKey, $options: 'i' } }
                 ];
                 logger.debug('Search query built', {
                     searchQuery: query.$or,
@@ -361,11 +364,11 @@ class TransactionService {
 
 
             if (pointsRedeemedBy) {
-                query.pointsRedeemedBy = { $regex: pointsRedeemedBy, $options: 'i' };
+                query.pointsRedeemedBy = { $regex: escapeRegex(String(pointsRedeemedBy)), $options: 'i' };
             }
 
             if (cashRedeemedBy) {
-                query.cashRedeemedBy = { $regex: cashRedeemedBy, $options: 'i' };
+                query.cashRedeemedBy = { $regex: escapeRegex(String(cashRedeemedBy)), $options: 'i' };
             }
 
             if (couponCode) {

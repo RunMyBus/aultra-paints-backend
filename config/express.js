@@ -11,16 +11,21 @@ const helmet = require('helmet');
 const routes = require('../routes/index');
 const passport = require('../middleware/passport');
 const scheduler = require('../crons/UpdatePendingCashFreeTransfers');
+const { SESSION_SECRET, IS_PROD } = require('./secrets');
 
 const requestContext = require('../utils/requestContext');
 
 const app = express();
 
 app.use(session({
-    secret: 'aultra-paints',
+    secret: SESSION_SECRET,
     resave: false,
-    saveUninitialized: true,
-    cookie: {}
+    saveUninitialized: false,
+    cookie: {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: IS_PROD,
+    }
 }));
 
 var distDir = '../../dist/';

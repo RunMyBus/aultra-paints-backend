@@ -53,6 +53,66 @@ async function generateInvoicePdf(order, user) {
     return pdfBuffer;
 }
 
+// Perform a Focus 8 push asynchronously and persist the outcome via updateOne.
+// Failures are logged with enough context that ops can find and retry them.
+async function runFocusSync(orderDocId, orderId, order, dealer, entityId) {
+    try {
+        const result = await pushOrderToFocus8(order, dealer, entityId);
+        const update = result.success
+            ? {
+                focusSyncStatus: 'SUCCESS',
+                focusOrderId: result.voucherNo,
+                focusSyncResponse: result.focus8Response,
+            }
+            : {
+                focusSyncStatus: 'FAILED',
+                focusSyncResponse: result.focus8Response,
+            };
+        await orderModel.updateOne({ _id: orderDocId }, { $set: update });
+        if (!result.success) {
+            logger.warn('Focus 8 sync failed', { orderId, focus8Response: result.focus8Response });
+        }
+    } catch (focusError) {
+        logger.error('Focus 8 push threw', { orderId, error: focusError.message });
+        await orderModel.updateOne(
+            { _id: orderDocId },
+            { $set: {
+                focusSyncStatus: 'FAILED',
+                focusSyncResponse: focusError.response?.data || { message: focusError.message },
+            } }
+        );
+    }
+}
+
+// Admin retry for stuck orders.
+exports.retryFocusSync = async (req, res) => {
+    try {
+        const { orderId } = req.body;
+        if (!orderId) return res.status(400).json({ success: false, message: 'orderId is required' });
+
+        const order = await orderModel.findOne({ orderId });
+        if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+        if (order.focusSyncStatus === 'SUCCESS') {
+            return res.status(400).json({ success: false, message: 'Order already synced to Focus 8' });
+        }
+
+        const dealer = order.dealerId
+            ? await userModel.findById(order.dealerId)
+            : await userModel.findById(order.createdBy);
+        if (!dealer) {
+            return res.status(404).json({ success: false, message: 'Dealer not found for order' });
+        }
+
+        // Mark pending, kick off, return immediately.
+        await orderModel.updateOne({ _id: order._id }, { $set: { focusSyncStatus: 'PENDING' } });
+        runFocusSync(order._id, order.orderId, order, dealer, req.body.entityId || 1);
+        return res.status(200).json({ success: true, message: 'Retry initiated', orderId });
+    } catch (error) {
+        logger.error('Focus 8 retry failed', { error: error.message });
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 async function getNextOrderId() {
     // Find the order with the highest orderId
     const latestOrder = await orderModel.findOne({ orderId: { $exists: true } })
@@ -90,77 +150,77 @@ exports.createOrder = async (req, res) => {
             return res.status(400).json({ success: false, message: 'No items provided for order.' });
         }
 
-        // Populate missing focusProductId and focusUnitId
-        const itemsMissingFocusData = items.filter(item => !item.focusProductId || !item.focusUnitId);
+        // Fetch every referenced offer so we can (a) enrich Focus 8 IDs and
+        // (b) re-derive prices server-side — never trust client-supplied prices.
+        const productIds = items.map(i => i._id).filter(Boolean);
+        const offers = await productOffersModel.find({ _id: { $in: productIds } })
+            .select('focusProductId focusUnitId focusProductMapping productOfferDescription price offerAvailable');
+        const offerMap = new Map(offers.map(o => [o._id.toString(), o]));
 
-        if (itemsMissingFocusData.length > 0) {
-            const productIds = itemsMissingFocusData.map(item => item._id).filter(id => id);
+        for (const item of items) {
+            if (!item._id || !offerMap.has(item._id.toString())) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Unknown product offer: ${item._id || item.productOfferDescription}`
+                });
+            }
+            const offer = offerMap.get(item._id.toString());
+            if (offer.offerAvailable === false) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Offer is no longer available: ${offer.productOfferDescription}`
+                });
+            }
 
-            if (productIds.length > 0) {
-                const products = await productOffersModel.find({
-                    _id: { $in: productIds }
-                }).select('focusProductId focusUnitId focusProductMapping productOfferDescription');
+            const qty = Number(item.quantity);
+            if (!Number.isInteger(qty) || qty <= 0 || qty > 10000) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Invalid quantity for ${offer.productOfferDescription}`
+                });
+            }
+            item.quantity = qty;
 
-                const productMap = products.reduce((acc, curr) => {
-                    acc[curr._id.toString()] = {
-                        focusProductId: curr.focusProductId,
-                        focusUnitId: curr.focusUnitId,
-                        focusProductMapping: curr.focusProductMapping,
-                        productOfferDescription: curr.productOfferDescription
-                    };
-                    return acc;
-                }, {});
+            // Resolve authoritative unit price by volume (falls back to any tier if volume absent).
+            const priceTier = (offer.price || []).find(p => p.volume === item.volume) || (offer.price || [])[0];
+            if (!priceTier || typeof priceTier.price !== 'number') {
+                return res.status(400).json({
+                    success: false,
+                    message: `No price configured for ${offer.productOfferDescription} @ ${item.volume}`
+                });
+            }
+            // Overwrite any client-supplied price with the server-side value.
+            item.productPrice = priceTier.price;
 
-                for (const item of items) {
-                    if (item._id && productMap[item._id.toString()]) {
-                        const productData = productMap[item._id.toString()];
-                        
-                        // Check if product has volume-specific mapping (grouping)
-                        if (productData.focusProductMapping && productData.focusProductMapping.length > 0 && item.volume) {
-                            // Find the mapping for this specific volume
-                            const volumeMapping = productData.focusProductMapping.find(
-                                mapping => mapping.volume === item.volume
-                            );
-                            
-                            if (volumeMapping) {
-                                if (!item.focusProductId) {
-                                    item.focusProductId = volumeMapping.focusProductId;
-                                    logger.info(`ORDER :: Using volume-specific Focus Product ID ${volumeMapping.focusProductId} for volume ${item.volume}`);
-                                }
-                                if (!item.focusUnitId) {
-                                    item.focusUnitId = volumeMapping.focusUnitId || 1;
-                                }
-                            } else {
-                                logger.warn(`ORDER :: No volume mapping found for volume ${item.volume} in product ${item._id}`);
-                                // Fall back to legacy fields if volume mapping not found
-                                if (!item.focusProductId && productData.focusProductId) {
-                                    item.focusProductId = productData.focusProductId;
-                                }
-                                if (!item.focusUnitId && productData.focusUnitId) {
-                                    item.focusUnitId = productData.focusUnitId;
-                                }
-                            }
-                        } else {
-                            return res.status(400).json({
-                                success: false,
-                                message: `No focus product mapping found for product ${item.productOfferDescription}`
-                            });
-                        }
+            // Resolve Focus 8 IDs.
+            if (!item.focusProductId || !item.focusUnitId) {
+                if (offer.focusProductMapping && offer.focusProductMapping.length > 0 && item.volume) {
+                    const volumeMapping = offer.focusProductMapping.find(m => m.volume === item.volume);
+                    if (volumeMapping) {
+                        item.focusProductId = item.focusProductId || volumeMapping.focusProductId;
+                        item.focusUnitId = item.focusUnitId || volumeMapping.focusUnitId || 1;
+                    } else {
+                        logger.warn(`ORDER :: No volume mapping found for volume ${item.volume} in product ${item._id}`);
+                        item.focusProductId = item.focusProductId || offer.focusProductId;
+                        item.focusUnitId = item.focusUnitId || offer.focusUnitId;
                     }
+                } else {
+                    item.focusProductId = item.focusProductId || offer.focusProductId;
+                    item.focusUnitId = item.focusUnitId || offer.focusUnitId || 1;
                 }
             }
         }
 
-        // Calculate total price from items
+        // Re-compute total from authoritative prices; reject if client disagrees.
         let calculatedTotalPrice = 0;
         items.forEach(item => {
             calculatedTotalPrice += (item.productPrice || 0) * (item.quantity || 1);
         });
-        // check total price mismatch
-        if (Number(calculatedTotalPrice.toFixed(2)) !== Number(Number(totalPrice).toFixed(2))) {
+        calculatedTotalPrice = Number(calculatedTotalPrice.toFixed(2));
+        if (totalPrice !== undefined && Number(Number(totalPrice).toFixed(2)) !== calculatedTotalPrice) {
             return res.status(400).json({
                 success: false,
-                message: 'Price mismatch: totalPrice does not match the sum of item prices.'
+                message: 'Price mismatch: totalPrice does not match the server-computed total.'
             });
         }
 
@@ -207,27 +267,11 @@ exports.createOrder = async (req, res) => {
             orderCreatedForDetails = req.user;
         }
 
-        // Only push to Focus8 if the order is verified (i.e., created by SalesExecutive)
-        // Dealer orders will be pushed to Focus8 after approval
+        // Kick off Focus 8 sync but return the API response immediately with
+        // focusSyncStatus: PENDING so the client can poll. Persist via updateOne
+        // (not order.save) to avoid racing the in-memory document.
         if (req.user.accountType === 'SalesExecutive') {
-            pushOrderToFocus8(order, orderCreatedForDetails, entityId)
-                .then(async (focusResult) => {
-                    if (focusResult.success) {
-                        order.focusSyncStatus = 'SUCCESS';
-                        order.focusOrderId = focusResult.voucherNo; // Using VoucherNo as the ID reference
-                        order.focusSyncResponse = focusResult.focus8Response;
-                    } else {
-                        order.focusSyncStatus = 'FAILED';
-                        order.focusSyncResponse = focusResult.focus8Response;
-                    }
-                    await order.save();
-                })
-                .catch(async (focusError) => {
-                    logger.error('Focus8 Push Failed for Order ' + orderId, focusError);
-                    order.focusSyncStatus = 'FAILED';
-                    order.focusSyncResponse = focusError.response?.data || { message: focusError.message };
-                    await order.save();
-                });
+            runFocusSync(order._id, orderId, order, orderCreatedForDetails, entityId);
         }
 
         // const pdfBuffer = await generateInvoicePdf(order, req.user);
@@ -412,30 +456,11 @@ exports.updateOrderStatus = async (req, res) => {
             }
         );
 
-        // If order is verified, push to Focus8
+        // If order is verified, push to Focus 8 via the safe async helper.
         if (isVerified === 1) {
-            // Get the dealer who created the order to use their details for Focus8
             const dealer = await userModel.findById(order.createdBy);
-            
             if (dealer) {
-                pushOrderToFocus8(updatedOrder, dealer, entityId)
-                    .then(async (focusResult) => {
-                        if (focusResult.success) {
-                            updatedOrder.focusSyncStatus = 'SUCCESS';
-                            updatedOrder.focusOrderId = focusResult.voucherNo;
-                            updatedOrder.focusSyncResponse = focusResult.focus8Response;
-                        } else {
-                            updatedOrder.focusSyncStatus = 'FAILED';
-                            updatedOrder.focusSyncResponse = focusResult.focus8Response;
-                        }
-                        await updatedOrder.save();
-                    })
-                    .catch(async (focusError) => {
-                        logger.error('Focus8 Push Failed for Order ' + orderId, focusError);
-                        updatedOrder.focusSyncStatus = 'FAILED';
-                        updatedOrder.focusSyncResponse = focusError.response?.data || { message: focusError.message };
-                        await updatedOrder.save();
-                    });
+                runFocusSync(updatedOrder._id, orderId, updatedOrder, dealer, entityId);
             } else {
                 logger.error('Dealer not found for order ', { orderId });
             }

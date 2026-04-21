@@ -59,82 +59,66 @@ exports.exportTransactions = async (req, res) => {
 };
 
 exports.markTransactionAsProcessed = async (req, res) => {
-    const { qr } = req.params;  // Assuming qr is passed as a URL parameter
+    const { qr } = req.params;
 
     try {
-        const document = await Transaction.findOne({ UDID:  qr });
-        if (!document) {
-            return res.status(404).json({ message: 'Coupon not found.' })
+        // Atomic claim: only succeeds if pointsRedeemedBy is not already set.
+        // This single operation replaces the previous check-then-update pattern,
+        // closing a race where two concurrent scans could both redeem a coupon.
+        const claimed = await Transaction.findOneAndUpdate(
+            { UDID: qr, pointsRedeemedBy: { $exists: false } },
+            {
+                $set: {
+                    updatedBy: req.user._id,
+                    pointsRedeemedBy: req.user.mobile,
+                    pointsRedeemedAt: new Date(),
+                },
+            },
+            { new: true }
+        );
+
+        if (!claimed) {
+            // Distinguish "not found" from "already redeemed" without leaking timing.
+            const existing = await Transaction.findOne({ UDID: qr }).select('_id pointsRedeemedBy');
+            if (!existing) return res.status(404).json({ message: 'Coupon not found.' });
+            return res.status(409).json({ message: 'Coupon Redeemed already.' });
         }
-        if(document.pointsRedeemedBy !== undefined) {
-            return res.status(404).json({ message: 'Coupon Redeemed already.' });
-        } else {
-            const staticUserData = await userModel.findOne({mobile: '9999999998'});
-            let userId = req.user._id.toString();
-            let updatedTransaction = {};
-            if (userId === staticUserData._id.toString()) {
-                updatedTransaction = await Transaction.findOneAndUpdate(
-                    {UDID: qr},  // Match the QR code
-                    {updatedBy: req.user._id },
-                    {new: true}  // Return the updated document
-                );
-                updatedTransaction.pointsRedeemedBy = staticUserData.mobile;
-            }else {
-                // Find the transaction and update isProcessed to true
-                updatedTransaction = await Transaction.findOneAndUpdate(
-                    {UDID: qr},  // Match the QR code
-                    {updatedBy: req.user._id, pointsRedeemedBy: req.user.mobile },
-                    {new: true}  // Return the updated document
-                );
-            }
-            let userData = {};
-            if (updatedTransaction.pointsRedeemedBy !== undefined) {
-                const rewardPointsCount = updatedTransaction.redeemablePoints || 0;
-                // Update the user fields safely
-                userData = await User.findOneAndUpdate(
-                    { _id: updatedTransaction.updatedBy },
-                    [
-                        {
-                            $set: {
-                                rewardPoints: {
-                                    $add: [{ $ifNull: ["$rewardPoints", 0] }, rewardPointsCount],
-                                }/*,
-                                cash: {
-                                    $add: [{ $ifNull: ["$cash", 0] }, cashCount],
-                                }*/
-                            }
-                        }
-                    ],
-                    { new: true } // Return the updated document
-                );
 
-                if (!userData) {
-                    return res.status(404).json({ message: 'User not found for update.' });
-                }
-            }
+        const rewardPointsCount = claimed.redeemablePoints || 0;
+        const userData = await User.findOneAndUpdate(
+            { _id: claimed.updatedBy },
+            { $inc: { rewardPoints: rewardPointsCount } },
+            { new: true }
+        );
 
-            if (!updatedTransaction) {
-                return res.status(404).json({message: 'Transaction not found.'});
-            }
-
-            const data = {
-                rewardPoints: updatedTransaction.redeemablePoints,
-                couponCode: document.couponCode
-            }
-
-            await transactionLedger.create({
-                narration: `Scanned coupon ${updatedTransaction.couponCode} and redeemed points.`,
-                amount: `+ ${updatedTransaction.redeemablePoints}`,
-                balance: userData.rewardPoints,
-                userId: userData._id,
-                couponId: updatedTransaction._id
+        if (!userData) {
+            logger.error('Redeeming user not found after atomic claim; rolling back', {
+                transactionId: claimed._id,
+                userId: claimed.updatedBy,
             });
-
-            return res.status(200).json({message: "Coupon redeemed Successfully..!", data: data});
+            // Best-effort rollback so the coupon can be re-redeemed.
+            await Transaction.updateOne(
+                { _id: claimed._id },
+                { $unset: { pointsRedeemedBy: '', pointsRedeemedAt: '', updatedBy: '' } }
+            );
+            return res.status(404).json({ message: 'User not found for update.' });
         }
+
+        await transactionLedger.create({
+            narration: `Scanned coupon ${claimed.couponCode} and redeemed points.`,
+            amount: `+ ${claimed.redeemablePoints}`,
+            balance: userData.rewardPoints,
+            userId: userData._id,
+            couponId: claimed._id,
+        });
+
+        return res.status(200).json({
+            message: 'Coupon redeemed Successfully..!',
+            data: { rewardPoints: claimed.redeemablePoints, couponCode: claimed.couponCode },
+        });
     } catch (error) {
-        console.log(error);
-        return res.status(500).json({ error: error.message });
+        logger.error('Error in markTransactionAsProcessed', { error: error.message });
+        return res.status(500).json({ error: 'Failed to redeem coupon.' });
     }
 };
 

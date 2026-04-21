@@ -7,6 +7,25 @@ const UserLoginSMSModel = require("../models/UserLoginSMS");
 const axios = require("axios");
 const { validateAndCreateOTP } = require('../services/user.service');
 const { Parser } = require('json2csv');
+const { escapeRegex, clampLimit, clampPage, isValidMobile } = require('../utils/validators');
+
+// Server-controlled fields that must never be accepted from the client.
+const USER_PROTECTED_FIELDS = ['rewardPoints', 'cash', 'token', '_id', 'createdAt', 'updatedAt', '__v'];
+const USER_ALLOWED_CREATE_FIELDS = [
+    'name', 'mobile', 'address', 'email', 'primaryContactPerson', 'primaryContactPersonMobile',
+    'dealerCode', 'parentDealerCode', 'accountType', 'upiID', 'salesExecutive',
+    'state', 'zone', 'district', 'status'
+];
+const USER_ALLOWED_UPDATE_FIELDS = USER_ALLOWED_CREATE_FIELDS.filter(f => f !== 'accountType');
+
+function pickFields(input, allowed) {
+    if (!input || typeof input !== 'object') return {};
+    const out = {};
+    for (const key of allowed) {
+        if (input[key] !== undefined) out[key] = input[key];
+    }
+    return out;
+}
 
 exports.getAll = async (body, res) => {
     try {
@@ -19,8 +38,8 @@ exports.getAll = async (body, res) => {
 
 exports.searchUser = async (body, res) => {
     try {
-        let page = parseInt(body.page || 1);
-        let limit = parseInt(body.limit || 10);
+        let page = clampPage(body.page);
+        let limit = clampLimit(body.limit);
         let query = {};
 
          // Initialize the $or condition
@@ -28,9 +47,10 @@ exports.searchUser = async (body, res) => {
 
 // Filter by search query (name, mobile,)
         if (body.searchQuery) {
+            const safe = escapeRegex(String(body.searchQuery).trim());
             query['$or'] = [
-                { 'name': { $regex: new RegExp(body.searchQuery.trim(), "i") } },
-                { 'mobile': { $regex: new RegExp(body.searchQuery.trim(), "i") } }
+                { 'name': { $regex: new RegExp(safe, "i") } },
+                { 'mobile': { $regex: new RegExp(safe, "i") } }
             ];
             
             // Filter out painters with no parentDealerCode
@@ -125,7 +145,10 @@ exports.addUser = async (body, res) => {
         if (errorArray.length) {
             return res({ status: 400, errors: errorArray })
         }
-        let userData = await userModel.insertMany(body);
+        // Whitelist allowed fields — never accept server-owned state
+        // (rewardPoints, cash, token, createdAt, etc.) from the client.
+        const safePayload = pickFields(body, USER_ALLOWED_CREATE_FIELDS);
+        let userData = await userModel.insertMany([safePayload]);
         return res({status: 200, message: userData});
     } catch (err) {
         console.log(err);
@@ -208,8 +231,11 @@ exports.userUpdate = async (id, body, res) => {
         if (errorArray.length > 0) {
             return res({ status: 400, errors: errorArray, })
         }
-        
-        let user = await userModel.updateOne({ _id: new ObjectId(id) }, { $set: body });
+
+        // Whitelist: accountType is not updatable via this endpoint;
+        // rewardPoints/cash/token are server-owned.
+        const safeUpdate = pickFields(body, USER_ALLOWED_UPDATE_FIELDS);
+        let user = await userModel.updateOne({ _id: new ObjectId(id) }, { $set: safeUpdate });
         return res({ status: 200, message: user });
     } catch (err) {
         console.log(err)
@@ -516,9 +542,10 @@ exports.getDealers = async (req, res) => {
         
         // Add search query filter if provided
         if (body.searchQuery) {
+            const safe = escapeRegex(String(body.searchQuery).trim());
             query['$or'] = [
-                { 'name': { $regex: new RegExp(body.searchQuery.trim(), "i") } },
-                { 'mobile': { $regex: new RegExp(body.searchQuery.trim(), "i") } }
+                { 'name': { $regex: new RegExp(safe, "i") } },
+                { 'mobile': { $regex: new RegExp(safe, "i") } }
             ];
         }
         const dealers = await userModel.find(query);
@@ -560,9 +587,10 @@ exports.exportUsers = async (req, res) => {  // Changed to handle req and res di
 
         // Filter by search query if provided
         if (req.body.searchQuery) {
+            const safe = escapeRegex(String(req.body.searchQuery).trim());
             query['$or'] = [
-                { 'name': { $regex: new RegExp(req.body.searchQuery.trim(), "i") } },
-                { 'mobile': { $regex: new RegExp(req.body.searchQuery.trim(), "i") } }
+                { 'name': { $regex: new RegExp(safe, "i") } },
+                { 'mobile': { $regex: new RegExp(safe, "i") } }
             ];
             
             query['$nor'] = [
