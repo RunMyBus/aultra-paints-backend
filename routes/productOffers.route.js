@@ -10,17 +10,17 @@ const upload = multer({
 // router.post('/testProductPrice', productOffersController.processProductPrices);
 
 router.use(passport.authenticate('jwt', { session: false }));
+const { requireRole, ADMIN } = require('../middleware/authorize');
 
-router.post('/create', upload.none(), productOffersController.createProductOffer);
+router.post('/create', requireRole(ADMIN), upload.none(), productOffersController.createProductOffer);
 router.post('/searchProductOffers', productOffersController.searchProductOffers);
 router.post('/getProductOffers', productOffersController.getProductOffers);
 router.get('/getProductOfferById:id', productOffersController.getProductOfferById);
-// router.put('/update:id', upload.none(), productOffersController.updateProductOffer);
-router.put('/update/:id', upload.none(), async (req, res) => {
+router.put('/update/:id', requireRole(ADMIN), upload.none(), async (req, res) => {
     productOffersController.updateProductOffer(req, result => {
         res.status(result.status).json(result)
     })
 });
-router.delete('/delete/:id', productOffersController.deleteProductOffer);
+router.delete('/delete/:id', requireRole(ADMIN), productOffersController.deleteProductOffer);
 
 module.exports = router;

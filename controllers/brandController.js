@@ -1,4 +1,5 @@
 const Brand = require('../models/Brand');  // Import the new Brand model
+const { escapeRegex, clampLimit, clampPage } = require('../utils/validators');
 
 // Create a new brand
 const createBrand = async (req, res) => {
@@ -47,13 +48,13 @@ const getBrands = async (req, res) => {
 // Get brands by name (with pagination)
 const getBrandByName = async (req, res) => {
   const { name } = req.params;
-  let page = parseInt(req.query.page || 1);
-  let limit = parseInt(req.query.limit || 10);
+  let page = clampPage(req.query.page);
+  let limit = clampLimit(req.query.limit);
 
   try {
     let query = {};
     if (name) {
-      query.name = { $regex: new RegExp(name, 'i') };
+      query.name = { $regex: new RegExp(escapeRegex(String(name)), 'i') };
     }
 
     const brands = await Brand.find(query)

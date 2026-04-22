@@ -8,12 +8,13 @@ const upload = multer({
 });
 
 router.use(passport.authenticate('jwt', { session: false }));
+const { requireRole, ADMIN } = require('../middleware/authorize');
 
-router.post('/create', upload.none(), rewardSchemesController.createRewardScheme);
-router.post('/searchRewardSchemes', rewardSchemesController.searchRewardSchemes);
+router.post('/create', requireRole(ADMIN), upload.none(), rewardSchemesController.createRewardScheme);
+router.post('/searchRewardSchemes', requireRole(ADMIN), rewardSchemesController.searchRewardSchemes);
 router.get('/getRewardSchemes', rewardSchemesController.getRewardSchemes);
 router.get('/getRewardSchemeById/:id', rewardSchemesController.getRewardSchemeById);
-router.put('/update/:id', upload.single('file'), rewardSchemesController.updateRewardScheme);
-router.delete('/delete/:id', rewardSchemesController.deleteRewardScheme);
+router.put('/update/:id', requireRole(ADMIN), upload.single('file'), rewardSchemesController.updateRewardScheme);
+router.delete('/delete/:id', requireRole(ADMIN), rewardSchemesController.deleteRewardScheme);
 
 module.exports = router;

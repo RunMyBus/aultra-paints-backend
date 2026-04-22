@@ -4,6 +4,7 @@ const Brand = require('../models/Brand'); // assuming Brand still exists and is 
 const Transaction = require("../models/Transaction");
 const { getAllUnifiedProducts } = require('../services/productService');
 const { getProductMaster, getEntityMaster } = require('../services/focus8Order.service');
+const { escapeRegex, clampLimit, clampPage } = require('../utils/validators');
 
 // Create a new product and associate it with a brand
 const createProduct = async (req, res) => {
@@ -185,12 +186,13 @@ const getAllProductsForSelect = async (req, res) => {
 
 const getProductsByName = async (req, res) => {
   const { productName } = req.params;
-  const page = parseInt(req.query.page || 1);
-  const limit = parseInt(req.query.limit || 10);
+  const page = clampPage(req.query.page);
+  const limit = clampLimit(req.query.limit);
+  const safeName = escapeRegex(String(productName || ''));
 
   try {
     const pipeline = [
-      { $match: { products: { $regex: productName, $options: 'i' } } },
+      { $match: { products: { $regex: safeName, $options: 'i' } } },
       {
         $addFields: {
           brandObjId: {
@@ -223,7 +225,7 @@ const getProductsByName = async (req, res) => {
 
     const [products, totalProducts] = await Promise.all([
       Product.aggregate(pipeline).skip((page - 1) * limit).limit(limit),
-      Product.countDocuments({ products: { $regex: productName, $options: 'i' } })
+      Product.countDocuments({ products: { $regex: safeName, $options: 'i' } })
     ]);
 
     if (!products.length) {

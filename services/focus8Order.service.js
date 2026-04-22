@@ -104,6 +104,22 @@ async function getFocusSessionId() {
     return fSessionId;
 }
 
+// Focus 8's ExecuteSqlQuery accepts raw SQL, so every inlined value is a
+// potential injection vector. Single-quote escaping is the minimum; callers
+// should also prefer validated identifiers (sqlIdentifier) where applicable.
+function sqlEscape(value) {
+    if (value === null || value === undefined) return '';
+    return String(value).replace(/'/g, "''");
+}
+function sqlIdentifier(value) {
+    // Conservative allowlist for opaque codes like dealerCode.
+    const s = String(value || '').trim();
+    if (!/^[A-Za-z0-9_\-./ ]{1,64}$/.test(s)) {
+        throw new Error('Invalid identifier for Focus 8 query');
+    }
+    return s;
+}
+
 /**
  * ===============================
  * GET ORDER HEADER DATA
@@ -114,9 +130,7 @@ async function getOrderHeaderData(filters = {}) {
     let query = `SELECT iMasterId, sName, sCode, BranchName, SalesmanName, DistrictsName FROM vmCore_Account WHERE istatus <> 5 AND iAccountType = 5`;
 
     const conditions = [];
-    // if (mobile) conditions.push(`sTelNo = '${mobile}'`);
-    // if (sName) conditions.push(`sName = '${sName}'`);
-    if (sCode) conditions.push(`sCode = '${sCode}'`);
+    if (sCode) conditions.push(`sCode = '${sqlEscape(sqlIdentifier(sCode))}'`);
 
     if (conditions.length > 0) {
         query += ` AND (${conditions.join(' OR ')})`;
@@ -186,7 +200,7 @@ async function getBranchId(branchName) {
     const res = await focusRequest(
         `${FOCUS8_BASE_URL}/utility/ExecuteSqlQuery`,
         {
-            data: [{ Query: `SELECT iMasterId, sName, sCode from mCore_Branch where istatus <>5 and sName = '${branchName}'` }]
+            data: [{ Query: `SELECT iMasterId, sName, sCode from mCore_Branch where istatus <>5 and sName = '${sqlEscape(branchName)}'` }]
         }
     );
 
@@ -210,7 +224,7 @@ async function getSalesmanId(salesmanName) {
     const res = await focusRequest(
         `${FOCUS8_BASE_URL}/utility/ExecuteSqlQuery`,
         {
-            data: [{ Query: `SELECT iMasterId, sName, sCode from mCore_salesman where istatus <>5 and sName = '${salesmanName}'` }]
+            data: [{ Query: `SELECT iMasterId, sName, sCode from mCore_salesman where istatus <>5 and sName = '${sqlEscape(salesmanName)}'` }]
         }
     );
 
@@ -234,7 +248,7 @@ async function getDistrictId(districtName) {
     const res = await focusRequest(
         `${FOCUS8_BASE_URL}/utility/ExecuteSqlQuery`,
         {
-            data: [{ Query: `SELECT iMasterId, sName, sCode from mCore_districts where istatus <>5 and sName = '${districtName}'` }]
+            data: [{ Query: `SELECT iMasterId, sName, sCode from mCore_districts where istatus <>5 and sName = '${sqlEscape(districtName)}'` }]
         }
     );
 
@@ -480,7 +494,7 @@ async function getDealerAccountId(dealerCode) {
             return null;
         }
 
-        const query = `SELECT iMasterId FROM vmCore_Account WHERE istatus <> 5 AND iAccountType = 5 AND sCode = '${dealerCode}'`;
+        const query = `SELECT iMasterId FROM vmCore_Account WHERE istatus <> 5 AND iAccountType = 5 AND sCode = '${sqlEscape(sqlIdentifier(dealerCode))}'`;
         
         const res = await focusRequest(
             `${FOCUS8_BASE_URL}/utility/ExecuteSqlQuery`,
