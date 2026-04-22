@@ -6,10 +6,11 @@ const ExtractJwt = require('passport-jwt').ExtractJwt;
 const User = require('../models/User');
 const UserLoginSMSModel = require("../models/UserLoginSMS");
 const StaticPhoneNumbers = require('../models/staticPhoneNumbers');
-const { JWT_SECRET, IS_PROD } = require('../config/secrets');
+const { JWT_SECRET } = require('../config/secrets');
 
-// Static OTP bypass — gated to non-prod environments only.
-const STATIC_OTP_ENABLED = !IS_PROD && process.env.STATIC_OTP_ENABLED !== 'false';
+// Static OTP bypass — controlled purely by STATIC_OTP_ENABLED env var (set to 'true' to enable).
+// Applies to whitelisted numbers in the StaticPhoneNumbers collection, in any environment.
+const STATIC_OTP_ENABLED = process.env.STATIC_OTP_ENABLED === 'true';
 const STATIC_OTP = String(process.env.STATIC_OTP || 123456);
 
 const localLogin = new LocalStrategy({usernameField: 'mobile', passwordField: 'otp'}, async (mobile, otp, done) => {
