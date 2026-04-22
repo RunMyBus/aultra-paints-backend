@@ -36,7 +36,8 @@ async function updateSalesmanPhones() {
         const salesmanMap = new Map();
         for (const sm of salesmanData) {
             if (sm.sName && sm.SalesManPhNO) {
-                const firstPhone = sm.SalesManPhNO.split(',')[0].trim();
+                const rawPhone = sm.SalesManPhNO.split(',')[0].replace(/[\s+]/g, '').replace(/^91/, '');
+                const firstPhone = rawPhone.slice(-10);
                 salesmanMap.set(sm.sName.trim().toLowerCase(), { 
                     phone: firstPhone,
                     name: sm.sName.trim()

@@ -154,8 +154,13 @@ class TransactionService {
                 query.couponCode = parseInt(couponCode);
             }
 
+            // Sort and paginate BEFORE lookups so we only join the current page's rows.
             let querySet = [
                 { $match: query },
+                { $sort: { createdAt: -1, _id: -1 } },
+                { $skip: skip },
+                { $limit: limit },
+
                 { $addFields: { batchId: { $toObjectId: "$batchId" } } },
                 { $lookup: { from: 'batchnumbers', localField: 'batchId', foreignField: '_id', as: 'batchData' } },
                 { $unwind: '$batchData' },
@@ -164,7 +169,6 @@ class TransactionService {
                 { $lookup: { from: 'users', localField: 'createdBy', foreignField: '_id', as: 'userData' } },
                 { $unwind: '$userData' },
 
-                // { $addFields: { updatedBy: { $toObjectId: "$updatedBy" } } },
                 { $addFields: { updatedBy: { $cond: { if: { $eq: ["$updatedBy", null] }, then: null, else: { $toObjectId: "$updatedBy" } } } } },
                 { $lookup: { from: 'users', localField: 'updatedBy', foreignField: '_id', as: 'uploadData' } },
                 { $unwind: { path: '$uploadData', preserveNullAndEmptyArrays: true } },
@@ -196,22 +200,20 @@ class TransactionService {
                         cashRedeemedAt: 1
                     }
                 },
-                { $sort: { createdAt: -1, _id: -1 } },
-                { $skip: ((page - 1) * limit) },
-                { $limit: limit },
             ];
-            // Execute query
-            const transactionsData = await Transaction.aggregate(querySet);
 
+            // Count query needs no $lookup — just match and count.
             const totalQuery = [
                 { $match: query },
-                { $addFields: { batchId: { $toObjectId: "$batchId" } } },
-                { $lookup: { from: 'batchnumbers', localField: 'batchId', foreignField: '_id', as: 'batchData' } },
-                { $match: { "batchData.0": { $exists: true } } },
                 { $count: "total" }
             ];
 
-            const totalResult = await Transaction.aggregate(totalQuery);
+            // Run data and count in parallel.
+            const [transactionsData, totalResult] = await Promise.all([
+                Transaction.aggregate(querySet),
+                Transaction.aggregate(totalQuery),
+            ]);
+
             const total = totalResult.length > 0 ? totalResult[0].total : 0;
 
             logger.info('Successfully retrieved transactions', {

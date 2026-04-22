@@ -18,6 +18,13 @@ const transactionSchema = new mongoose.Schema({
     upiId: { type: String },
 }, { timestamps: true });
 
+transactionSchema.index({ createdAt: -1 });
+transactionSchema.index({ batchId: 1, createdAt: -1 });
+transactionSchema.index({ couponCode: 1 });
+transactionSchema.index({ UDID: 1 });
+transactionSchema.index({ pointsRedeemedBy: 1 });
+transactionSchema.index({ cashRedeemedBy: 1 });
+
 const Transaction = mongoose.model('Transaction', transactionSchema);
 
 module.exports = Transaction;
