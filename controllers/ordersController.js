@@ -165,12 +165,6 @@ exports.createOrder = async (req, res) => {
                 });
             }
             const offer = offerMap.get(item._id.toString());
-            if (offer.offerAvailable === false) {
-                return res.status(400).json({
-                    success: false,
-                    message: `Offer is no longer available: ${offer.productOfferDescription}`
-                });
-            }
 
             const qty = Number(item.quantity);
             if (!Number.isInteger(qty) || qty <= 0 || qty > 10000) {
