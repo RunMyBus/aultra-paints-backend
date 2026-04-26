@@ -17,6 +17,7 @@ const productOffersSchema = new mongoose.Schema({
         }
     ],
     offerAvailable: { type: Boolean, default: true },
+    routeScheme: { type: [String], default: null },
     focusProductId: {type: Number},
     focusUnitId: {type: Number},
     focusProductMapping: [{

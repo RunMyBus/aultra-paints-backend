@@ -8,6 +8,10 @@ const userSchema = new mongoose.Schema({
     token: {type: String}, //user login token
     rewardPoints: {type: Number, default: 0},
     cash: {type: Number, default: 0},
+    // Preserved pre-migration cash balance (set once by migrate_cash_to_legacy.js).
+    // After migration, cash = 0 and all new coupon-scan credits go into cash again.
+    // legacyCash is read-only after migration — never incremented by application code.
+    legacyCash: {type: Number, default: 0},
     status: { type: String, default: 'active' },
     primaryContactPerson: {type: String},
     primaryContactPersonMobile: {type: String},

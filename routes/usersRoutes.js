@@ -101,6 +101,10 @@ router.get('/sales-executives', requireRole(ADMIN), async (req, res) => {
     userController.getAllSalesExecutives(req, res);
 });
 
+router.get('/dealers', requireRole(ADMIN), async (req, res) => {
+    userController.getAllDealers(req, res);
+});
+
 router.post('/export', requireRole(ADMIN), userController.exportUsers);
 
 router.get('/export-unverified', requireRole(ADMIN), userController.exportUnverifiedUsers);

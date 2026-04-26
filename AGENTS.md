@@ -35,6 +35,74 @@ This Express/Jest backend powers Aultra Paints services. Use the guidance below 
 - Update the `config/express.js` CORS whitelist when onboarding new clients, and adjust `middleware/passport.js` for auth tweaks.
 - Validate and sanitize user inputs at controllers/services, and favor parameterized queries or ORM helpers when touching raw SQL.
 
+## Changes (as of 2026-04-26)
+
+### Credit Note Issuance feature
+SuperUser-only feature allowing admins to issue credit notes against a dealer's `rewardPoints` or `cash` balance.
+
+**New / changed files — backend:**
+- `models/CreditNote.js` *(new)* — Mongoose model for `creditNotes` collection. Fields: `creditNoteNumber` (unique, `CN-YYYYMM-NNNN`), `userId`, `balanceType` (`rewardPoints|cash`), `amount`, `narration`, `status` (`issued|redeemed|cancelled`), `ledgerId`. Indexed on `{ userId, createdAt }`.
+- `models/TransactionLedger.js` — added `creditNoteId: { type: String }` field after `creditNoteIssued`.
+- `models/User.js` — added `legacyCash: { type: Number, default: 0 }` (read-only post-migration; see migration script below). Also added to `USER_PROTECTED_FIELDS` in `userController.js` so clients can never overwrite it.
+- `controllers/creditNote.controller.js` *(new)* — three exports:
+  - `issueCreditNote` — validates input, atomically debits dealer balance via `User.findOneAndUpdate` with a `$gte` guard (race-safe), generates a `CN-YYYYMM-NNNN` number using the `Sequence` model (key `creditNote-YYYYMM`), creates the `CreditNote` doc, writes a `TransactionLedger` row (resilient — returns 201 even if the ledger write fails, but logs `CRITICAL`).
+  - `listCreditNotes` — paginated list with optional `userId`, `dateFrom`, `dateTo` filters; enriches each row with dealer `name` and `mobile` from `User`.
+  - `downloadCreditNotePDF` — finds credit note by `creditNoteNumber`, generates a PDF on-demand via `utils/pdfGenerator.generateCreditNoteIssuancePDF`, streams it with correct `Content-Disposition` headers.
+- `routes/creditNote.route.js` *(new)* — JWT + `requireRole(ADMIN)` on all three routes: `POST /issue`, `POST /list`, `GET /pdf/:creditNoteNumber`.
+- `routes/index.js` — registered `creditNoteRoutes` at `/creditNotes`.
+- `utils/pdfGenerator.js` — added `generateCreditNoteIssuancePDF(creditNote, dealerName)`: reads `templates/creditNoteIssuanceTemplate.html`, replaces placeholders, renders via Puppeteer (same flow as existing PDF generators).
+- `templates/creditNoteIssuanceTemplate.html` *(new)* — HTML template for credit note PDF. Placeholders: `{{creditNoteNumber}}`, `{{dealerName}}`, `{{balanceType}}`, `{{amount}}`, `{{narration}}`, `{{date}}`, `{{status}}`.
+- `controllers/userController.js` — added `getAllDealers()`: returns all `{ accountType: 'Dealer', status: 'active' }` users with projection `{ name, mobile, dealerCode, rewardPoints, cash, legacyCash }`, sorted `{ name: 1 }`. No pagination (intentional — lightweight endpoint for dropdowns).
+- `routes/usersRoutes.js` — added `GET /dealers` → `requireRole(ADMIN)` → `userController.getAllDealers`.
+- `controllers/authController.js` — added `legacyCash: req.user.legacyCash || 0` to the login response payload.
+
+**New / changed files — frontend (`aultra-paints-frontend/`):**
+- `src/app/services/api-urls.service.ts` — added `issueCreditNote`, `listCreditNotes`, `downloadCreditNotePDF`, `getAllDealers` URL constants.
+- `src/app/services/api-request.service.ts` — added `issueCreditNote()`, `listCreditNotes()`, `downloadCreditNotePDF()` (Blob response type), `getAllDealers()` methods.
+- `src/app/credit-notes/credit-notes.component.ts` *(new)* — standalone Angular component; extends `Unsubscribable` with `takeUntil(destroy$)`. Key methods: `loadDealers()` (called on every modal open for fresh balances), `submitIssue()`, `downloadPDF()` (Blob → new tab with fallback download), `applyFilters()`, `clearFilters()`, pagination handlers.
+- `src/app/credit-notes/credit-notes.component.html` *(new)* — table with filters (dealer ng-select, balanceType, status, date range), pagination, and "Issue Credit Note" modal with dealer picker, live balance preview card, balanceType radio, amount input, narration textarea.
+- `src/app/app.routes.ts` — added `{ path: 'credit-notes', component: CreditNotesComponent, canActivate: [RoleGuard], data: { roles: ADMIN } }`.
+- `src/app/layout/layout.component.html` — added "Credit Notes" sidebar nav item (after Transaction Ledger, `bx-receipt` icon).
+
+**Migration scripts (run once, in order, before deploying):**
+- `mongoscripts/migrate_cash_to_legacy.js` — copies `cash → legacyCash` and resets `cash = 0` for every User where `cash != 0`, using an aggregation pipeline update (atomic).
+- `mongoscripts/migrate_routescheme_to_array.js` — wraps legacy plain-string `routeScheme` values in a single-element array using `$type: 'string'` filter.
+
+---
+
+### Product Offers — multi-select route scheme + SuperUser visibility + sort order
+- `models/productOffers.model.js` — `routeScheme` type changed from `String` to `[String]` (default `null`). MongoDB's element-match means existing single-string `{ routeScheme: "mobile" }` queries still work for both legacy String docs and new Array docs without a query change.
+- `controllers/productOffers.controller.js`:
+  - Added `parseRouteScheme(raw)` helper: normalises a JSON array string, plain string, or null → `string[] | null`. Used in both `createProductOffer` and `updateProductOffer`.
+  - `searchProductOffers`: wrapped the `routeScheme` filter in `if (req.user.accountType !== 'SuperUser')` — SuperUser now sees all offers regardless of route scheme.
+  - Sort changed from `{ cashback: -1 }` → `{ createdAt: -1 }` (newest first).
+- `src/app/product-offers/product-offers.component.ts` — `routeScheme` defaults changed from `null` → `[]`; FormData serialises as `JSON.stringify(routeScheme || [])`. Added `asArray(value)` helper to normalise legacy string or new array to `string[]` for template iteration.
+- `src/app/product-offers/product-offers.component.html` — added `[multiple]="true"` to route scheme `ng-select`. Route-scheme badge display block removed from cards (per product decision).
+- `src/app/product-offers/product-offers.component.css` — added equal-height card styles (`.product-offers-card` flex column, `.card-body` flex:1) so the action row always aligns at the bottom.
+
+---
+
+### redeem.html — web redemption discontinued
+`redeem.html` (served statically; URL embedded in printed QR codes as `${config.redeemUrl}/redeem.html?tx=<UDID>`) now shows a **"This Service Is No Longer Available"** deprecation page directing users to the Aultra Paints mobile app. The original redemption form code is preserved as an HTML comment at the bottom of the file for easy restoration if needed.
+
+---
+
+### Test suite fixes and additions (as of 2026-04-26)
+All 102 tests across 6 suites pass (`npx jest tests/controllers/ --no-coverage`).
+
+**New test files:**
+- `tests/controllers/creditNote.controller.test.js` — 18 tests covering `issueCreditNote` (input validation, balance checks, happy paths for both `rewardPoints` and `cash`, atomic debit assertion, resilient ledger failure), `listCreditNotes` (enrichment, filters, pagination, DB error), `downloadCreditNotePDF` (404, success headers, DB error).
+- `tests/controllers/userController.test.js` — 8 tests for `getAllDealers`: active-Dealer query, projection includes `legacyCash`, sort `{ name: 1 }`, empty-result case, DB errors.
+
+**Extended test files:**
+- `tests/controllers/productOffers.controller.test.js` — 4 new tests in a `routeScheme filtering` block: SuperUser bypasses filter, Dealer scoped to SE mobile, SalesExecutive scoped to own mobile, sort is `{ createdAt: -1 }`.
+
+**Fixed test files (tests were testing stale behaviour):**
+- `tests/controllers/authController.test.js` — fully rewritten. Old tests assumed accountType/dealerCode/Focus8 guards in `redeemCash` that no longer exist. New tests match the reworked controller: `isValidMobile` / `isValidUpi` input validation, atomic `findOneAndUpdate` claim flow (404 not found, 409 already claimed), payment failure path, happy path for existing user, happy path for unregistered mobile (new user created), 500 on unexpected error. All mobile numbers updated to valid Indian format (6–9 prefix).
+- `tests/controllers/ordersController.test.js` — five fixes: (1) added `global.config = process.env` before `require()` so `config.GST_PERCENTAGE` resolves; (2) added default `productOffersModel.find().select()` mock in `beforeEach` — the controller now derives prices server-side and the old tests didn't wire the chain; (3) rewrote "no focusProductMapping" test → "no price configured" (the controller never emits the old message); (4) added `price` entry to the volume-mapping test mock; (5) rewrote three `focusSyncStatus` mutation assertions to check `orderModel.updateOne({ $set: { focusSyncStatus } })` — `runFocusSync` persists via `updateOne`, not via in-memory mutation + `save()`.
+
+---
+
 ## Latest Scanned Code Changes (as of 2026-02-28)
 - Added Focus8-related pricing/effective-date logic in `services/focus8Order.service.js` and `controllers/productCatlogController.js`.
 - Credit note flow was updated across `controllers/transactionLedgerController.js`, `templates/creditNoteTemplate.html`, and `utils/pdfGenerator.js`.

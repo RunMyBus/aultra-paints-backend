@@ -312,5 +312,108 @@ describe('ProductOffersController', () => {
                 message: 'Something went wrong'
             });
         });
+
+        // ── Route scheme filtering (recent change) ────────────────────────────
+        describe('routeScheme filtering', () => {
+            const DEALER_ID = new mongoose.Types.ObjectId();
+            const SE_MOBILE = '9876500001';
+
+            function wireFind(offers = []) {
+                productOffersModel.find.mockReturnValue({
+                    skip: jest.fn().mockReturnValue({
+                        limit: jest.fn().mockReturnValue({
+                            sort: jest.fn().mockResolvedValue(offers),
+                        }),
+                    }),
+                });
+                productOffersModel.countDocuments.mockResolvedValue(offers.length);
+                ProductPriceModel.findOne.mockResolvedValue(null);
+            }
+
+            beforeEach(() => {
+                jest.clearAllMocks();
+                wireFind();
+            });
+
+            test('SuperUser bypasses routeScheme filter — query has neither $or nor $and for routeScheme', async () => {
+                const req = {
+                    body: { page: 1, limit: 10 },
+                    user: { _id: DEALER_ID, accountType: 'SuperUser', mobile: '9999999999' },
+                };
+                const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+                await searchProductOffers(req, res);
+
+                const queryArg = productOffersModel.find.mock.calls[0][0];
+                // The only clause should be offerAvailable:true — no routeScheme filter
+                expect(queryArg).not.toHaveProperty('$and');
+                // If there IS an $or it must not contain any routeScheme condition
+                if (queryArg['$or']) {
+                    const hasRouteFilter = queryArg['$or'].some(
+                        clause => clause.routeScheme !== undefined
+                    );
+                    expect(hasRouteFilter).toBe(false);
+                }
+                expect(queryArg.offerAvailable).toBe(true);
+            });
+
+            test('Dealer gets routeScheme filter scoped to their salesExecutive mobile', async () => {
+                const req = {
+                    body: { page: 1, limit: 10 },
+                    user: { _id: DEALER_ID, accountType: 'Dealer', salesExecutive: SE_MOBILE },
+                };
+                const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+                await searchProductOffers(req, res);
+
+                const queryArg = productOffersModel.find.mock.calls[0][0];
+                // Expect routeScheme clauses to be present (either via $or at top level or inside $and)
+                const flatClauses = queryArg['$or'] ||
+                    (queryArg['$and'] || []).flatMap(c => c['$or'] || []);
+                const routeClauses = flatClauses.filter(c => c.routeScheme !== undefined);
+                expect(routeClauses.length).toBeGreaterThan(0);
+                // One of the clauses must allow offers with SE_MOBILE
+                const hasMobileClause = routeClauses.some(c => c.routeScheme === SE_MOBILE);
+                expect(hasMobileClause).toBe(true);
+            });
+
+            test('SalesExecutive gets routeScheme filter scoped to their own mobile', async () => {
+                const req = {
+                    body: { page: 1, limit: 10 },
+                    user: { _id: DEALER_ID, accountType: 'SalesExecutive', mobile: SE_MOBILE },
+                };
+                // SalesExecutive path also calls UserModel.find — mock it
+                const UserModel = require('../../models/User');
+                jest.mock('../../models/User');
+                UserModel.find = jest.fn().mockResolvedValue([]);
+
+                const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+                await searchProductOffers(req, res);
+
+                const queryArg = productOffersModel.find.mock.calls[0][0];
+                const flatClauses = queryArg['$or'] ||
+                    (queryArg['$and'] || []).flatMap(c => c['$or'] || []);
+                const hasMobileClause = flatClauses.some(c => c.routeScheme === SE_MOBILE);
+                expect(hasMobileClause).toBe(true);
+            });
+
+            test('sort argument is { createdAt: -1 }', async () => {
+                const req = {
+                    body: { page: 1, limit: 10 },
+                    user: { _id: DEALER_ID, accountType: 'SuperUser', mobile: '9999999999' },
+                };
+                const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+                await searchProductOffers(req, res);
+
+                // The sort() call is chained on the find query — grab its argument
+                const findChain = productOffersModel.find.mock.results[0].value;
+                const sortArg = findChain.skip.mock.results[0].value
+                    .limit.mock.results[0].value
+                    .sort.mock.calls[0][0];
+                expect(sortArg).toEqual({ createdAt: -1 });
+            });
+        });
     });
 });

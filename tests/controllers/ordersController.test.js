@@ -1,3 +1,6 @@
+// config is referenced at module level inside ordersController (e.g. GST_PERCENTAGE)
+global.config = process.env;
+
 const ordersController = require('../../controllers/ordersController');
 const orderModel = require('../../models/Order');
 const userModel = require('../../models/User');
@@ -74,6 +77,24 @@ function baseItems() {
 describe('createOrder', () => {
     let res;
 
+    // Default offer returned by productOffersModel.find().select() for baseItems()
+    // price 100 @ volume '1L' → server-computed total = 2 × 100 = 200
+    const BASE_OFFER = {
+        _id: { toString: () => '64f100000000000000000001' },
+        focusProductId: 501,
+        focusUnitId: 1,
+        focusProductMapping: [],
+        productOfferDescription: 'Paint 1L',
+        price: [{ volume: '1L', price: 100 }],
+        offerAvailable: true,
+    };
+
+    function wireOfferFind(offers = [BASE_OFFER]) {
+        productOffersModel.find = jest.fn().mockReturnValue({
+            select: jest.fn().mockResolvedValue(offers),
+        });
+    }
+
     beforeEach(() => {
         jest.clearAllMocks();
         res = makeRes();
@@ -88,6 +109,10 @@ describe('createOrder', () => {
 
         const savedOrder = { save: jest.fn().mockResolvedValue(true), focusSyncStatus: 'PENDING' };
         orderModel.mockImplementation(() => savedOrder);
+
+        // Wire the default offer so the price-derivation + focus-ID resolution
+        // path succeeds for all tests using baseItems() unless overridden.
+        wireOfferFind();
     });
 
     // ── role validation ──────────────────────────────────────────────────────
@@ -139,7 +164,7 @@ describe('createOrder', () => {
 
     // ── focus product mapping ────────────────────────────────────────────────
 
-    test('returns 400 when product has no focusProductMapping', async () => {
+    test('returns 400 when offer has no price configured for the requested volume', async () => {
         const items = [
             {
                 _id: '64f100000000000000000002',
@@ -147,17 +172,18 @@ describe('createOrder', () => {
                 productPrice: 100,
                 quantity: 1,
                 volume: '1L',
-                // no focusProductId / focusUnitId
             },
         ];
+        // Offer exists but has no price entries — server rejects the order.
         productOffersModel.find = jest.fn().mockReturnValue({
             select: jest.fn().mockResolvedValue([
                 {
                     _id: { toString: () => '64f100000000000000000002' },
                     focusProductId: null,
                     focusUnitId: null,
-                    focusProductMapping: [], // empty — triggers 400
+                    focusProductMapping: [],
                     productOfferDescription: 'Unmapped Paint',
+                    price: [], // no price entries
                 },
             ]),
         });
@@ -166,7 +192,7 @@ describe('createOrder', () => {
         await ordersController.createOrder(req, res);
         expect(res.status).toHaveBeenCalledWith(400);
         expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-            message: expect.stringContaining('No focus product mapping'),
+            message: expect.stringContaining('No price configured'),
         }));
     });
 
@@ -191,6 +217,8 @@ describe('createOrder', () => {
                         { volume: '5L', focusProductId: 999, focusUnitId: 2 },
                     ],
                     productOfferDescription: 'Volume Paint',
+                    price: [{ volume: '5L', price: 100 }],
+                    offerAvailable: true,
                 },
             ]),
         });
@@ -268,9 +296,10 @@ describe('createOrder', () => {
         expect(focus8Service.pushOrderToFocus8).toHaveBeenCalledTimes(1);
     });
 
-    test('marks focusSyncStatus FAILED when Focus8 push fails for SE order', async () => {
+    test('marks focusSyncStatus FAILED via updateOne when Focus8 push fails for SE order', async () => {
         const savedOrder = { save: jest.fn().mockResolvedValue(true), focusSyncStatus: 'PENDING' };
         orderModel.mockImplementation(() => savedOrder);
+        orderModel.updateOne = jest.fn().mockResolvedValue({});
         userModel.findById = jest.fn().mockResolvedValue(dealerUser);
         focus8Service.pushOrderToFocus8.mockRejectedValue(new Error('Focus8 down'));
 
@@ -283,10 +312,12 @@ describe('createOrder', () => {
         // Response should still succeed immediately
         expect(res.status).toHaveBeenCalledWith(200);
 
-        // Flush microtask queue so the async .catch() callback completes
+        // Flush microtask queue so the async runFocusSync catch block completes
         await new Promise(resolve => setImmediate(resolve));
-        expect(savedOrder.focusSyncStatus).toBe('FAILED');
-        expect(savedOrder.save).toHaveBeenCalledTimes(2); // once on creation, once after failure
+        expect(orderModel.updateOne).toHaveBeenCalledWith(
+            expect.any(Object),
+            { $set: expect.objectContaining({ focusSyncStatus: 'FAILED' }) }
+        );
     });
 
     test('generates sequential orderId (ORD01 → ORD02)', async () => {
@@ -761,11 +792,11 @@ describe('updateOrderStatus', () => {
         expect(focus8Service.pushOrderToFocus8).toHaveBeenCalledTimes(1);
     });
 
-    test('marks focusSyncStatus SUCCESS after successful Focus8 push on verify', async () => {
+    test('persists focusSyncStatus SUCCESS via updateOne after successful Focus8 push', async () => {
+        orderModel.updateOne = jest.fn().mockResolvedValue({});
         userModel.find = jest.fn().mockResolvedValue([{ _id: DEALER_ID }]);
         orderModel.findOne = jest.fn().mockResolvedValue(pendingOrder);
-        const mutableUpdatedOrder = { ...updatedOrder, save: jest.fn().mockResolvedValue(true) };
-        orderModel.findOneAndUpdate = jest.fn().mockResolvedValue(mutableUpdatedOrder);
+        orderModel.findOneAndUpdate = jest.fn().mockResolvedValue(updatedOrder);
         userModel.findById = jest.fn().mockResolvedValue(dealerUser);
         focus8Service.pushOrderToFocus8.mockResolvedValue({
             success: true,
@@ -776,18 +807,20 @@ describe('updateOrderStatus', () => {
         const req = { user: seUser, body: { orderId: 'ORD01', isVerified: 1 } };
         await ordersController.updateOrderStatus(req, res);
 
-        // Flush microtask queue so the async .then() callback completes
+        // Flush microtask queue so the async runFocusSync .then() completes
         await new Promise(resolve => setImmediate(resolve));
 
-        expect(mutableUpdatedOrder.focusSyncStatus).toBe('SUCCESS');
-        expect(mutableUpdatedOrder.focusOrderId).toBe('SO-002');
+        expect(orderModel.updateOne).toHaveBeenCalledWith(
+            expect.any(Object),
+            { $set: expect.objectContaining({ focusSyncStatus: 'SUCCESS', focusOrderId: 'SO-002' }) }
+        );
     });
 
-    test('marks focusSyncStatus FAILED when Focus8 push rejects on verify', async () => {
+    test('persists focusSyncStatus FAILED via updateOne when Focus8 push rejects', async () => {
+        orderModel.updateOne = jest.fn().mockResolvedValue({});
         userModel.find = jest.fn().mockResolvedValue([{ _id: DEALER_ID }]);
         orderModel.findOne = jest.fn().mockResolvedValue(pendingOrder);
-        const mutableUpdatedOrder = { ...updatedOrder, save: jest.fn().mockResolvedValue(true) };
-        orderModel.findOneAndUpdate = jest.fn().mockResolvedValue(mutableUpdatedOrder);
+        orderModel.findOneAndUpdate = jest.fn().mockResolvedValue(updatedOrder);
         userModel.findById = jest.fn().mockResolvedValue(dealerUser);
         focus8Service.pushOrderToFocus8.mockRejectedValue(new Error('Focus8 error'));
 
@@ -796,14 +829,17 @@ describe('updateOrderStatus', () => {
 
         await new Promise(resolve => setImmediate(resolve));
 
-        expect(mutableUpdatedOrder.focusSyncStatus).toBe('FAILED');
+        expect(orderModel.updateOne).toHaveBeenCalledWith(
+            expect.any(Object),
+            { $set: expect.objectContaining({ focusSyncStatus: 'FAILED' }) }
+        );
     });
 
-    test('marks focusSyncStatus FAILED when Focus8 push returns success:false', async () => {
+    test('persists focusSyncStatus FAILED via updateOne when Focus8 returns success:false', async () => {
+        orderModel.updateOne = jest.fn().mockResolvedValue({});
         userModel.find = jest.fn().mockResolvedValue([{ _id: DEALER_ID }]);
         orderModel.findOne = jest.fn().mockResolvedValue(pendingOrder);
-        const mutableUpdatedOrder = { ...updatedOrder, save: jest.fn().mockResolvedValue(true) };
-        orderModel.findOneAndUpdate = jest.fn().mockResolvedValue(mutableUpdatedOrder);
+        orderModel.findOneAndUpdate = jest.fn().mockResolvedValue(updatedOrder);
         userModel.findById = jest.fn().mockResolvedValue(dealerUser);
         focus8Service.pushOrderToFocus8.mockResolvedValue({
             success: false,
@@ -815,7 +851,10 @@ describe('updateOrderStatus', () => {
 
         await new Promise(resolve => setImmediate(resolve));
 
-        expect(mutableUpdatedOrder.focusSyncStatus).toBe('FAILED');
+        expect(orderModel.updateOne).toHaveBeenCalledWith(
+            expect.any(Object),
+            { $set: expect.objectContaining({ focusSyncStatus: 'FAILED' }) }
+        );
     });
 
     // ── reject order ─────────────────────────────────────────────────────────
