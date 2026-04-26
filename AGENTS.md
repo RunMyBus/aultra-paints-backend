@@ -45,6 +45,24 @@ This Express/Jest backend powers Aultra Paints services. Use the guidance below 
   - `sync-accounts.js`
   - `update-dealer-salesexec.js`
 - Postman assets were refreshed in `postman/AULTRA-PAINTS-LOCAL.postman_collection.json`.
+## Cash redemption — DISABLED (as of 2026-04-26)
+Points-to-INR cash payouts via Cashfree and BulkPe payment gateways have been retired. Live entry points are gone; record-keeping artifacts remain on disk for historical queries.
+
+- **Disabled routes** (every method/path under these returns HTTP 410 Gone with `{ success:false, code:'CASH_REDEMPTION_DISABLED', message:'…' }`):
+  - `routes/cashFreeRoutes.js` mounted at `/cashFree/*`
+  - `routes/bulkPeRoutes.js` mounted at `/bulkPe/*`
+  - Both files collapsed to a single `router.all('/*', …)` that logs the hit (`utils/logger`) and returns the disabled payload.
+- **Disabled cron**: the `crons/UpdatePendingCashFreeTransfers.js` registration was removed from `config/express.js` (the require line is commented out). The cron file remains on disk for history but no longer runs.
+- **Preserved on disk** (no live entry points; kept for transactional record-keeping queries):
+  - `controllers/cashFreeController.js`
+  - `services/cashFreePaymentService.js`, `services/bulkPePaymentService.js`
+  - `models/CashFreeTransaction.js`
+  - `utils/Cashfree.js`
+  - `crons/UpdatePendingCashFreeTransfers.js`
+  - `mongoscripts/updateUserRedemptions.js`
+- **Unaffected**: `routes/transfer.route.js` (`/transfer/toDealer`) is points-to-points only and is the recommended replacement path.
+
+When changing related code, treat the gateway integrations as read-only history. Do not re-mount the disabled routes or re-register the cron without an explicit product decision.
 
 ## Coupon Redeem Flow (as of 2026-04-26)
 The QR-scan redemption (`POST /transaction/redeemPoints`, handler in `services/transactionService.js#redeemCouponPoints`) treats every coupon as having two **independent** reward tracks, each crediting a distinct balance on the User.
@@ -72,3 +90,4 @@ The QR-scan redemption (`POST /transaction/redeemPoints`, handler in `services/t
 - **Eligibility** is unchanged: only `accountType` ∈ `POINTS_REDEEM_ELIGIBLE_ACCOUNT_TYPES` (env-driven, defaults to `Dealer`) with a `dealerCode` that resolves in Focus8 may redeem.
 
 When extending this flow, preserve the per-track shape: introduce a new track with its own `*RedeemedBy/At` pair on the coupon, its own balance field on the User, and add it to the same `if (allTracksRedeemed) → 404` guard rather than reusing one of the existing tracks.
+

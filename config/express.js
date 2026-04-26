@@ -10,7 +10,9 @@ const cors = require('cors');
 const helmet = require('helmet');
 const routes = require('../routes/index');
 const passport = require('../middleware/passport');
-const scheduler = require('../crons/UpdatePendingCashFreeTransfers');
+// Cash-redemption cron disabled — cron file preserved on disk for history but
+// no longer required (would re-arm the retired Cashfree status-poll job).
+// const scheduler = require('../crons/UpdatePendingCashFreeTransfers');
 const { SESSION_SECRET, IS_PROD } = require('./secrets');
 
 const requestContext = require('../utils/requestContext');
