@@ -61,7 +61,7 @@ ledgers.forEach(ledger => {
 
   if (!dealerCode) return;
 
-  const absAmt = Math.abs(parseFloat(String(ledger.amount).replace(/[^\d.-]/g, "")));
+  const absAmt = Math.abs(parseFloat(String(ledger.pointsCredited).replace(/[^\d.-]/g, "")));
 
   // Find existing transaction group 
   const existingGroup = groups.find(

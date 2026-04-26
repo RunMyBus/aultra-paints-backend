@@ -98,15 +98,15 @@ exports.transferPoints = async (req, res) => {
         try {
             await transactionLedger.create({
                 narration: narrationFrom,
-                amount: `- ${amount}`,
-                balance: savedSenderData.rewardPoints,
+                pointsCredited: `- ${amount}`,
+                pointsBalance: savedSenderData.rewardPoints,
                 userId: savedSenderData._id,
                 ...(uniqueCode ? { uniqueCode } : {})
             });
             await transactionLedger.create({
                 narration: narrationTo,
-                amount: `+ ${amount}`,
-                balance: savedRecipientData.rewardPoints,
+                pointsCredited: `+ ${amount}`,
+                pointsBalance: savedRecipientData.rewardPoints,
                 userId: savedRecipientData._id,
                 ...(uniqueCode ? { uniqueCode } : {})
             });
