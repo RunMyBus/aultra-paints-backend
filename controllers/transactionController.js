@@ -106,8 +106,8 @@ exports.markTransactionAsProcessed = async (req, res) => {
 
         await transactionLedger.create({
             narration: `Scanned coupon ${claimed.couponCode} and redeemed points.`,
-            amount: `+ ${claimed.redeemablePoints}`,
-            balance: userData.rewardPoints,
+            pointsCredited: `+ ${claimed.redeemablePoints}`,
+            pointsBalance: userData.rewardPoints,
             userId: userData._id,
             couponId: claimed._id,
         });

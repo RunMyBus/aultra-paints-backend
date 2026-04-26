@@ -45,3 +45,30 @@ This Express/Jest backend powers Aultra Paints services. Use the guidance below 
   - `sync-accounts.js`
   - `update-dealer-salesexec.js`
 - Postman assets were refreshed in `postman/AULTRA-PAINTS-LOCAL.postman_collection.json`.
+
+## Coupon Redeem Flow (as of 2026-04-26)
+The QR-scan redemption (`POST /transaction/redeemPoints`, handler in `services/transactionService.js#redeemCouponPoints`) treats every coupon as having two **independent** reward tracks, each crediting a distinct balance on the User.
+
+- **Coupon model** (`models/Transaction.js`, MongoDB collection `transactions`):
+  - Points track: `redeemablePoints` (value), `pointsRedeemedBy` / `pointsRedeemedAt` (used flag).
+  - Cash track:   `value`             (value), `cashRedeemedBy`   / `cashRedeemedAt`   (used flag).
+- **User balances** (`models/User.js`):
+  - `rewardPoints` — credited from `coupon.redeemablePoints`.
+  - `cash`         — credited from `coupon.value`. (Existing field — used in `userController.js` "Cash Reward" displays and in `authController.js` user-info responses; do **not** introduce a parallel `cashReward` field.)
+- **Per-track idempotency**: a scan credits only the tracks where the corresponding `*RedeemedBy` is still undefined, and marks only those fields. The previously-redeemed track is left untouched.
+- **Reject only when both are used**: returns `404 { message: 'Coupon Redeemed already.' }` only if BOTH `pointsRedeemedBy` and `cashRedeemedBy` are already set on the coupon.
+- **Atomic update**: a single `User.findOneAndUpdate({ $inc: { rewardPoints, cash } })` increments both balances; the `$inc` object only contains the keys for the tracks being credited on this scan.
+- **Response payload**:
+  ```
+  { rewardPoints: <points just credited>, cashReward: <cash just credited>, couponCode }
+  ```
+  `rewardPoints` carries only the points-track credit (matches the historical meaning of the field). `cashReward` carries the cash-track credit. The two are independent — there is no aggregate.
+- **Ledger** (`models/TransactionLedger`): one row per scan, carrying both tracks in their own fields. Each track's pair of fields is independently optional — a row that only credits one track sets only that track's pair (the other pair is undefined).
+  - `pointsCredited` — points credited / debited on this row (string preserves the legacy `'+ NNN'` / `'- NNN'` formatting used by credit-note PDFs; renamed from `amount` on 2026-04-26)
+  - `pointsBalance`  — `User.rewardPoints` after this row's effect (renamed from `balance` on 2026-04-26; `required: true` was relaxed on 2026-04-26 so cash-only rows don't have to fabricate a points snapshot)
+  - `cashReward`     — cash credited on this row
+  - `cashBalance`    — `User.cash` after this row's effect
+  Readers should treat any undefined pair as "this row did not affect that track". Old rows pre-dating the rename were migrated to the new field names by `mongoscripts/rename_ledger_points_fields.js` (run before deploying the renamed code); old rows do not carry the cash fields.
+- **Eligibility** is unchanged: only `accountType` ∈ `POINTS_REDEEM_ELIGIBLE_ACCOUNT_TYPES` (env-driven, defaults to `Dealer`) with a `dealerCode` that resolves in Focus8 may redeem.
+
+When extending this flow, preserve the per-track shape: introduce a new track with its own `*RedeemedBy/At` pair on the coupon, its own balance field on the User, and add it to the same `if (allTracksRedeemed) → 404` guard rather than reusing one of the existing tracks.

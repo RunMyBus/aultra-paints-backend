@@ -162,12 +162,12 @@ exports.generateTransactionLedgerTemplate = async (req, res) => {
     const userName = transferorUser?.name || '';
 
     // Reward Scheme Calculation for Credit Note (Not saved to DB)
-    const amountVal = Math.abs(Number(txnForPdf.amount?.replace(/[^0-9.-]/g, '') || 0));
+    const amountVal = Math.abs(Number(txnForPdf.pointsCredited?.replace(/[^0-9.-]/g, '') || 0));
 
-    // Create a display-friendly version of the transaction (no + or - in amount)
+    // Create a display-friendly version of the transaction (no + or - in pointsCredited)
     const displayTxn = {
       ...(txnForPdf.toObject ? txnForPdf.toObject() : txnForPdf),
-      amount: amountVal.toString(),
+      pointsCredited: amountVal.toString(),
     };
 
     const transactionsForPdf = [displayTxn];
@@ -228,8 +228,8 @@ exports.generateTransactionLedgerTemplate = async (req, res) => {
             // Insert a ledger record for the deduction so it is fully traceable
             await TransactionLedger.create({
               narration: 'Credit Note reward deduction',
-              amount: `- ${amountVal}`,
-              balance: updatedSuperUser.rewardPoints,
+              pointsCredited: `- ${amountVal}`,
+              pointsBalance: updatedSuperUser.rewardPoints,
               userId: superUser._id.toString(),
               uniqueCode: `CN_${txnForPdf.uniqueCode}`, // prefixed to keep it unique
             });
