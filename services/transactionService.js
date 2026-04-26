@@ -2,7 +2,6 @@
 const Transaction = require('../models/Transaction');
 const mongoose = require('mongoose');
 const logger = require('../utils/logger');
-const userModel = require("../models/User");
 const User = require("../models/User");
 const transactionLedger = require("../models/TransactionLedger");
 const { Parser } = require('json2csv');
@@ -549,92 +548,125 @@ class TransactionService {
             logger.debug('Successfully retrieved coupon based on udid', {
                 couponCode: document.couponCode,
             });
-            if(document.pointsRedeemedBy !== undefined) {
-                logger.warn('Coupon Redeemed already', {
+
+            // Each coupon has two independent reward tracks: a points reward
+            // (redeemablePoints) tracked by `pointsRedeemedBy`, and a cash
+            // reward (`value`) tracked by `cashRedeemedBy`. After cash payouts
+            // via payment gateway were retired, the cash value is now also
+            // credited to the user's `rewardPoints` balance — but each track
+            // is still redeemed independently, so a partially-redeemed coupon
+            // (e.g. cash already taken via the old flow but points untouched)
+            // can be completed by a later scan.
+            //
+            // Refuse the scan only when BOTH tracks have already been redeemed.
+            const pointsAlreadyRedeemed = document.pointsRedeemedBy !== undefined;
+            const cashAlreadyRedeemed   = document.cashRedeemedBy   !== undefined;
+
+            if (pointsAlreadyRedeemed && cashAlreadyRedeemed) {
+                logger.warn('Coupon fully redeemed already (both points and cash tracks used)', {
                     couponCode: document.couponCode,
+                    pointsRedeemedBy: document.pointsRedeemedBy,
+                    cashRedeemedBy: document.cashRedeemedBy,
                 });
                 return res.status(404).json({ message: 'Coupon Redeemed already.' });
-            } else {
-                const staticUserData = await userModel.findOne({mobile: '9999999998'});
-                let userId = req.user._id.toString();
-                let updatedTransaction = {};
-                if (userId === staticUserData._id.toString()) {
-                    logger.info('Static user logged in, so making the qr redeemable again', {
-                        userId: userId,
+            }
+
+            const now = new Date();
+
+            // Build the $set update with only the fields for the tracks we are
+            // redeeming on this scan. Skip tracks already redeemed earlier.
+            const updateSet = { updatedBy: req.user._id };
+            if (!pointsAlreadyRedeemed) {
+                updateSet.pointsRedeemedBy = req.user.mobile;
+                updateSet.pointsRedeemedAt = now;
+            }
+            if (!cashAlreadyRedeemed) {
+                updateSet.cashRedeemedBy = req.user.mobile;
+                updateSet.cashRedeemedAt = now;
+            }
+
+            const updatedTransaction = await Transaction.findOneAndUpdate(
+                { UDID: qr },
+                { $set: updateSet },
+                { new: true }
+            );
+            logger.info('Successfully updated coupon — redeemed tracks', {
+                couponCode: updatedTransaction && updatedTransaction.couponCode,
+                pointsRedeemedNow: !pointsAlreadyRedeemed,
+                cashRedeemedNow: !cashAlreadyRedeemed,
+            });
+
+            if (!updatedTransaction) {
+                return res.status(404).json({ message: 'Transaction not found.' });
+            }
+
+            // Credit each unredeemed track to its own balance on the User:
+            //   coupon.redeemablePoints → User.rewardPoints
+            //   coupon.value             → User.cash
+            // Tracks already redeemed earlier stay at 0 and are not double-credited.
+            const pointsReward = pointsAlreadyRedeemed ? 0 : (updatedTransaction.redeemablePoints || 0);
+            const cashReward   = cashAlreadyRedeemed   ? 0 : (updatedTransaction.value             || 0);
+
+            let userData = req.user;
+            if (pointsReward > 0 || cashReward > 0) {
+                const inc = {};
+                if (pointsReward > 0) inc.rewardPoints = pointsReward;
+                if (cashReward   > 0) inc.cash         = cashReward;
+
+                userData = await User.findOneAndUpdate(
+                    { _id: updatedTransaction.updatedBy },
+                    { $inc: inc },
+                    { new: true }
+                );
+
+                if (!userData) {
+                    logger.warn('User not found for updating points/cash', {
+                        userId: updatedTransaction.updatedBy,
                     });
-                    updatedTransaction = await Transaction.findOneAndUpdate(
-                        {UDID: qr},  // Match the QR code
-                        {updatedBy: req.user._id },
-                        {new: true}  // Return the updated document
-                    );
-                    updatedTransaction.pointsRedeemedBy = staticUserData.mobile;
-                }else {
-                    // Find the transaction and update isProcessed to true
-                    updatedTransaction = await Transaction.findOneAndUpdate(
-                        {UDID: qr},  // Match the QR code
-                        {$set: {updatedBy: req.user._id, pointsRedeemedBy: req.user.mobile, pointsRedeemedAt: new Date()} },
-                        {new: true}  // Return the updated document
-                    );
-                    logger.info('Successfully updated coupon', {
-                        pointsRedeemedBy: updatedTransaction.pointsRedeemedBy
-                    });
+                    return res.status(404).json({ message: 'User not found for update.' });
                 }
-                let userData = {};
-                if (updatedTransaction.pointsRedeemedBy !== undefined) {
-                    // let getTransaction = await Transaction.findOne({couponCode: qr})
-                    // batch = await Batch.findOne({_id: getTransaction.batchId});
-                    // if (getTransaction) {
-                    const rewardPointsCount = updatedTransaction.redeemablePoints || 0;
-                    // const cashCount = updatedTransaction.value || 0;
+                logger.info('Successfully credited coupon to user', {
+                    userId: userData._id,
+                    pointsReward,
+                    cashReward,
+                    rewardPoints: userData.rewardPoints,
+                    cash: userData.cash,
+                });
+            }
 
-                    // Update the user fields safely
-                    userData = await User.findOneAndUpdate(
-                        { _id: updatedTransaction.updatedBy },
-                        [
-                            {
-                                $set: {
-                                    rewardPoints: {
-                                        $add: [{ $ifNull: ["$rewardPoints", 0] }, rewardPointsCount],
-                                    }
-                                }
-                            }
-                        ],
-                        { new: true } // Return the updated document
-                    );
-
-                    if (!userData) {
-                        logger.warn('User not found for updating points', {
-                            userId: userData._id
-                        });
-                        return res.status(404).json({ message: 'User not found for update.' });
-                    }
-                    logger.info('Successfully updated points to user', {
-                        userId: userData._id,
-                        pointsRedeemed: rewardPointsCount
-                    });
-                    // }
-                }
-
-                if (!updatedTransaction) {
-                    return res.status(404).json({message: 'Transaction not found.'});
-                }
-
-                const data = {
-                    rewardPoints: updatedTransaction.redeemablePoints,
-                    couponCode: document.couponCode,
-                }
+            // One ledger row per scan, carrying both tracks in their own
+            // fields. `amount`/`balance` cover the points side (historical
+            // meaning); `cashReward`/`cashBalance` cover the cash side.
+            if (pointsReward > 0 || cashReward > 0) {
+                const narrationParts = [];
+                if (pointsReward > 0) narrationParts.push(`${pointsReward} pts`);
+                if (cashReward   > 0) narrationParts.push(`${cashReward} cash`);
+                const narration = `Scanned coupon ${updatedTransaction.couponCode}: ${narrationParts.join(' + ')} credited.`;
 
                 await transactionLedger.create({
-                    narration: `Scanned coupon ${updatedTransaction.couponCode} and redeemed points.`,
-                    amount: updatedTransaction.redeemablePoints,
-                    balance: userData.rewardPoints,
-                    userId: userData._id
+                    narration,
+                    pointsCredited: pointsReward,
+                    pointsBalance:  userData.rewardPoints,
+                    cashReward,
+                    cashBalance:    userData.cash,
+                    userId:         userData._id,
                 });
-
-                logger.info('Coupon redeemed successfully and logged to ledger');
-
-                return res.status(200).json({message: "Coupon redeemed Successfully..!", data: data});
             }
+
+            logger.info('Coupon redeemed successfully and logged to ledger', {
+                pointsReward,
+                cashReward,
+            });
+
+            // Response carries each track's credit independently. Callers
+            // (mobile, web) decide how to render the split.
+            const data = {
+                rewardPoints: pointsReward,
+                cashReward,
+                couponCode: document.couponCode,
+            };
+
+            return res.status(200).json({ message: "Coupon redeemed Successfully..!", data: data });
         } catch (error) {
             logger.error('Error in transaction service - redeemCouponPoints method', {
                 error: error.message,

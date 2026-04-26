@@ -170,10 +170,10 @@ exports.redeemCash = async (req, next) => {
 
             await transactionLedger.create({
                 narration: `Scanned coupon code ${updatedTransaction.couponCode} and redeemed cash.`,
-                amount: `+ ${updatedTransaction.value}`,
-                balance: userData.cash,
-                userId: userData._id,
-                couponId: updatedTransaction._id
+                cashReward:  updatedTransaction.value,
+                cashBalance: userData.cash,
+                userId:      userData._id,
+                couponId:    updatedTransaction._id,
             });
             return next({ status: 200, message: "Coupon redeemed and payment initiated successfully!", data: ledgerEntry });
 
@@ -213,10 +213,10 @@ exports.redeemCash = async (req, next) => {
 
             await transactionLedger.create({
                 narration: `Scanned coupon ${updatedTransaction.couponCode} and redeemed cash.`,
-                amount: `+ ${updatedTransaction.value}`,
-                balance: userData.cash,
-                userId: userData._id,
-                couponId: updatedTransaction._id
+                cashReward:  updatedTransaction.value,
+                cashBalance: userData.cash,
+                userId:      userData._id,
+                couponId:    updatedTransaction._id,
             });
 
             return next({ status: 200, message: "Coupon redeemed and payment initiated successfully!", data: data });

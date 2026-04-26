@@ -13,15 +13,15 @@ exports.generateTransactionLedgerPDF = async (userId, transactions, userName = '
       <td>${i + 1}</td>
       <td>${t.uniqueCode || '-'}</td>
       <td>${t.narration || '-'}</td>
-      <td class="text-right">${t.amount || '0'}</td>
+      <td class="text-right">${t.pointsCredited || '0'}</td>
       <td class="text-right">${t.rewardPercentage || '0%'}</td>
-      <td class="text-right">${t.balance || '0'}</td>
+      <td class="text-right">${t.pointsBalance || '0'}</td>
       <td>${new Date(t.createdAt).toLocaleString()}</td>
     </tr>
   `).join('');
 
   const totalCredits = transactions.reduce(
-    (sum, t) => sum + Math.abs(Number(t.amount?.toString().replace(/[^0-9.-]/g, '') || 0)) + (Number(t.rewardPoints) || 0),
+    (sum, t) => sum + Math.abs(Number(t.pointsCredited?.toString().replace(/[^0-9.-]/g, '') || 0)) + (Number(t.rewardPoints) || 0),
     0
   );
 
