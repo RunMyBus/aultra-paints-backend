@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Credit Note</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-size: 12px;
+      color: #333;
+      padding: 20mm;
+    }
+    h2, h3 { margin: 0; padding: 0; }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 2px solid #000;
+      padding-bottom: 8px;
+      margin-bottom: 16px;
+    }
+    .company-info { font-size: 12px; line-height: 1.4; }
+    .credit-note-title { text-align: right; }
+    .credit-note-title h2 { font-size: 20px; color: #000; }
+    .credit-note-meta { margin-top: 4px; font-size: 11px; }
+    .dealer-name {
+      margin: 14px 0 10px 0;
+      text-align: center;
+      font-size: 13px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    th, td {
+      border: 1px solid #000;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f5f5f5;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+    .label-col { width: 40%; font-weight: bold; }
+    .signature-section {
+      margin-top: 50px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .signature-box {
+      width: 45%;
+      border-top: 1px solid #000;
+      text-align: center;
+      padding-top: 4px;
+      font-size: 10px;
+    }
+    .footer {
+      clear: both;
+      margin-top: 30px;
+      font-size: 10px;
+      text-align: center;
+      color: #555;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: #d4edda;
+      color: #155724;
+      font-weight: bold;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="company-info">
+      <h3>Yatika Software Technologies Pvt. Ltd.</h3>
+      <p>
+        Villa 76, Vasanthacity,<br>
+        Hafeezpet, Hyderabad – 500049, India<br>
+        <strong>Contact:</strong> +91-88866 65253
+      </p>
+      <p>©2025 Yatika Software Technologies Pvt. Ltd. All Rights Reserved.</p>
+    </div>
+    <div class="credit-note-title">
+      <h2>CREDIT NOTE</h2>
+      <div class="credit-note-meta">
+        <strong>Credit Note No:</strong> {{creditNoteNumber}}<br>
+        <strong>Date:</strong> {{date}}<br>
+        <strong>Status:</strong> <span class="status-badge">{{status}}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="dealer-name">{{dealerName}}</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th class="label-col">Field</th>
+        <th>Details</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="label-col">Credit Note Number</td>
+        <td>{{creditNoteNumber}}</td>
+      </tr>
+      <tr>
+        <td class="label-col">Dealer Name</td>
+        <td>{{dealerName}}</td>
+      </tr>
+      <tr>
+        <td class="label-col">Balance Type</td>
+        <td>{{balanceType}}</td>
+      </tr>
+      <tr>
+        <td class="label-col">Amount Debited</td>
+        <td>{{amount}}</td>
+      </tr>
+      <tr>
+        <td class="label-col">Reason / Narration</td>
+        <td>{{narration}}</td>
+      </tr>
+      <tr>
+        <td class="label-col">Date of Issue</td>
+        <td>{{date}}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="signature-section">
+    <div class="signature-box">Authorized Signatory</div>
+    <div class="signature-box">Customer Signature</div>
+  </div>
+
+  <div class="footer">
+    <p>This is a system-generated credit note. No physical signature required.</p>
+  </div>
+
+</body>
+</html>

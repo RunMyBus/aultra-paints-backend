@@ -2,6 +2,33 @@ const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
 
+exports.generateCreditNoteIssuancePDF = async (creditNote, dealerName = '') => {
+  const templatePath = path.join(__dirname, '../templates/creditNoteIssuanceTemplate.html');
+  let html = fs.readFileSync(templatePath, 'utf-8');
+
+  const balanceLabel = creditNote.balanceType === 'rewardPoints' ? 'Reward Points' : 'Cash';
+  const balanceAfterLabel = creditNote.balanceType === 'rewardPoints'
+    ? `${(creditNote.pointsBalanceAfter ?? '')} pts`
+    : `₹${(creditNote.cashBalanceAfter ?? '')}`;
+
+  html = html
+    .replace(/{{creditNoteNumber}}/g, creditNote.creditNoteNumber)
+    .replace(/{{dealerName}}/g,       dealerName.toUpperCase())
+    .replace(/{{balanceType}}/g,      balanceLabel)
+    .replace(/{{amount}}/g,           creditNote.amount.toString())
+    .replace(/{{narration}}/g,        creditNote.narration || '-')
+    .replace(/{{date}}/g,             new Date(creditNote.createdAt || Date.now()).toLocaleDateString())
+    .replace(/{{status}}/g,           (creditNote.status || 'issued').toUpperCase());
+
+  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
+  const page = await browser.newPage();
+  await page.setContent(html, { waitUntil: 'networkidle0' });
+  const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
+  await browser.close();
+
+  return pdfBuffer;
+};
+
 exports.generateTransactionLedgerPDF = async (userId, transactions, userName = '') => {
   const templatePath = path.join(__dirname, '../templates/creditNoteTemplate.html');
   console.log(' Template path:', templatePath);

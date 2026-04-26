@@ -5,12 +5,6 @@ process.env.ACTIVATE_BULKPE_PG = 'false';
 process.env.CASH_REDEEM_ELIGIBLE_ACCOUNT_TYPES = 'Dealer';
 global.config = process.env;
 
-const authController = require('../../controllers/authController');
-const User = require('../../models/User');
-const Transaction = require('../../models/Transaction');
-const cashFreePaymentService = require('../../services/cashFreePaymentService');
-const { getDealerAccountId } = require('../../services/focus8Order.service');
-
 // Mock the dependencies
 jest.mock('../../models/User');
 jest.mock('../../models/Transaction');
@@ -20,139 +14,162 @@ jest.mock('../../services/bulkPePaymentService');
 jest.mock('../../services/focus8Order.service', () => ({ getDealerAccountId: jest.fn() }));
 jest.mock('../../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn() }));
 
+const authController = require('../../controllers/authController');
+const User = require('../../models/User');
+const Transaction = require('../../models/Transaction');
+const cashFreePaymentService = require('../../services/cashFreePaymentService');
 const transactionLedger = require('../../models/TransactionLedger');
 
-const DEALER_USER = { _id: 'user123', name: 'Test Dealer', mobile: '1234567890', cash: 200, accountType: 'Dealer', dealerCode: 'D001' };
-const MOCK_TRANSACTION = { _id: 'txn123', UDID: 'test-qr-123', value: 100, couponCode: 'COUP01', cashRedeemedBy: undefined };
+// ─── Fixtures ────────────────────────────────────────────────────────────────
+// Mobile must be a valid Indian 10-digit number starting 6-9 (isValidMobile check).
+const VALID_MOBILE = '9876543210';
+const VALID_UPI    = 'dealer@upi';
+const QR           = 'test-qr-123';
 
+const DEALER_USER = {
+    _id: 'user123',
+    name: 'Test Dealer',
+    mobile: VALID_MOBILE,
+    cash: 200,
+    accountType: 'Dealer',
+    dealerCode: 'D001',
+};
+
+// Transaction returned by the atomic findOneAndUpdate claim
+const CLAIMED_TXN = { _id: 'txn123', UDID: QR, value: 100, couponCode: 'COUP01' };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// redeemCash — updated to match the reworked controller
+// Flow: validate mobile → validate UPI → findUser → atomic claim →
+//       payment → (user exists) update user cash / (user null) create new user
+// ─────────────────────────────────────────────────────────────────────────────
 describe('redeemCash', () => {
     const next = jest.fn();
 
     beforeEach(() => {
         jest.clearAllMocks();
+        // Default: atomic claim succeeds; override per test as needed.
+        Transaction.findOneAndUpdate.mockResolvedValue(CLAIMED_TXN);
+        Transaction.updateOne = jest.fn().mockResolvedValue({});
     });
 
-    // ─── Dealer eligibility guard ────────────────────────────────────────────
+    // ── Input validation ──────────────────────────────────────────────────────
 
-    test('should return 403 if user not found in DB', async () => {
-        const req = { body: { mobile: '9999999999', upi: 'test@upi' }, params: { qrCodeID: 'test-qr-123' } };
+    test('400 when mobile is not a valid Indian number', async () => {
+        const req = { body: { mobile: '1234567890', upi: VALID_UPI }, params: { qrCodeID: QR } };
+        await authController.redeemCash(req, next);
+        expect(next).toHaveBeenCalledWith({ status: 400, message: 'Invalid mobile.' });
+    });
 
-        User.findOne.mockResolvedValue(null);
+    test('400 when UPI ID has invalid format', async () => {
+        const req = { body: { mobile: VALID_MOBILE, upi: 'not-a-valid-upi' }, params: { qrCodeID: QR } };
+        await authController.redeemCash(req, next);
+        expect(next).toHaveBeenCalledWith({ status: 400, message: 'Invalid UPI ID.' });
+    });
 
+    // ── Transaction lookup ────────────────────────────────────────────────────
+
+    test('404 when QR code has no matching transaction in DB', async () => {
+        User.findOne.mockResolvedValue(DEALER_USER);
+        Transaction.findOneAndUpdate.mockResolvedValue(null); // atomic claim fails
+        Transaction.findOne.mockReturnValue({
+            select: jest.fn().mockResolvedValue(null), // no existing doc either
+        });
+
+        const req = { body: { mobile: VALID_MOBILE, upi: VALID_UPI }, params: { qrCodeID: 'no-such-qr' } };
         await authController.redeemCash(req, next);
 
-        expect(next).toHaveBeenCalledWith({ status: 403, message: 'Only registered users can redeem. User not found.' });
-        expect(getDealerAccountId).not.toHaveBeenCalled();
+        expect(next).toHaveBeenCalledWith({
+            status: 404,
+            message: 'Transaction not found for QR code: no-such-qr',
+        });
     });
 
-    test('should return 403 if user is not a Dealer', async () => {
-        const req = { body: { mobile: '1234567890', upi: 'test@upi' }, params: { qrCodeID: 'test-qr-123' } };
+    test('409 when coupon has already been claimed by another redemption', async () => {
+        User.findOne.mockResolvedValue(DEALER_USER);
+        Transaction.findOneAndUpdate.mockResolvedValue(null); // atomic claim fails
+        Transaction.findOne.mockReturnValue({
+            select: jest.fn().mockResolvedValue(CLAIMED_TXN), // existing doc found
+        });
 
-        User.findOne.mockResolvedValue({ ...DEALER_USER, accountType: 'Painter' });
-
+        const req = { body: { mobile: VALID_MOBILE, upi: VALID_UPI }, params: { qrCodeID: QR } };
         await authController.redeemCash(req, next);
 
-        expect(next).toHaveBeenCalledWith({ status: 403, message: expect.stringContaining('Only') });
-        expect(getDealerAccountId).not.toHaveBeenCalled();
+        expect(next).toHaveBeenCalledWith({ status: 409, message: 'Coupon already redeemed.' });
     });
 
-    test('should return 403 if dealer has no dealerCode', async () => {
-        const req = { body: { mobile: '1234567890', upi: 'test@upi' }, params: { qrCodeID: 'test-qr-123' } };
+    // ── Payment ───────────────────────────────────────────────────────────────
 
-        User.findOne.mockResolvedValue({ ...DEALER_USER, dealerCode: undefined });
+    test('400 when payment gateway returns success:false and releases the claim', async () => {
+        User.findOne.mockResolvedValue(DEALER_USER);
+        // atomic claim succeeds (set by beforeEach)
+        cashFreePaymentService.upiPayment.mockResolvedValue({ success: false, message: 'Payment failed' });
 
+        const req = { body: { mobile: VALID_MOBILE, upi: VALID_UPI }, params: { qrCodeID: QR } };
         await authController.redeemCash(req, next);
 
-        expect(next).toHaveBeenCalledWith({ status: 403, message: 'Dealer code not set. Contact support.' });
-        expect(getDealerAccountId).not.toHaveBeenCalled();
+        // Claim must be released
+        expect(Transaction.updateOne).toHaveBeenCalledWith(
+            { _id: CLAIMED_TXN._id },
+            expect.objectContaining({ $unset: expect.any(Object) })
+        );
+        expect(next).toHaveBeenCalledWith({ status: 400, message: 'Payment failed' });
     });
 
-    test('should return 403 if dealer not found in Focus8', async () => {
-        const req = { body: { mobile: '1234567890', upi: 'test@upi' }, params: { qrCodeID: 'test-qr-123' } };
+    // ── Happy paths ───────────────────────────────────────────────────────────
+
+    test('200 success — existing user: cash incremented, ledger written', async () => {
+        const updatedTxn  = { ...CLAIMED_TXN, updatedBy: 'user123' };
+        const updatedUser = { ...DEALER_USER, cash: 300 };
 
         User.findOne.mockResolvedValue(DEALER_USER);
-        getDealerAccountId.mockResolvedValue(null);
-
-        await authController.redeemCash(req, next);
-
-        expect(getDealerAccountId).toHaveBeenCalledWith('D001');
-        expect(next).toHaveBeenCalledWith({ status: 403, message: 'Dealer not found in Focus8. Contact support.' });
-    });
-
-    // ─── Happy path & downstream errors ─────────────────────────────────────
-
-    test('should successfully redeem cash for a valid Dealer', async () => {
-        const req = {
-            body: { mobile: '1234567890', upi: 'test@upi' },
-            params: { qrCodeID: 'test-qr-123' }
-        };
-
-        const updatedTransaction = { ...MOCK_TRANSACTION, updatedBy: 'user123', cashRedeemedBy: '1234567890' };
-
-        User.findOne.mockResolvedValue(DEALER_USER);
-        getDealerAccountId.mockResolvedValue(42);
-        Transaction.findOne.mockResolvedValue(MOCK_TRANSACTION);
+        // Two findOneAndUpdate calls: (1) atomic claim already set, (2) set updatedBy
+        Transaction.findOneAndUpdate
+            .mockResolvedValueOnce(CLAIMED_TXN)   // claim
+            .mockResolvedValueOnce(updatedTxn);    // update updatedBy
         cashFreePaymentService.upiPayment.mockResolvedValue({ success: true });
-        Transaction.findOneAndUpdate.mockResolvedValue(updatedTransaction);
-        User.findOneAndUpdate.mockResolvedValue(DEALER_USER);
+        User.findOneAndUpdate.mockResolvedValue(updatedUser);
         transactionLedger.create.mockResolvedValue({});
 
+        const req = { body: { mobile: VALID_MOBILE, upi: VALID_UPI }, params: { qrCodeID: QR } };
         await authController.redeemCash(req, next);
 
-        expect(getDealerAccountId).toHaveBeenCalledWith('D001');
-        expect(Transaction.findOne).toHaveBeenCalledWith({ UDID: 'test-qr-123' });
-        expect(cashFreePaymentService.upiPayment).toHaveBeenCalledWith('test@upi', '1234567890', 100);
-        expect(Transaction.findOneAndUpdate).toHaveBeenCalledWith(
-            { UDID: 'test-qr-123' },
-            { $set: expect.objectContaining({ updatedBy: 'user123', cashRedeemedBy: '1234567890' }) },
+        expect(cashFreePaymentService.upiPayment).toHaveBeenCalledWith(VALID_UPI, VALID_MOBILE, 100);
+        expect(User.findOneAndUpdate).toHaveBeenCalledWith(
+            { _id: updatedTxn.updatedBy },
+            expect.objectContaining({ $inc: { cash: 100 } }),
             { new: true }
         );
+        expect(transactionLedger.create).toHaveBeenCalled();
         expect(next).toHaveBeenCalledWith(expect.objectContaining({ status: 200 }));
     });
 
-    test('should return 404 if transaction not found', async () => {
-        const req = {
-            body: { mobile: '1234567890', upi: 'test@upi' },
-            params: { qrCodeID: 'invalid-qr' }
-        };
+    test('200 success — unregistered mobile: new User document created', async () => {
+        const savedUser = { _id: 'newuser1', mobile: VALID_MOBILE, cash: 100, name: VALID_MOBILE };
+        const updatedTxn = { ...CLAIMED_TXN, updatedBy: 'newuser1' };
 
-        User.findOne.mockResolvedValue(DEALER_USER);
-        getDealerAccountId.mockResolvedValue(42);
-        Transaction.findOne.mockResolvedValue(null);
+        User.findOne.mockResolvedValue(null); // user not in DB
+        Transaction.findOneAndUpdate
+            .mockResolvedValueOnce(CLAIMED_TXN)  // atomic claim
+            .mockResolvedValueOnce(updatedTxn);  // update after new user saved
+        cashFreePaymentService.upiPayment.mockResolvedValue({ success: true });
+        User.mockImplementation(() => ({ save: jest.fn().mockResolvedValue(savedUser) }));
+        transactionLedger.create.mockResolvedValue({});
 
+        const req = { body: { mobile: VALID_MOBILE, upi: VALID_UPI }, params: { qrCodeID: QR } };
         await authController.redeemCash(req, next);
 
-        expect(next).toHaveBeenCalledWith({ status: 404, message: 'Transaction not found for QR code: invalid-qr' });
+        expect(next).toHaveBeenCalledWith(expect.objectContaining({ status: 200 }));
     });
 
-    test('should return 400 if coupon already redeemed', async () => {
-        const req = {
-            body: { mobile: '1234567890', upi: 'test@upi' },
-            params: { qrCodeID: 'test-qr-123' }
-        };
+    // ── Unexpected errors ─────────────────────────────────────────────────────
 
-        User.findOne.mockResolvedValue(DEALER_USER);
-        getDealerAccountId.mockResolvedValue(42);
-        Transaction.findOne.mockResolvedValue({ ...MOCK_TRANSACTION, cashRedeemedBy: 'someone' });
+    test('500 on unexpected DB error', async () => {
+        User.findOne.mockRejectedValue(new Error('Connection lost'));
 
+        const req = { body: { mobile: VALID_MOBILE, upi: VALID_UPI }, params: { qrCodeID: QR } };
         await authController.redeemCash(req, next);
 
-        expect(next).toHaveBeenCalledWith({ status: 400, message: 'Coupon already redeemed.' });
-    });
-
-    test('should return 400 if payment fails', async () => {
-        const req = {
-            body: { mobile: '1234567890', upi: 'test@upi' },
-            params: { qrCodeID: 'test-qr-123' }
-        };
-
-        User.findOne.mockResolvedValue(DEALER_USER);
-        getDealerAccountId.mockResolvedValue(42);
-        Transaction.findOne.mockResolvedValue(MOCK_TRANSACTION);
-        cashFreePaymentService.upiPayment.mockResolvedValue({ success: false, message: 'Payment failed' });
-
-        await authController.redeemCash(req, next);
-
-        expect(next).toHaveBeenCalledWith({ status: 400, message: 'Payment failed' });
+        expect(next).toHaveBeenCalledWith({ status: 500, message: 'Connection lost' });
     });
 });

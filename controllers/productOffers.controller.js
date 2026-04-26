@@ -7,9 +7,30 @@ const logger = require('../utils/logger');
 const UserModel = require('../models/User');
 const ProductPriceModel = require('../models/ProductPrice');
 
+/**
+ * Parse routeScheme from a FormData field.
+ * Accepts: JSON array string '["m1","m2"]', single string "m1", empty string, or null.
+ * Returns: non-empty string[] or null (null means "show to all dealers").
+ */
+function parseRouteScheme(raw) {
+    if (!raw) return null;
+    let parsed;
+    try {
+        parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch {
+        parsed = raw; // treat as plain string
+    }
+    if (Array.isArray(parsed)) {
+        const filtered = parsed.filter(Boolean);
+        return filtered.length ? filtered : null;
+    }
+    return parsed || null;
+}
+
 // Create a new productOffer
 exports.createProductOffer = async (req, res) => {
     let {productOfferDescription, validUntil, productOfferStatus, cashback, redeemPoints, price} = req.body;
+    const routeScheme = parseRouteScheme(req.body.routeScheme);
     if (!req.body.productOfferImage) {
         return res.status(400).json({message: 'Image is required'});
     }
@@ -46,7 +67,8 @@ exports.createProductOffer = async (req, res) => {
         productOfferStatus,
         cashback,
         redeemPoints,
-        price : parsedPrice
+        price : parsedPrice,
+        routeScheme: routeScheme || null
     });
 
     try {
@@ -183,7 +205,30 @@ exports.searchProductOffers = async (req, res) => {
             ];
         }
         query['offerAvailable'] = true;
-        let data = await productOffersModel.find(query).skip((page - 1) * limit).limit(parseInt(limit)).sort({cashback: -1});
+
+        // SuperUser sees all offers regardless of route scheme.
+        // Dealers and SalesExecutives are filtered to their own route.
+        if (req.user.accountType !== 'SuperUser') {
+            let seMobile = null;
+            if (req.user.accountType === 'Dealer') {
+                seMobile = req.user.salesExecutive || null;
+            } else if (req.user.accountType === 'SalesExecutive') {
+                seMobile = req.user.mobile;
+            }
+            const routeSchemeFilter = { $or: [
+                { routeScheme: null },
+                { routeScheme: { $exists: false } },
+                { routeScheme: seMobile }
+            ]};
+            if (query['$or']) {
+                query['$and'] = [{ $or: query['$or'] }, routeSchemeFilter];
+                delete query['$or'];
+            } else {
+                query['$or'] = routeSchemeFilter['$or'];
+            }
+        }
+
+        let data = await productOffersModel.find(query).skip((page - 1) * limit).limit(parseInt(limit)).sort({createdAt: -1});
         const totalOffers = await productOffersModel.countDocuments(query);
         const updatedData = await Promise.all(data.map(async (productOffer) => {
             let dealerIds = []
@@ -297,11 +342,12 @@ exports.updateProductOffer = async (req, res) => {
             // productOfferTitle: req.body.productOfferTitle,
             validUntil: req.body.validUntil,
             productOfferStatus: req.body.productOfferStatus,
-            cashback: req.body.cashback,        
-            redeemPoints: req.body.redeemPoints, 
+            cashback: req.body.cashback,
+            redeemPoints: req.body.redeemPoints,
             productOfferImageUrl: req.body.productOfferImageUrl,
-            updatedBy: req.body.updatedBy,  
-            price: parsedPrice    
+            updatedBy: req.body.updatedBy,
+            price: parsedPrice,
+            routeScheme: parseRouteScheme(req.body.routeScheme)
         };
 
         const productOffer = await productOffersModel.findByIdAndUpdate(req.params.id,  productOfferData, {new: true});

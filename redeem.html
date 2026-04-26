@@ -3,6 +3,165 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aultra Paints – Service Update</title>
+    <link rel="icon" href="/assets/aultrapaints_icon.png" type="image/x-icon">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #f4f6f9;
+            font-family: Arial, sans-serif;
+            padding: 24px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.10);
+            max-width: 480px;
+            width: 100%;
+            padding: 48px 40px 40px;
+            text-align: center;
+        }
+
+        .logo {
+            height: 72px;
+            margin-bottom: 32px;
+            object-fit: contain;
+        }
+
+        .icon-wrap {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #fff3cd;
+            margin-bottom: 24px;
+        }
+
+        .icon-wrap svg {
+            width: 44px;
+            height: 44px;
+            fill: #f0a500;
+        }
+
+        h1 {
+            font-size: 1.45rem;
+            color: #1a1a2e;
+            margin-bottom: 16px;
+            line-height: 1.35;
+        }
+
+        p {
+            font-size: 1rem;
+            color: #555;
+            line-height: 1.7;
+            margin-bottom: 12px;
+        }
+
+        .divider {
+            border: none;
+            border-top: 1px solid #eee;
+            margin: 28px 0;
+        }
+
+        .store-links {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .store-links a {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 22px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+
+        .store-links a:hover { opacity: 0.85; }
+
+        .btn-playstore { background: #01875f; color: #fff; }
+        .btn-appstore  { background: #1a1a2e; color: #fff; }
+
+        .footer-note {
+            margin-top: 28px;
+            font-size: 0.8rem;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+
+        <img src="/assets/Aultrapaints_logo.png" alt="Aultra Paints" class="logo"
+             onerror="this.style.display='none'">
+
+        <div class="icon-wrap">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L1 21h22L12 2zm0 3.5L20.5 19H3.5L12 5.5zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z"/>
+            </svg>
+        </div>
+
+        <h1>This Service Is No Longer Available</h1>
+
+        <p>
+            Web-based coupon redemption has been <strong>discontinued</strong>.<br>
+            To redeem your cashback, please register yourself in the
+            <span>Aultra Paints</span> mobile app and redeem from there.
+        </p>
+
+        <hr class="divider">
+
+        <p style="font-size:0.9rem; color:#777; margin-bottom:16px;">
+            Download the app to get started:
+        </p>
+
+        <div class="store-links">
+            <a class="btn-playstore"
+               href="https://play.google.com/store/search?q=aultra+paints+app&c=apps"
+               target="_blank" rel="noopener">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                    <path d="M3 20.5v-17c0-.83 1-.83 1.5-.5l15 8.5-15 8.5C3.5 21.33 3 21.33 3 20.5z"/>
+                </svg>
+                Google Play
+            </a>
+        </div>
+
+        <p class="footer-note">
+            For support, contact us at
+            <a href="mailto:info@aultrapaints.com" style="color:#7B1FA2;">info@aultrapaints.com</a>
+        </p>
+
+    </div>
+
+</body>
+</html>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     ORIGINAL REDEMPTION PAGE — commented out temporarily
+     To restore: remove the outer comment block and delete the page above.
+     ═══════════════════════════════════════════════════════════════════════════
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Code Mobile Submission</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
           integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
@@ -13,17 +172,13 @@
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-            /*display: flex;*/
-            /*flex-direction: column;*/
-            /*align-items: center;*/
-            /*justify-content: center;*/
             height: 100vh;
             background-color: #f9f9f9;
         }
 
         h2 {
             color: #333;
-            margin-bottom: 30px; 
+            margin-bottom: 30px;
         }
 
         form {
@@ -61,59 +216,39 @@
             color: red;
         }
 
-
-        height:
-
-        100
-        vh
-
-        ;
-        }
-
         .card {
-
             position: relative;
             background-color: #7B1FA2;
             padding: 30px;
             width: 400px;
             border: none;
-
-
         }
 
         .content {
-
             z-index: 10;
         }
 
         .logo {
-
             margin-bottom: 50px;
         }
 
-
         .off {
-
             line-height: 0px;
         }
 
         .off h1 {
-
             font-size: 80px;
         }
 
         .off span {
-
             margin-right: 111px;
         }
-
 
         .plus {
             font-size: 23px;
         }
 
         .code {
-
             text-transform: uppercase;
             padding: 10px;
             background-color: #fff;
@@ -122,13 +257,10 @@
         }
 
         .cross-bg {
-
             height: 100%;
             width: 100%;
             position: absolute;
-
             background-color: #9C27B0;
-
             left: 0px;
             top: 0px;
             opacity: 0.4;
@@ -153,11 +285,6 @@
                                        required maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 10);"/>
                             </div>
                         </div>
-    
-                        <!-- <div class="mb-3">
-                            <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
-                            <input class="form-control" type="text" id="name" placeholder="Enter your name" />
-                        </div> -->
 
                         <div class="mb-3">
                             <label for="upi" class="form-label">UPI ID <span class="text-danger">*</span></label>
@@ -165,26 +292,24 @@
                         </div>
 
                         <div id="message"></div>
-    
+
                         <button class="btn btn-success" type="submit">Submit</button>
-                        
+
                     </form>
                 </div>
             </div>
             <div class="col-sm-4"></div>
         </div>
-    </div>    
+    </div>
 
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
             <div class="text-end">
                 <img src="\assets\Aultrapaints_logo.png" alt="Logo 2" class="navbar-logo" style="height:200px; margin-top: -110px;"  />
-                <!--                <p>Copyright &copy; 2022 QR Code Mobile Submission</p>-->
             </div>
         </div>
     </div>
-    <!-- Images/Logo in the navbar -->
 </div>
 <script>
     const url = window.location.hostname;
@@ -194,7 +319,6 @@
     document.addEventListener('DOMContentLoaded', () => {
         const form = document.getElementById('mobileForm');
         const mobileNumberInput = document.getElementById('mobileNumber');
-        // const nameInput = document.getElementById('name');
         const upiInput = document.getElementById('upi');
         const messageDiv = document.getElementById('message');
 
@@ -213,15 +337,7 @@
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
             const mobile = mobileNumberInput.value.trim();
-            // const name = nameInput.value.trim();
             const upi = upiInput.value.trim();
-
-              // Validate name field
-            //   if (!name) {
-            //     messageDiv.textContent = 'Name is required.';
-            //     messageDiv.style.color = 'red';
-            //     return;
-            // }
 
             if (!upi) {
                 messageDiv.textContent = 'UPI ID is required.';
@@ -252,66 +368,15 @@
                 });
 
                 const responseData = await response.json();
-            console.log('API Response:', responseData); // Log the full API response
+            console.log('API Response:', responseData);
 
-            // Check if response status is OK (200-299 range)
             if (response.ok) {
                 const jsonData = responseData.data;
                 messageDiv.style.color = 'green';
                 messageDiv.textContent = responseData.message;
                 console.log('Success: Coupon redeemed successfully.');
                 form.reset();
-                    // popup.style.backgroundColor = 'white';
-                    // popup.style.padding = '20px';
-                    // popup.style.borderRadius = '5px';
-                    // popup.style.boxShadow = '0 0 10px rgba(0,0,0,0.2)';
-                    // popup.innerHTML = `<div class="card mb-3 shadow-lg rounded-3" style="width: 100%;">
-                    //                     <div class="d-flex justify-content-around" style="padding: 20px; background-color: #218838; color: white">
-                    //                         <i class='bx bx-badge-check bx-tada' style="font-size: 150px;"></i>
-                    //                         <i class='bx bx-rupee' style="font-size: 150px;opacity: 0.2;"></i>
-                    //                     </div>
-                    //                     <div class="card-body">
-                    //                         <table class="table table-borderless">
-                    //                             <tbody>
-                    //                             <tr>
-                    //                             <th>Name</th>
-                    //                                 <td>${jsonData.userName}</td>
-                    //                             </tr>
-                    //                             <tr>
-                    //                                 <th>Mobile Number</th>
-                    //                                 <td>${jsonData.mobile}</td>
-                    //                             </tr>
-                    //                             <tr>
-                    //                                 <th>Redeemed Points</th>
-                    //                                 <td>${jsonData.redeemablePoints}</td>
-                    //                             </tr>
-                    //                             <tr>
-                    //                                 <th>Coupon</th>
-                    //                                 <td>${jsonData.couponCode}</td>
-                    //                             </tr>
-                    //                             <tr>
-                    //                                 <th>Cash</th>
-                    //                                 <td>${jsonData.cash} Rs.</td>
-                    //                             </tr>
-                    //                             <tr>
-                    //                                 <th>Batch Name</th>
-                    //                                 <td>${jsonData.batchName}</td>
-                    //                             </tr>
-                    //                             <tr>
-                    //                                 <th>Batch Number</th>
-                    //                                 <td>${jsonData.batchNumber}</td>
-                    //                             </tr>
-                    //                             <tr>
-                    //                                 <th>Status</th>
-                    //                                 <td>${jsonData.isProcessed ? 'Processed' : 'Not Processed'}</td>
-                    //                             </tr>
-                    //                             </tbody>
-                    //                         </table>
-                    //                     </div>
-                    //                 </div>`;
-                   
                 }else {
-                // Handle error response from backend (non-OK status)
                 messageDiv.style.color = 'red';
                 messageDiv.textContent = responseData.message || 'An error occurred. Please check your data and try again.';
                 console.log('API Error:', responseData.message || 'An error occurred.');
@@ -319,15 +384,13 @@
             }
 } catch (error) {
             console.error('Error submitting data:', error);
-            console.log('Catch block error:', error.message); // Log the error message
+            console.log('Catch block error:', error.message);
 
-            // Handle network errors or any fetch-related issues
             if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
                 messageDiv.style.color = 'red';
                 messageDiv.textContent = 'Network error: Please check your internet connection.';
                 console.log('Network Error: Please check your internet connection.');
             } else {
-                // If any other unexpected errors happen, display it
                 messageDiv.style.color = 'red';
                 messageDiv.textContent = `Unexpected error: ${error.message}.`;
                 console.log('Unexpected Error:', error.message);
@@ -340,3 +403,5 @@
 </script>
 </body>
 </html>
+
+-->

@@ -39,6 +39,7 @@ exports.login = async (req, next) => {
             accountType: req.user.accountType,
             redeemablePoints: req.user.redeemablePoints,
             cash: req.user.cash,
+            legacyCash: req.user.legacyCash || 0,
             parentDealerCode: req.user.parentDealerCode,
             message: "LOGGED_IN_SUCCESSFULLY"
         });

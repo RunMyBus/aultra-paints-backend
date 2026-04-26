@@ -11,7 +11,7 @@ const { Parser } = require('json2csv');
 const { escapeRegex, clampLimit, clampPage, isValidMobile } = require('../utils/validators');
 
 // Server-controlled fields that must never be accepted from the client.
-const USER_PROTECTED_FIELDS = ['rewardPoints', 'cash', 'token', '_id', 'createdAt', 'updatedAt', '__v'];
+const USER_PROTECTED_FIELDS = ['rewardPoints', 'cash', 'legacyCash', 'token', '_id', 'createdAt', 'updatedAt', '__v'];
 const USER_ALLOWED_CREATE_FIELDS = [
     'name', 'mobile', 'address', 'email', 'primaryContactPerson', 'primaryContactPersonMobile',
     'dealerCode', 'parentDealerCode', 'accountType', 'upiID', 'salesExecutive',
@@ -565,6 +565,25 @@ exports.getDealers = async (req, res) => {
     }
 }
 
+
+exports.getAllDealers = async (req, res) => {
+    try {
+        const dealers = await userModel.find(
+            { accountType: 'Dealer', status: 'active' },
+            { name: 1, mobile: 1, dealerCode: 1, rewardPoints: 1, cash: 1, legacyCash: 1 }
+        ).sort({ name: 1 });
+
+        return res.status(200).json({
+            status: 'success',
+            data: dealers,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            status: 'error',
+            message: 'Error fetching dealers',
+        });
+    }
+};
 
 exports.getAllSalesExecutives = async (req, res) => {
     try {

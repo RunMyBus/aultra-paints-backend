@@ -27,6 +27,7 @@ const transactionLedgerSchema = new mongoose.Schema({
     couponId: { type: String },
     uniqueCode: { type: String, unique: true },
     creditNoteIssued: { type: Boolean, default: false }, // prevents double-deduction on repeated credit note downloads
+    creditNoteId: { type: String }, // links to CreditNote._id (set on issuance rows)
 },{ timestamps: true });
 
 module.exports = mongoose.model('TransactionLedger', transactionLedgerSchema, 'transactionLedger');
