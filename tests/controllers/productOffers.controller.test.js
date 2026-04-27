@@ -1,14 +1,13 @@
-const { searchProductOffers } = require('../../controllers/productOffers.controller');
+const { searchProductOffers, createProductOffer, updateProductOffer } = require('../../controllers/productOffers.controller');
 const productOffersModel = require('../../models/productOffers.model');
 const ProductPriceModel = require('../../models/ProductPrice');
+const UserModel = require('../../models/User');
 const mongoose = require('mongoose');
 
 // Mock AWS configuration
 jest.mock('../../config/aws', () => ({
-    AWS_ACCESS_KEY_Id: 'mock-access-key',
-    AWS_SECRETACCESSKEY: 'mock-secret-key',
-    REGION: 'mock-region',
-    bucket_endpoint: 'mock-endpoint'
+    upload: jest.fn(),
+    deleteObject: jest.fn(),
 }));
 
 // Mock AWS SDK
@@ -22,9 +21,18 @@ jest.mock('aws-sdk', () => ({
     }))
 }));
 
+jest.mock('sharp', () => jest.fn(() => ({
+    resize: jest.fn().mockReturnThis(),
+    png: jest.fn().mockReturnThis(),
+    toBuffer: jest.fn().mockResolvedValue(Buffer.from('thumbnail-data')),
+})));
+
 // Mock the models
 jest.mock('../../models/productOffers.model');
 jest.mock('../../models/ProductPrice');
+jest.mock('../../models/User');
+
+const s3Mock = require('../../config/aws');
 
 describe('ProductOffersController', () => {
     describe('searchProductOffers', () => {
@@ -33,7 +41,7 @@ describe('ProductOffersController', () => {
                 page: 1,
                 limit: 10
             };
-        
+
             const mockUser = {
                 _id: new mongoose.Types.ObjectId('67e2d56857f5292cd11bc773'),
                 userType: 'Dealer',
@@ -41,7 +49,7 @@ describe('ProductOffersController', () => {
                 zone: 'Z001',
                 district: 'D001'
             };
-        
+
             const mockProductOffers = [
                 {
                     _id: new mongoose.Types.ObjectId('67dd1140d808657d711f5db5'),
@@ -61,7 +69,7 @@ describe('ProductOffersController', () => {
                     updatedAt: new Date('2025-03-24T06:50:46.628Z')
                 }
             ];
-        
+
             const mockPriceData = {
                 _id: new mongoose.Types.ObjectId('67e2e8f9792e075aba48756a'),
                 productOfferId: '67dd1140d808657d711f5db5',
@@ -70,7 +78,7 @@ describe('ProductOffersController', () => {
                 createdAt: new Date('2025-03-25T17:33:45.770Z'),
                 updatedAt: new Date('2025-03-25T17:33:45.770Z')
             };
-        
+
             productOffersModel.find.mockReturnValue({
                 skip: jest.fn().mockReturnValue({
                     limit: jest.fn().mockReturnValue({
@@ -78,22 +86,22 @@ describe('ProductOffersController', () => {
                     })
                 })
             });
-        
+
             productOffersModel.countDocuments.mockResolvedValue(1);
             ProductPriceModel.findOne.mockResolvedValue(mockPriceData);
-        
+
             const mockReq = {
                 body: mockBody,
                 user: mockUser
             };
-        
+
             const mockRes = {
                 status: jest.fn().mockReturnThis(),
                 json: jest.fn()
             };
-        
+
             await searchProductOffers(mockReq, mockRes);
-        
+
             expect(mockRes.status).toHaveBeenCalledWith(200);
             expect(mockRes.json).toHaveBeenCalledWith({
                 data: [{
@@ -104,9 +112,9 @@ describe('ProductOffersController', () => {
                 currentPage: 1
             });
         });
-        
 
-      
+
+
         test('should return product offers with correct price based on dealerId (Dealer Mapped - State  and zone)', async () => {
             const mockBody = {
                 page: 1,
@@ -136,7 +144,7 @@ describe('ProductOffersController', () => {
                 }
             ];
 
-            
+
             const mockPriceData = {
                 _id: new mongoose.Types.ObjectId('67e2e8f9792e075aba48757b'),
                 productOfferId: '67dd1140d808657d711f5db5',
@@ -156,7 +164,7 @@ describe('ProductOffersController', () => {
 
             productOffersModel.countDocuments.mockResolvedValue(1);
             ProductPriceModel.findOne.mockResolvedValue(mockPriceData);
-        
+
 
             const mockReq = {
                 body: mockBody,
@@ -186,14 +194,14 @@ describe('ProductOffersController', () => {
                 page: 1,
                 limit: 10
             };
-        
+
             const mockUser = {
                 _id: new mongoose.Types.ObjectId('67e2d56857f5292cd11bc773'),
                userType : 'Dealer',
                 state: '',
                 district: ''
             };
-        
+
             const mockProductOffers = [
                 {
                     _id: new mongoose.Types.ObjectId('67dd1140d808657d711f5db5'),
@@ -211,7 +219,7 @@ describe('ProductOffersController', () => {
                 }
             ];
 
-            
+
             const mockPriceData = {
                 _id: new mongoose.Types.ObjectId('67e2e8f9792e075aba48756a'),
                 productOfferId: '67dd1140d808657d711f5db5',
@@ -220,7 +228,7 @@ describe('ProductOffersController', () => {
                 createdAt: new Date('2025-03-25T17:33:45.770Z'),
                 updatedAt: new Date('2025-03-25T17:33:45.770Z')
             };
-        
+
             productOffersModel.find.mockReturnValue({
                 skip: jest.fn().mockReturnValue({
                     limit: jest.fn().mockReturnValue({
@@ -228,23 +236,23 @@ describe('ProductOffersController', () => {
                     })
                 })
             });
-        
+
             productOffersModel.countDocuments.mockResolvedValue(1);
             ProductPriceModel.findOne.mockResolvedValue(mockPriceData);
-        
-        
+
+
             const mockReq = {
                 body: mockBody,
                 user: mockUser
             };
-        
+
             const mockRes = {
                 status: jest.fn().mockReturnThis(),
                 json: jest.fn()
             };
-        
+
             await searchProductOffers(mockReq, mockRes);
-        
+
             expect(mockRes.status).toHaveBeenCalledWith(200);
             expect(mockRes.json).toHaveBeenCalledWith({
                 data: [{
@@ -255,8 +263,8 @@ describe('ProductOffersController', () => {
                 currentPage: 1
             });
         });
-        
-        
+
+
 
         // Keep these tests exactly as they were since they're passing
         test('should return empty result when no product offers are found', async () => {
@@ -414,6 +422,328 @@ describe('ProductOffersController', () => {
                     .sort.mock.calls[0][0];
                 expect(sortArg).toEqual({ createdAt: -1 });
             });
+        });
+    });
+
+    // ── Thumbnail generation (createProductOffer) ─────────────────────────────
+    describe('createProductOffer', () => {
+        const OFFER_ID = new mongoose.Types.ObjectId('67dd1140d808657d711f5db5');
+        const ORIGINAL_URL = `https://bucket.blr1.digitaloceanspaces.com/${OFFER_ID}.png`;
+        const THUMB_URL = `https://bucket.blr1.digitaloceanspaces.com/${OFFER_ID}_thumbnail.png`;
+        const VALID_IMAGE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+        const VALID_PRICE = JSON.stringify([{ All: 1000 }]);
+
+        function wireS3Upload() {
+            s3Mock.upload
+                .mockReturnValueOnce({ promise: jest.fn().mockResolvedValue({ Location: ORIGINAL_URL }) })
+                .mockReturnValueOnce({ promise: jest.fn().mockResolvedValue({ Location: THUMB_URL }) });
+        }
+
+        beforeEach(() => {
+            jest.clearAllMocks();
+            productOffersModel.findOne.mockResolvedValue(null);
+            productOffersModel.mockImplementation(() => ({
+                save: jest.fn().mockResolvedValue({ _id: OFFER_ID }),
+            }));
+            productOffersModel.updateOne.mockResolvedValue({});
+            UserModel.find.mockResolvedValue([]);
+            ProductPriceModel.deleteMany.mockResolvedValue({});
+            ProductPriceModel.insertMany.mockResolvedValue({});
+            wireS3Upload();
+        });
+
+        test('returns 400 when productOfferImage is missing', async () => {
+            const req = {
+                body: {
+                    productOfferDescription: 'Test',
+                    productOfferStatus: 'Active',
+                    cashback: 5,
+                    redeemPoints: 10,
+                    price: VALID_PRICE,
+                }
+            };
+            const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+            await createProductOffer(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(res.json).toHaveBeenCalledWith({ message: 'Image is required' });
+            expect(s3Mock.upload).not.toHaveBeenCalled();
+        });
+
+        test('uploads original image to S3 with correct key', async () => {
+            const req = {
+                body: {
+                    productOfferImage: VALID_IMAGE,
+                    productOfferDescription: 'Test',
+                    productOfferStatus: 'Active',
+                    cashback: 5,
+                    redeemPoints: 10,
+                    price: VALID_PRICE,
+                }
+            };
+            const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+            await createProductOffer(req, res);
+
+            expect(s3Mock.upload).toHaveBeenCalledWith(
+                expect.objectContaining({ Key: `${OFFER_ID}.png`, ACL: 'public-read' })
+            );
+        });
+
+        test('uploads thumbnail to S3 with _thumbnail suffix key', async () => {
+            const req = {
+                body: {
+                    productOfferImage: VALID_IMAGE,
+                    productOfferDescription: 'Test',
+                    productOfferStatus: 'Active',
+                    cashback: 5,
+                    redeemPoints: 10,
+                    price: VALID_PRICE,
+                }
+            };
+            const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+            await createProductOffer(req, res);
+
+            expect(s3Mock.upload).toHaveBeenCalledTimes(2);
+            expect(s3Mock.upload).toHaveBeenNthCalledWith(
+                2,
+                expect.objectContaining({ Key: `${OFFER_ID}_thumbnail.png`, ACL: 'public-read' })
+            );
+        });
+
+        test('saves both productOfferImageUrl and productOfferThumbnailUrl in updateOne', async () => {
+            const req = {
+                body: {
+                    productOfferImage: VALID_IMAGE,
+                    productOfferDescription: 'Test',
+                    productOfferStatus: 'Active',
+                    cashback: 5,
+                    redeemPoints: 10,
+                    price: VALID_PRICE,
+                }
+            };
+            const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+            await createProductOffer(req, res);
+
+            expect(productOffersModel.updateOne).toHaveBeenCalledWith(
+                { _id: OFFER_ID },
+                { $set: { productOfferImageUrl: ORIGINAL_URL, productOfferThumbnailUrl: THUMB_URL } }
+            );
+        });
+
+        test('returns 201 on success', async () => {
+            const req = {
+                body: {
+                    productOfferImage: VALID_IMAGE,
+                    productOfferDescription: 'Test',
+                    productOfferStatus: 'Active',
+                    cashback: 5,
+                    redeemPoints: 10,
+                    price: VALID_PRICE,
+                }
+            };
+            const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+            await createProductOffer(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(201);
+        });
+
+        test('returns 400 when offer with same description already exists', async () => {
+            productOffersModel.findOne.mockResolvedValue({ _id: OFFER_ID, productOfferDescription: 'Test' });
+
+            const req = {
+                body: {
+                    productOfferImage: VALID_IMAGE,
+                    productOfferDescription: 'Test',
+                    productOfferStatus: 'Active',
+                    cashback: 5,
+                    redeemPoints: 10,
+                    price: VALID_PRICE,
+                }
+            };
+            const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+            await createProductOffer(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(s3Mock.upload).not.toHaveBeenCalled();
+        });
+    });
+
+    // ── Thumbnail generation (updateProductOffer) ─────────────────────────────
+    describe('updateProductOffer', () => {
+        const OFFER_ID = '67dd1140d808657d711f5db5';
+        const OLD_ORIGINAL_URL = `https://bucket.blr1.digitaloceanspaces.com/${OFFER_ID}.png`;
+        const OLD_THUMB_URL = `https://bucket.blr1.digitaloceanspaces.com/${OFFER_ID}_thumbnail.png`;
+        const NEW_ORIGINAL_URL = `https://bucket.blr1.digitaloceanspaces.com/${OFFER_ID}_new.png`;
+        const NEW_THUMB_URL = `https://bucket.blr1.digitaloceanspaces.com/${OFFER_ID}_new_thumbnail.png`;
+        const VALID_IMAGE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+        const VALID_PRICE = JSON.stringify([{ All: 1000 }]);
+
+        function wireS3Upload() {
+            s3Mock.upload
+                .mockReturnValueOnce({ promise: jest.fn().mockResolvedValue({ Location: NEW_ORIGINAL_URL }) })
+                .mockReturnValueOnce({ promise: jest.fn().mockResolvedValue({ Location: NEW_THUMB_URL }) });
+        }
+
+        // updateProductOffer calls res({status, ...}) instead of res.status().json()
+        // so res must be a jest.fn() that is also callable as a function
+        function makeRes() {
+            return jest.fn();
+        }
+
+        beforeEach(() => {
+            jest.clearAllMocks();
+            productOffersModel.findOne.mockResolvedValue(null);
+            productOffersModel.findByIdAndUpdate.mockResolvedValue({ _id: OFFER_ID });
+            s3Mock.deleteObject.mockReturnValue({ promise: jest.fn().mockResolvedValue({}) });
+            UserModel.find.mockResolvedValue([]);
+            ProductPriceModel.deleteMany.mockResolvedValue({});
+            ProductPriceModel.insertMany.mockResolvedValue({});
+            wireS3Upload();
+        });
+
+        test('deletes old original image from S3 when new image is provided', async () => {
+            const req = {
+                params: { id: OFFER_ID },
+                body: {
+                    productOfferImage: VALID_IMAGE,
+                    productOfferImageUrl: OLD_ORIGINAL_URL,
+                    productOfferThumbnailUrl: OLD_THUMB_URL,
+                    productOfferDescription: 'Updated',
+                    productOfferStatus: 'Active',
+                    cashback: 5,
+                    redeemPoints: 10,
+                    price: VALID_PRICE,
+                }
+            };
+
+            await updateProductOffer(req, makeRes());
+
+            expect(s3Mock.deleteObject).toHaveBeenCalledWith(
+                expect.objectContaining({ Key: `${OFFER_ID}.png` })
+            );
+        });
+
+        test('deletes old thumbnail from S3 when new image is provided', async () => {
+            const req = {
+                params: { id: OFFER_ID },
+                body: {
+                    productOfferImage: VALID_IMAGE,
+                    productOfferImageUrl: OLD_ORIGINAL_URL,
+                    productOfferThumbnailUrl: OLD_THUMB_URL,
+                    productOfferDescription: 'Updated',
+                    productOfferStatus: 'Active',
+                    cashback: 5,
+                    redeemPoints: 10,
+                    price: VALID_PRICE,
+                }
+            };
+
+            await updateProductOffer(req, makeRes());
+
+            expect(s3Mock.deleteObject).toHaveBeenCalledWith(
+                expect.objectContaining({ Key: `${OFFER_ID}_thumbnail.png` })
+            );
+        });
+
+        test('uploads new original and thumbnail to S3 when new image is provided', async () => {
+            const req = {
+                params: { id: OFFER_ID },
+                body: {
+                    productOfferImage: VALID_IMAGE,
+                    productOfferImageUrl: OLD_ORIGINAL_URL,
+                    productOfferThumbnailUrl: OLD_THUMB_URL,
+                    productOfferDescription: 'Updated',
+                    productOfferStatus: 'Active',
+                    cashback: 5,
+                    redeemPoints: 10,
+                    price: VALID_PRICE,
+                }
+            };
+
+            await updateProductOffer(req, makeRes());
+
+            expect(s3Mock.upload).toHaveBeenCalledTimes(2);
+            expect(s3Mock.upload).toHaveBeenNthCalledWith(
+                1,
+                expect.objectContaining({ Key: `${OFFER_ID}.png`, ACL: 'public-read' })
+            );
+            expect(s3Mock.upload).toHaveBeenNthCalledWith(
+                2,
+                expect.objectContaining({ Key: `${OFFER_ID}_thumbnail.png`, ACL: 'public-read' })
+            );
+        });
+
+        test('passes productOfferThumbnailUrl to findByIdAndUpdate when image is updated', async () => {
+            const req = {
+                params: { id: OFFER_ID },
+                body: {
+                    productOfferImage: VALID_IMAGE,
+                    productOfferImageUrl: OLD_ORIGINAL_URL,
+                    productOfferThumbnailUrl: OLD_THUMB_URL,
+                    productOfferDescription: 'Updated',
+                    productOfferStatus: 'Active',
+                    cashback: 5,
+                    redeemPoints: 10,
+                    price: VALID_PRICE,
+                }
+            };
+
+            await updateProductOffer(req, makeRes());
+
+            const updateArg = productOffersModel.findByIdAndUpdate.mock.calls[0][1];
+            expect(updateArg).toHaveProperty('productOfferThumbnailUrl', NEW_THUMB_URL);
+            expect(updateArg).toHaveProperty('productOfferImageUrl', NEW_ORIGINAL_URL);
+        });
+
+        test('does not call S3 upload or deleteObject when no new image is provided', async () => {
+            const req = {
+                params: { id: OFFER_ID },
+                body: {
+                    // no productOfferImage
+                    productOfferImageUrl: OLD_ORIGINAL_URL,
+                    productOfferThumbnailUrl: OLD_THUMB_URL,
+                    productOfferDescription: 'Updated',
+                    productOfferStatus: 'Active',
+                    cashback: 5,
+                    redeemPoints: 10,
+                    price: VALID_PRICE,
+                }
+            };
+
+            await updateProductOffer(req, makeRes());
+
+            expect(s3Mock.upload).not.toHaveBeenCalled();
+            expect(s3Mock.deleteObject).not.toHaveBeenCalled();
+        });
+
+        test('skips thumbnail deletion when no previous thumbnailUrl exists', async () => {
+            const req = {
+                params: { id: OFFER_ID },
+                body: {
+                    productOfferImage: VALID_IMAGE,
+                    productOfferImageUrl: OLD_ORIGINAL_URL,
+                    // no productOfferThumbnailUrl (legacy offer without thumbnail)
+                    productOfferDescription: 'Updated',
+                    productOfferStatus: 'Active',
+                    cashback: 5,
+                    redeemPoints: 10,
+                    price: VALID_PRICE,
+                }
+            };
+
+            await updateProductOffer(req, makeRes());
+
+            // deleteObject should only have been called once (for the original), not for thumbnail
+            const deleteKeys = s3Mock.deleteObject.mock.calls.map(call => call[0].Key);
+            expect(deleteKeys).not.toContain(`${OFFER_ID}_thumbnail.png`);
+            // uploads still happen for both original and new thumbnail
+            expect(s3Mock.upload).toHaveBeenCalledTimes(2);
         });
     });
 });

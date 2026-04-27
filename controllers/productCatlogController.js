@@ -8,6 +8,30 @@ const UserModel = require('../models/User');
 const logger = require('../utils/logger');
 const { getPriceBookData, getDealerAccountId } = require('../services/focus8Order.service');
 
+// ── Focus8 in-memory cache (10 min TTL) ───────────────────────────────────
+const _f8Cache = {
+  priceBook: { data: null, ts: 0 },
+  dealerAccounts: new Map(),
+};
+const F8_TTL = 10 * 60 * 1000;
+
+async function _cachedPriceBook() {
+  if (_f8Cache.priceBook.data && Date.now() - _f8Cache.priceBook.ts < F8_TTL) {
+    return _f8Cache.priceBook.data;
+  }
+  const data = await getPriceBookData();
+  _f8Cache.priceBook = { data, ts: Date.now() };
+  return data;
+}
+
+async function _cachedDealerAccountId(dealerCode) {
+  const cached = _f8Cache.dealerAccounts.get(dealerCode);
+  if (cached && Date.now() - cached.ts < F8_TTL) return cached.id;
+  const id = await getDealerAccountId(dealerCode);
+  _f8Cache.dealerAccounts.set(dealerCode, { id, ts: Date.now() });
+  return id;
+}
+// ─────────────────────────────────────────────────────────────────────────
 
 // Create Product Catlog
 exports.createProductCatlog = async (req, res) => {
@@ -300,188 +324,143 @@ exports.searchProductCatlog = async (req, res) => {
 
     query['offerAvailable'] = false;
 
-    // Search by productDescription 
     if (req.body.searchQuery) {
       query['productOfferDescription'] = {
         $regex: new RegExp(req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
       };
     }
 
-    const data = await productOfferModel
-      .find(query)
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .sort({ createdAt: -1 });
+    // ── Run find + count in parallel ─────────────────────────────────────
+    const [data, total] = await Promise.all([
+      productOfferModel.find(query).skip((page - 1) * limit).limit(limit).sort({ createdAt: -1 }),
+      productOfferModel.countDocuments(query),
+    ]);
 
-    const total = await productOfferModel.countDocuments(query);
-
-    // Determine which dealer's prices to fetch
-    // If dealerId is provided in request (e.g., Sales Executive creating order for dealer), use that
-    // Otherwise, use the logged-in user's ID (for direct dealer access)
     let targetDealerId = req.body.dealerId || req.user._id.toString();
+    const needsDealerPrices = accountType === 'Dealer' || (accountType === 'SalesExecutive' && req.body.dealerId);
+
+    // ── Dealer info + Focus8 (cached) ────────────────────────────────────
     let dealerCode = null;
-    let dealerUser = null;
-
-    // Fetch dealer details if we need Focus8 pricing
-    if (accountType === 'Dealer' || (accountType === 'SalesExecutive' && req.body.dealerId)) {
-      try {
-        dealerUser = await UserModel.findById(targetDealerId);
-        if (dealerUser && dealerUser.dealerCode) {
-          dealerCode = dealerUser.dealerCode;
-        } else {
-          logger.warn(`No dealerCode found for user ${targetDealerId}`);
-        }
-      } catch (error) {
-        logger.error('Error fetching dealer details', {
-          targetDealerId,
-          error: error.message
-        });
-      }
-    }
-
-    // Fetch Focus8 pricebook data and dealer account ID
     let priceBookRecords = [];
     let focusAccountId = null;
-    
-    if (dealerCode) {
+
+    if (needsDealerPrices) {
       try {
-        // Fetch dealer's Focus8 account ID and pricebook data in parallel
-        [focusAccountId, priceBookRecords] = await Promise.all([
-          getDealerAccountId(dealerCode),
-          getPriceBookData()
-        ]);
-        
-        logger.info(`FOCUS8 :: Dealer ${dealerCode} has account ID: ${focusAccountId}, fetched ${priceBookRecords.length} pricebook records`);
-      } catch (error) {
-        logger.error('FOCUS8 :: Error fetching pricebook data for dealer', {
-          dealerCode,
-          error: error.message
-        });
-        // Continue with catalog prices on error
+        const dealerUser = await UserModel.findById(targetDealerId).select('dealerCode');
+        dealerCode = dealerUser?.dealerCode || null;
+      } catch (err) {
+        logger.error('Error fetching dealer details', { targetDealerId, error: err.message });
       }
     }
 
-    let updatedData = await Promise.all(data.map(async (productCatlog) => {
+    if (dealerCode) {
+      try {
+        [focusAccountId, priceBookRecords] = await Promise.all([
+          _cachedDealerAccountId(dealerCode),
+          _cachedPriceBook(),
+        ]);
+        logger.info(`FOCUS8 :: Dealer ${dealerCode} account ID: ${focusAccountId}, ${priceBookRecords.length} pricebook records (cached)`);
+      } catch (err) {
+        logger.error('FOCUS8 :: Error fetching pricebook data', { dealerCode, error: err.message });
+      }
+    }
+
+    // ── Batch price queries (replaces N+1 loop) ──────────────────────────
+    const allProductIds = data.map(p => p._id.toString());
+    let dealerPriceMap = {};   // productOfferId → [price docs]
+    let fallbackPriceMap = {}; // productOfferId → [price docs]
+
+    if (needsDealerPrices && allProductIds.length > 0) {
+      const dealerPrices = await ProductPriceModel.find({
+        productOfferId: { $in: allProductIds },
+        dealerId: targetDealerId,
+      });
+      dealerPrices.forEach(p => {
+        (dealerPriceMap[p.productOfferId] = dealerPriceMap[p.productOfferId] || []).push(p);
+      });
+
+      const needsFallback = allProductIds.filter(id => !dealerPriceMap[id]?.length);
+      if (needsFallback.length > 0) {
+        const fallbackPrices = await ProductPriceModel.find({
+          productOfferId: { $in: needsFallback },
+        });
+        fallbackPrices.forEach(p => {
+          (fallbackPriceMap[p.productOfferId] = fallbackPriceMap[p.productOfferId] || []).push(p);
+        });
+      }
+    }
+
+    // ── Map products (synchronous — no per-product DB calls) ─────────────
+    const updatedData = data.map(productCatlog => {
+      const priceArray = [];
       let prices = [];
-      const priceArray = []; // Array to store {volume, price} objects
 
       if (accountType === 'SuperUser') {
-        // For SuperUser, use the prices directly from the product catalog
         prices = productCatlog.price || [];
-
-        // Track which volumes we've already processed
         const processedVolumes = new Set();
-
-        // First pass: Add dealer-specific prices (if targetDealerId is provided)
         prices.forEach(priceObj => {
           if (priceObj.volume && priceObj.refId === targetDealerId) {
-            priceArray.push({
-              volume: priceObj.volume,
-              price: priceObj.price
-            });
+            priceArray.push({ volume: priceObj.volume, price: priceObj.price });
             processedVolumes.add(priceObj.volume);
           }
         });
-
-        // Second pass: Add 'All' prices for volumes not already processed
         prices.forEach(priceObj => {
           if (priceObj.volume && priceObj.refId === 'All' && !processedVolumes.has(priceObj.volume)) {
-            priceArray.push({
-              volume: priceObj.volume,
-              price: priceObj.price
-            });
+            priceArray.push({ volume: priceObj.volume, price: priceObj.price });
           }
         });
       } else if (accountType === 'SalesExecutive' && !req.body.dealerId) {
-        // For Sales Executives WITHOUT dealerId, show all volumes with 'All' prices from the product catalog
-        // This allows them to see all available volumes and prices when browsing
         prices = productCatlog.price || [];
-        
         prices.forEach(priceObj => {
           if (priceObj.volume && priceObj.refId === 'All') {
-            priceArray.push({
-              volume: priceObj.volume,
-              price: priceObj.price
-            });
+            priceArray.push({ volume: priceObj.volume, price: priceObj.price });
           }
         });
       } else {
-        // For dealers OR Sales Executives WITH dealerId, get dealer-specific prices
-        const dealerPrices = await ProductPriceModel.find({
-          productOfferId: productCatlog._id,
-          dealerId: targetDealerId
-        });
+        const id = productCatlog._id.toString();
+        prices = dealerPriceMap[id]?.length ? dealerPriceMap[id] : (fallbackPriceMap[id] || []);
 
-        // If no dealer-specific prices found, fall back to 'All' prices
-        if (dealerPrices.length === 0) {
-          const allPrices = await ProductPriceModel.find({
-            productOfferId: productCatlog._id,
-            refId: 'All'
-          });
-          prices = allPrices;
-        } else {
-          prices = dealerPrices;
-        }
-
-        // Create the price array with Focus8 pricebook integration
         prices.forEach(price => {
-          if (price.volume) {
-            let finalPrice = price.price; // Default to catalog price
-            let volumeFocusProductId = null;
-            
-            // Check if product has volume-specific focus product mapping (grouping)
-            if (productCatlog.focusProductMapping && productCatlog.focusProductMapping.length > 0) {
-              // Find the mapping for this specific volume
-              const volumeMapping = productCatlog.focusProductMapping.find(
-                mapping => mapping.volume === price.volume
-              );
-              
-              if (volumeMapping && volumeMapping.focusProductId) {
-                volumeFocusProductId = volumeMapping.focusProductId;
-                logger.info(`FOCUS8 :: Using volume-specific mapping for ${productCatlog.productOfferDescription} - ${price.volume}: Focus Product ID ${volumeFocusProductId}`);
-              }
-            } else if (productCatlog.focusProductId) {
-              volumeFocusProductId = productCatlog.focusProductId;
-            }
-            
-            if (focusAccountId && volumeFocusProductId && priceBookRecords.length > 0) {
-              finalPrice = getEffectivePriceFromFocus(
-                volumeFocusProductId,
-                focusAccountId,
-                priceBookRecords,
-                price.price // Fallback to catalog price
-              );
-            }
-            
-            priceArray.push({
-              volume: price.volume,
-              price: finalPrice,
-              focusProductId: volumeFocusProductId, // Include for order creation
-              source: finalPrice !== price.price ? 'focus8' : 'catalog' // For debugging
-            });
+          if (!price.volume) return;
+          let finalPrice = price.price;
+          let volumeFocusProductId = null;
+
+          if (productCatlog.focusProductMapping?.length > 0) {
+            const mapping = productCatlog.focusProductMapping.find(m => m.volume === price.volume);
+            if (mapping?.focusProductId) volumeFocusProductId = mapping.focusProductId;
+          } else if (productCatlog.focusProductId) {
+            volumeFocusProductId = productCatlog.focusProductId;
           }
+
+          if (focusAccountId && volumeFocusProductId && priceBookRecords.length > 0) {
+            finalPrice = getEffectivePriceFromFocus(volumeFocusProductId, focusAccountId, priceBookRecords, price.price);
+          }
+
+          priceArray.push({
+            volume: price.volume,
+            price: finalPrice,
+            focusProductId: volumeFocusProductId,
+            source: finalPrice !== price.price ? 'focus8' : 'catalog',
+          });
         });
       }
 
       return {
         ...productCatlog._doc,
         productPrices: priceArray,
-        productPrice: priceArray[0]?.price || 0
+        productPrice: priceArray[0]?.price || 0,
       };
-    }));
+    });
 
     return res.status(200).json({
       data: updatedData,
       total,
       pages: Math.ceil(total / limit),
-      currentPage: page
+      currentPage: page,
     });
   } catch (err) {
     console.error("Error in searchProductCatlog:", err);
-    logger.error("Error in searchProductCatlog", {
-      error: err.message,
-      stack: err.stack
-    });
+    logger.error("Error in searchProductCatlog", { error: err.message, stack: err.stack });
     return res.status(500).json({ message: "Something went wrong" });
   }
 };

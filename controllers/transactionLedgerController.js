@@ -25,34 +25,21 @@ exports.getAllTransactions = async (req, res) => {
         }
         
         // Apply coupon code filter if provided
+        // couponId is not reliably populated on older ledger entries, so we
+        // search the narration which always contains the coupon code in the
+        // format "Scanned coupon <code>: ..."
         if (req.body.couponCode) {
-            // Aggregation pipeline to convert number to string and apply regex
-            const pipeline = [
-                {
-                    $match: {
-                        $expr: {
-                            $regexMatch: { 
-                                input: { $toString: "$couponCode" }, 
-                                regex: req.body.couponCode.toString() 
-                            }
-                        }
-                    }
-                }
-            ];
-            const transaction = await Transaction.aggregate(pipeline);
-
-            if (transaction.length > 0) {
-                query.couponId = { $in: transaction.map(i => i._id) };
-            } else {
-                return res.status(400).json({ error: 'Invalid coupon code.' });
-            }
+            const safeCode = req.body.couponCode.toString().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            query.narration = { $regex: safeCode, $options: 'i' };
         }
 
         // Apply date filter if provided
         if (req.body.date) {
             const dateStr = req.body.date;
-            const startDate = new Date(dateStr + 'T00:00:00.000Z');
-            const endDate = new Date(dateStr + 'T23:59:59.999Z');
+            const [year, month, day] = dateStr.split('-').map(Number);
+            // Use local server time so dates align with how records were created
+            const startDate = new Date(year, month - 1, day, 0, 0, 0, 0);
+            const endDate   = new Date(year, month - 1, day, 23, 59, 59, 999);
 
             query.createdAt = {
                 $gte: startDate,

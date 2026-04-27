@@ -70,6 +70,25 @@ SuperUser-only feature allowing admins to issue credit notes against a dealer's 
 
 ---
 
+### Product Offers — image thumbnails (as of 2026-04-28)
+On create and update, the server generates a 300 px-wide PNG thumbnail alongside the full-resolution original and stores both in the same DigitalOcean Spaces bucket (`AWS_BUCKET_PRODUCT_OFFER`).
+
+**New dependency:** `sharp` — native image-processing library used for thumbnail generation. Must be present in `node_modules` after `npm install`.
+
+**Changed files:**
+- `models/productOffers.model.js` — added `productOfferThumbnailUrl: { type: String }` field (optional; undefined on legacy docs).
+- `controllers/productOffers.controller.js`:
+  - Added `sharp` import and private `generateThumbnail(imageBuffer)` helper: resizes to 300 px width (proportional height, `withoutEnlargement: true`), outputs PNG.
+  - `createProductOffer` — after uploading the original (`{offerId}.png`), calls `generateThumbnail` and uploads `{offerId}_thumbnail.png`; `updateOne` now sets both `productOfferImageUrl` and `productOfferThumbnailUrl`.
+  - `updateProductOffer` — when a new image is provided, deletes the old original **and** old thumbnail from S3 before uploading replacements; `productOfferThumbnailUrl` is included in the `findByIdAndUpdate` payload.
+
+**New script:**
+- `scripts/backfill-product-offer-thumbnails.js` — one-shot script to backfill thumbnails for existing offers that pre-date this change. Queries documents where `productOfferImageUrl` is set but `productOfferThumbnailUrl` is absent, downloads each original from DigitalOcean, generates a thumbnail with `sharp`, uploads it, and saves the URL. Idempotent — safe to re-run. Run with: `node scripts/backfill-product-offer-thumbnails.js`.
+
+**Mobile API contract:** both `productOfferImageUrl` (full resolution) and `productOfferThumbnailUrl` (300 px wide) are returned in all product-offer read endpoints. Mobile should use the thumbnail for list/card previews and fall back to `productOfferImageUrl` when `productOfferThumbnailUrl` is absent (legacy docs).
+
+---
+
 ### Product Offers — multi-select route scheme + SuperUser visibility + sort order
 - `models/productOffers.model.js` — `routeScheme` type changed from `String` to `[String]` (default `null`). MongoDB's element-match means existing single-string `{ routeScheme: "mobile" }` queries still work for both legacy String docs and new Array docs without a query change.
 - `controllers/productOffers.controller.js`:
@@ -87,15 +106,15 @@ SuperUser-only feature allowing admins to issue credit notes against a dealer's 
 
 ---
 
-### Test suite fixes and additions (as of 2026-04-26)
-All 102 tests across 6 suites pass (`npx jest tests/controllers/ --no-coverage`).
+### Test suite fixes and additions (as of 2026-04-28)
+All 114 tests across 6 suites pass (`npx jest tests/controllers/ --no-coverage`).
 
 **New test files:**
 - `tests/controllers/creditNote.controller.test.js` — 18 tests covering `issueCreditNote` (input validation, balance checks, happy paths for both `rewardPoints` and `cash`, atomic debit assertion, resilient ledger failure), `listCreditNotes` (enrichment, filters, pagination, DB error), `downloadCreditNotePDF` (404, success headers, DB error).
 - `tests/controllers/userController.test.js` — 8 tests for `getAllDealers`: active-Dealer query, projection includes `legacyCash`, sort `{ name: 1 }`, empty-result case, DB errors.
 
 **Extended test files:**
-- `tests/controllers/productOffers.controller.test.js` — 4 new tests in a `routeScheme filtering` block: SuperUser bypasses filter, Dealer scoped to SE mobile, SalesExecutive scoped to own mobile, sort is `{ createdAt: -1 }`.
+- `tests/controllers/productOffers.controller.test.js` — 4 new tests in a `routeScheme filtering` block: SuperUser bypasses filter, Dealer scoped to SE mobile, SalesExecutive scoped to own mobile, sort is `{ createdAt: -1 }`. Additionally, 12 new tests across `createProductOffer` (missing image → 400, duplicate description → 400, original S3 key, thumbnail S3 key with `_thumbnail` suffix, both URLs in `updateOne`, 201 on success) and `updateProductOffer` (old original deleted, old thumbnail deleted, new original uploaded, new thumbnail uploaded, `productOfferThumbnailUrl` in `findByIdAndUpdate`, no S3 calls when image unchanged, thumbnail deletion skipped when no prior thumbnail). The `aws-sdk` mock was updated to expose `upload` and `deleteObject` on the `../../config/aws` mock; `sharp` and `../../models/User` are now mocked at module level.
 
 **Fixed test files (tests were testing stale behaviour):**
 - `tests/controllers/authController.test.js` — fully rewritten. Old tests assumed accountType/dealerCode/Focus8 guards in `redeemCash` that no longer exist. New tests match the reworked controller: `isValidMobile` / `isValidUpi` input validation, atomic `findOneAndUpdate` claim flow (404 not found, 409 already claimed), payment failure path, happy path for existing user, happy path for unregistered mobile (new user created), 500 on unexpected error. All mobile numbers updated to valid Indian format (6–9 prefix).

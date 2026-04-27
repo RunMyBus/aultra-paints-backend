@@ -6,6 +6,14 @@ const multer = require("multer");
 const logger = require('../utils/logger');
 const UserModel = require('../models/User');
 const ProductPriceModel = require('../models/ProductPrice');
+const sharp = require('sharp');
+
+async function generateThumbnail(imageBuffer) {
+    return sharp(imageBuffer)
+        .resize({ width: 300, withoutEnlargement: true })
+        .png()
+        .toBuffer();
+}
 
 /**
  * Parse routeScheme from a FormData field.
@@ -95,7 +103,21 @@ exports.createProductOffer = async (req, res) => {
         };
 
         const data = await s3.upload(params).promise();
-        savedProductOffer = await productOffersModel.updateOne({_id: savedProductOffer._id}, {$set: {productOfferImageUrl: data.Location}});
+
+        const thumbnailBuffer = await generateThumbnail(imageData.data);
+        const thumbParams = {
+            Bucket: process.env.AWS_BUCKET_PRODUCT_OFFER,
+            Key: `${savedProductOffer._id}_thumbnail.png`,
+            Body: thumbnailBuffer,
+            ContentType: 'image/png',
+            ACL: 'public-read'
+        };
+        const thumbData = await s3.upload(thumbParams).promise();
+
+        savedProductOffer = await productOffersModel.updateOne(
+            { _id: savedProductOffer._id },
+            { $set: { productOfferImageUrl: data.Location, productOfferThumbnailUrl: thumbData.Location } }
+        );
 
         await processProductPrices(savedProductOfferId, parsedPrice);
 
@@ -288,14 +310,13 @@ exports.updateProductOffer = async (req, res) => {
             secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
         });*/
         if (req.body.productOfferImage) {
-            //delete old productOfferImage if exists
             if (req.body.productOfferImageUrl) {
-                let imgUrlSplit = req.body.productOfferImageUrl.split('/')[req.body.productOfferImageUrl.split('/').length - 1];
-                const paramsRemove = {
-                    Bucket: process.env.AWS_BUCKET_PRODUCT_OFFER,
-                    Key: imgUrlSplit,
-                };
-                await s3.deleteObject(paramsRemove).promise();
+                const imgKey = req.body.productOfferImageUrl.split('/').pop();
+                await s3.deleteObject({ Bucket: process.env.AWS_BUCKET_PRODUCT_OFFER, Key: imgKey }).promise();
+            }
+            if (req.body.productOfferThumbnailUrl) {
+                const thumbKey = req.body.productOfferThumbnailUrl.split('/').pop();
+                await s3.deleteObject({ Bucket: process.env.AWS_BUCKET_PRODUCT_OFFER, Key: thumbKey }).promise();
             }
 
 
@@ -309,9 +330,19 @@ exports.updateProductOffer = async (req, res) => {
                 ContentType: imageData.type,
                 ACL: 'public-read'
             };
-
             const data = await s3.upload(params).promise();
             req.body.productOfferImageUrl = data.Location;
+
+            const thumbnailBuffer = await generateThumbnail(imageData.data);
+            const thumbParams = {
+                Bucket: process.env.AWS_BUCKET_PRODUCT_OFFER,
+                Key: `${req.params.id}_thumbnail.png`,
+                Body: thumbnailBuffer,
+                ContentType: 'image/png',
+                ACL: 'public-read'
+            };
+            const thumbData = await s3.upload(thumbParams).promise();
+            req.body.productOfferThumbnailUrl = thumbData.Location;
         }
 
 
@@ -347,7 +378,8 @@ exports.updateProductOffer = async (req, res) => {
             productOfferImageUrl: req.body.productOfferImageUrl,
             updatedBy: req.body.updatedBy,
             price: parsedPrice,
-            routeScheme: parseRouteScheme(req.body.routeScheme)
+            routeScheme: parseRouteScheme(req.body.routeScheme),
+            productOfferThumbnailUrl: req.body.productOfferThumbnailUrl,
         };
 
         const productOffer = await productOffersModel.findByIdAndUpdate(req.params.id,  productOfferData, {new: true});

@@ -50,6 +50,7 @@
     "pmx": "^1.6.7",
     "puppeteer": "^24.29.1",
     "qrcode": "^1.5.4",
+    "sharp": "^0.34.5",
     "winston": "^3.17.0"
   },
   "devDependencies": {
