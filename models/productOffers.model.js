@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const productOffersSchema = new mongoose.Schema({
     productOfferImageUrl: { type: String },
+    productOfferThumbnailUrl: { type: String },
     productOfferDescription: { type: String, required: true },
     validUntil: { type: Date },
     productOfferStatus: { type: String, required: true },

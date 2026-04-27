@@ -641,7 +641,7 @@ class TransactionService {
                 const narrationParts = [];
                 if (pointsReward > 0) narrationParts.push(`${pointsReward} pts`);
                 if (cashReward   > 0) narrationParts.push(`${cashReward} cash`);
-                const narration = `+ Scanned coupon ${updatedTransaction.couponCode}: ${narrationParts.join(' + ')} credited.`;
+                const narration = `Scanned coupon ${updatedTransaction.couponCode}: ${narrationParts.join(' + ')} credited.`;
 
                 await transactionLedger.create({
                     narration,

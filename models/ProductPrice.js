@@ -7,6 +7,9 @@ const productPriceSchema = new mongoose.Schema({
     volume: { type: String }
 }, {timestamps: true})
 
+productPriceSchema.index({ productOfferId: 1, dealerId: 1 });
+productPriceSchema.index({ productOfferId: 1 });
+
 const ProductPrice = mongoose.model('ProductPrice', productPriceSchema, 'productPrices');
 
 module.exports = ProductPrice;
