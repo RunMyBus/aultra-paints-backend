@@ -517,16 +517,31 @@ class TransactionService {
     };
 
     async redeemCouponPoints(req, res) {
-        // Only Dealers present in both our DB and Focus8 are eligible to redeem points
+        // Dealers redeem both points and cash; Painters redeem points only.
         if (!redeemEligibleAccountTypes.includes(req.user.accountType)) {
             return res.status(403).json({ message: `Only ${redeemEligibleAccountTypes.join(', ')} are eligible to redeem points.` });
         }
-        if (!req.user.dealerCode) {
-            return res.status(403).json({ message: 'Dealer code not set. Contact support.' });
-        }
-        const focusAccountId = await getDealerAccountId(req.user.dealerCode);
-        if (!focusAccountId) {
-            return res.status(403).json({ message: 'Dealer not found in Focus8. Contact support.' });
+
+        const isPainter = req.user.accountType === 'Painter';
+
+        if (isPainter) {
+            // Painters are authorized via their parent dealer's Focus8 account
+            if (!req.user.parentDealerCode) {
+                return res.status(403).json({ message: 'Parent dealer code not set. Contact support.' });
+            }
+            const focusAccountId = await getDealerAccountId(req.user.parentDealerCode);
+            if (!focusAccountId) {
+                return res.status(403).json({ message: 'Parent dealer not found in Focus8. Contact support.' });
+            }
+        } else {
+            // Dealers must be directly registered in Focus8
+            if (!req.user.dealerCode) {
+                return res.status(403).json({ message: 'Dealer code not set. Contact support.' });
+            }
+            const focusAccountId = await getDealerAccountId(req.user.dealerCode);
+            if (!focusAccountId) {
+                return res.status(403).json({ message: 'Dealer not found in Focus8. Contact support.' });
+            }
         }
 
         const { qrCodeUrl } = req.body;  // Assuming qr is passed as a URL parameter
@@ -562,9 +577,16 @@ class TransactionService {
             const pointsAlreadyRedeemed = document.pointsRedeemedBy !== undefined;
             const cashAlreadyRedeemed   = document.cashRedeemedBy   !== undefined;
 
-            if (pointsAlreadyRedeemed && cashAlreadyRedeemed) {
-                logger.warn('Coupon fully redeemed already (both points and cash tracks used)', {
+            // Painters only get the points track, so the coupon is exhausted for them
+            // as soon as points are taken. Dealers need both tracks used.
+            const allTracksRedeemed = isPainter
+                ? pointsAlreadyRedeemed
+                : (pointsAlreadyRedeemed && cashAlreadyRedeemed);
+
+            if (allTracksRedeemed) {
+                logger.warn('Coupon already redeemed', {
                     couponCode: document.couponCode,
+                    isPainter,
                     pointsRedeemedBy: document.pointsRedeemedBy,
                     cashRedeemedBy: document.cashRedeemedBy,
                 });
@@ -580,7 +602,8 @@ class TransactionService {
                 updateSet.pointsRedeemedBy = req.user.mobile;
                 updateSet.pointsRedeemedAt = now;
             }
-            if (!cashAlreadyRedeemed) {
+            // Painters never redeem cash
+            if (!isPainter && !cashAlreadyRedeemed) {
                 updateSet.cashRedeemedBy = req.user.mobile;
                 updateSet.cashRedeemedAt = now;
             }
@@ -593,7 +616,7 @@ class TransactionService {
             logger.info('Successfully updated coupon — redeemed tracks', {
                 couponCode: updatedTransaction && updatedTransaction.couponCode,
                 pointsRedeemedNow: !pointsAlreadyRedeemed,
-                cashRedeemedNow: !cashAlreadyRedeemed,
+                cashRedeemedNow: !isPainter && !cashAlreadyRedeemed,
             });
 
             if (!updatedTransaction) {
@@ -605,7 +628,8 @@ class TransactionService {
             //   coupon.value             → User.cash
             // Tracks already redeemed earlier stay at 0 and are not double-credited.
             const pointsReward = pointsAlreadyRedeemed ? 0 : (updatedTransaction.redeemablePoints || 0);
-            const cashReward   = cashAlreadyRedeemed   ? 0 : (updatedTransaction.value             || 0);
+            // Painters only get points; cash is skipped for them entirely
+            const cashReward = (!isPainter && !cashAlreadyRedeemed) ? (updatedTransaction.value || 0) : 0;
 
             let userData = req.user;
             if (pointsReward > 0 || cashReward > 0) {

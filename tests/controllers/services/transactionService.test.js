@@ -34,7 +34,7 @@ const DEALER_ID = new mongoose.Types.ObjectId();
 
 const DEALER_USER = { _id: DEALER_ID, mobile: '9000000001', accountType: 'Dealer', dealerCode: 'D001', rewardPoints: 500 };
 const PAINTER_ID = new mongoose.Types.ObjectId();
-const PAINTER_USER = { _id: PAINTER_ID, mobile: '9000000002', accountType: 'Painter', dealerCode: 'P001', rewardPoints: 200 };
+const PAINTER_USER = { _id: PAINTER_ID, mobile: '9000000002', accountType: 'Painter', parentDealerCode: 'D001', rewardPoints: 200 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -524,9 +524,33 @@ describe('TransactionService', () => {
             expect(transactionLedger.create).not.toHaveBeenCalled();
         });
 
-        // ─── Painter happy path (eligibility wiring) ──────────────────────
+        // ─── Painter: points only, authorized via parentDealerCode ──────
 
-        test('credits a Painter user the same way as a Dealer', async () => {
+        test('returns 403 if Painter has no parentDealerCode', async () => {
+            const req = { user: { ...PAINTER_USER, parentDealerCode: undefined }, body: { qrCodeUrl: QR_URL } };
+            const res = makeRes();
+
+            await TransactionService.redeemCouponPoints(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(res.json).toHaveBeenCalledWith({ message: 'Parent dealer code not set. Contact support.' });
+            expect(getDealerAccountId).not.toHaveBeenCalled();
+        });
+
+        test('returns 403 if Painter parentDealerCode not found in Focus8', async () => {
+            const req = { user: { ...PAINTER_USER }, body: { qrCodeUrl: QR_URL } };
+            const res = makeRes();
+
+            getDealerAccountId.mockResolvedValue(null);
+
+            await TransactionService.redeemCouponPoints(req, res);
+
+            expect(getDealerAccountId).toHaveBeenCalledWith('D001');
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(res.json).toHaveBeenCalledWith({ message: 'Parent dealer not found in Focus8. Contact support.' });
+        });
+
+        test('Painter authorized via parentDealerCode credits points only', async () => {
             const req = { user: { ...PAINTER_USER }, body: { qrCodeUrl: QR_URL } };
             const res = makeRes();
 
@@ -537,10 +561,9 @@ describe('TransactionService', () => {
             };
             const updatedTxn = { ...coupon,
                 pointsRedeemedBy: PAINTER_USER.mobile,
-                cashRedeemedBy:   PAINTER_USER.mobile,
                 updatedBy: PAINTER_ID,
             };
-            const updatedUser = { ...PAINTER_USER, rewardPoints: 280, cash: 40 };
+            const updatedUser = { ...PAINTER_USER, rewardPoints: 280 };
 
             getDealerAccountId.mockResolvedValue(55);
             Transaction.findOne = jest.fn().mockResolvedValue(coupon);
@@ -550,22 +573,55 @@ describe('TransactionService', () => {
 
             await TransactionService.redeemCouponPoints(req, res);
 
-            expect(getDealerAccountId).toHaveBeenCalledWith('P001');
+            // Must use parentDealerCode for Focus8 lookup, not dealerCode
+            expect(getDealerAccountId).toHaveBeenCalledWith('D001');
+
+            // Coupon update must NOT touch the cash track
+            const setArg = Transaction.findOneAndUpdate.mock.calls[0][1].$set;
+            expect(setArg).toHaveProperty('pointsRedeemedBy', PAINTER_USER.mobile);
+            expect(setArg).not.toHaveProperty('cashRedeemedBy');
+            expect(setArg).not.toHaveProperty('cashRedeemedAt');
+
+            // Only rewardPoints incremented — cash must not appear in $inc
             expect(User.findOneAndUpdate).toHaveBeenCalledWith(
                 { _id: PAINTER_ID },
-                { $inc: { rewardPoints: 80, cash: 40 } },
+                { $inc: { rewardPoints: 80 } },
                 { new: true }
             );
+
+            // Ledger row has zero cash fields
             expect(transactionLedger.create).toHaveBeenCalledTimes(1);
             expect(transactionLedger.create).toHaveBeenCalledWith(expect.objectContaining({
                 pointsCredited: 80, pointsBalance: 280,
-                cashReward: 40, cashBalance: 40,
-                narration: expect.stringMatching(/80 pts \+ 40 cash credited/i),
+                cashReward: 0,
+                narration: expect.stringMatching(/80 pts credited/i),
             }));
+
             expect(res.status).toHaveBeenCalledWith(200);
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-                data: { rewardPoints: 80, cashReward: 40, couponCode: 'C008' },
+                data: { rewardPoints: 80, cashReward: 0, couponCode: 'C008' },
             }));
+        });
+
+        test('Painter gets 404 once points track is taken (even if cash track is open)', async () => {
+            const req = { user: { ...PAINTER_USER }, body: { qrCodeUrl: QR_URL } };
+            const res = makeRes();
+
+            Transaction.findOne = jest.fn().mockResolvedValue({
+                _id: 'txn2', UDID: 'TEST-UDID-001', couponCode: 'C009',
+                redeemablePoints: 80, value: 40,
+                pointsRedeemedBy: '9000000099',   // already taken
+                cashRedeemedBy: undefined,          // cash still open — irrelevant for Painter
+            });
+            Transaction.findOneAndUpdate = jest.fn();
+            User.findOneAndUpdate = jest.fn();
+            transactionLedger.create = jest.fn();
+
+            await TransactionService.redeemCouponPoints(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(404);
+            expect(res.json).toHaveBeenCalledWith({ message: 'Coupon Redeemed already.' });
+            expect(Transaction.findOneAndUpdate).not.toHaveBeenCalled();
         });
     });
 });

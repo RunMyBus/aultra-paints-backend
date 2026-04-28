@@ -174,7 +174,9 @@ The QR-scan redemption (`POST /transaction/redeemPoints`, handler in `services/t
   - `cashReward`     — cash credited on this row
   - `cashBalance`    — `User.cash` after this row's effect
   Readers should treat any undefined pair as "this row did not affect that track". Old rows pre-dating the rename were migrated to the new field names by `mongoscripts/rename_ledger_points_fields.js` (run before deploying the renamed code); old rows do not carry the cash fields.
-- **Eligibility** is unchanged: only `accountType` ∈ `POINTS_REDEEM_ELIGIBLE_ACCOUNT_TYPES` (env-driven, defaults to `Dealer`) with a `dealerCode` that resolves in Focus8 may redeem.
+- **Eligibility**: `accountType` must be in `POINTS_REDEEM_ELIGIBLE_ACCOUNT_TYPES` (env-driven, defaults to `Dealer`; production `.env` includes `Painter`). Behaviour differs by type:
+  - **Dealer** — must have a `dealerCode` that resolves in Focus8. Redeems **both** points and cash tracks.
+  - **Painter** — must have a `parentDealerCode` that resolves in Focus8 (authorization via their parent dealer). Redeems **points track only**; cash track is never touched.
 
 When extending this flow, preserve the per-track shape: introduce a new track with its own `*RedeemedBy/At` pair on the coupon, its own balance field on the User, and add it to the same `if (allTracksRedeemed) → 404` guard rather than reusing one of the existing tracks.
 
