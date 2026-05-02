@@ -154,17 +154,8 @@ async function getOrderHeaderData(filters = {}) {
         return null;
     }
 
-    let Branch__Id = 0;
     let Salesman__Id = 0;
     let Districts__Id = 0;
-
-    try {
-        if (customer.BranchName) {
-            Branch__Id = await getBranchId(customer.BranchName);
-        }
-    } catch (e) {
-        logger.warn(`Failed to resolve Branch ID for ${customer.BranchName}, using fallback 0`);
-    }
 
     try {
         if (customer.SalesmanName) {
@@ -184,7 +175,6 @@ async function getOrderHeaderData(filters = {}) {
 
     return {
         CustomerAC__Id: Number(customer.iMasterId),
-        Branch__Id: Number(Branch__Id),
         Salesman__Id: Number(Salesman__Id),
         Districts__Id: Number(Districts__Id),
         IsIGST: 0
@@ -299,15 +289,46 @@ async function getEntityMaster() {
 
 /**
  * ===============================
+ * GET WAREHOUSE MASTER
+ * ===============================
+ */
+async function getWarehouseMaster() {
+    const res = await focusRequest(
+        `${FOCUS8_BASE_URL}/utility/ExecuteSqlQuery`,
+        {
+            data: [{ Query: "SELECT iMasterId, sName, sCode from mCore_Warehouse where istatus <>5" }]
+        }
+    );
+
+    return res.data?.data?.[0]?.Table || [];
+}
+
+/**
+ * ===============================
+ * GET BRANCH MASTER
+ * ===============================
+ */
+async function getBranchMaster() {
+    const res = await focusRequest(
+        `${FOCUS8_BASE_URL}/utility/ExecuteSqlQuery`,
+        {
+            data: [{ Query: "SELECT iMasterId, sName, sCode from mCore_Branch where istatus <>5" }]
+        }
+    );
+
+    return res.data?.data?.[0]?.Table || [];
+}
+
+/**
+ * ===============================
  * PUSH SALES ORDER TO FOCUS8
  * ===============================
  */
-async function pushOrderToFocus8(order, user, entityId) {
+async function pushOrderToFocus8(order, user, { entityId, warehouseId, branchId, narration } = {}) {
     let payload;
     try {
         const {
             CustomerAC__Id,
-            Branch__Id,
             Salesman__Id,
             Districts__Id,
             IsIGST
@@ -324,20 +345,25 @@ async function pushOrderToFocus8(order, user, entityId) {
         });
 
         const Entity__Id = entityId;
+        const Branch__Id = branchId;
+        const Warehouse__Id = warehouseId;
+
+        const header = {
+            CustomerAC__Id,
+            Branch__Id,
+            Salesman__Id,
+            Districts__Id,
+            Entity__Id,
+            Warehouse__Id,
+            'Company Name__Id': Entity__Id,
+            IsIGST,
+            MobileAppOrderId: order.orderId || ''
+        };
+        if (narration) header.Narration = narration; //TODO: narration field name should be confirmed by focus
 
         payload = {
             data: [{
-                Header: {
-                    CustomerAC__Id,
-                    Branch__Id,
-                    Salesman__Id,
-                    Districts__Id,
-                    Entity__Id,
-                    Warehouse__Id: 3, //TODO: Remove after focus makes this non mandatory.
-                    'Company Name__Id': Entity__Id,
-                    IsIGST,
-                    MobileAppOrderId: order.orderId || ''
-                },
+                Header: header,
                 Body: bodyItems,
                 Footer: []
             }]
@@ -556,6 +582,8 @@ async function getDealerFinancialData(dealerCode) {
 module.exports = {
     getProductMaster,
     getEntityMaster,
+    getWarehouseMaster,
+    getBranchMaster,
     pushOrderToFocus8,
     getPriceBookData,
     getDealerAccountId,

@@ -10,3 +10,5 @@ logs/
 docs/
 .agent
 .vscode/
+.wolf
+.claude

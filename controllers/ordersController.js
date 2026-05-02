@@ -55,9 +55,9 @@ async function generateInvoicePdf(order, user) {
 
 // Perform a Focus 8 push asynchronously and persist the outcome via updateOne.
 // Failures are logged with enough context that ops can find and retry them.
-async function runFocusSync(orderDocId, orderId, order, dealer, entityId) {
+async function runFocusSync(orderDocId, orderId, order, dealer, { entityId, warehouseId, branchId, narration } = {}) {
     try {
-        const result = await pushOrderToFocus8(order, dealer, entityId);
+        const result = await pushOrderToFocus8(order, dealer, { entityId, warehouseId, branchId, narration });
         const update = result.success
             ? {
                 focusSyncStatus: 'SUCCESS',
@@ -105,7 +105,12 @@ exports.retryFocusSync = async (req, res) => {
 
         // Mark pending, kick off, return immediately.
         await orderModel.updateOne({ _id: order._id }, { $set: { focusSyncStatus: 'PENDING' } });
-        runFocusSync(order._id, order.orderId, order, dealer, req.body.entityId || 1);
+        runFocusSync(order._id, order.orderId, order, dealer, {
+            entityId: order.entityId,
+            warehouseId: order.warehouseId,
+            branchId: order.branchId,
+            narration: order.narration
+        });
         return res.status(200).json({ success: true, message: 'Retry initiated', orderId });
     } catch (error) {
         logger.error('Focus 8 retry failed', { error: error.message });
@@ -145,9 +150,14 @@ exports.createOrder = async (req, res) => {
             return res.status(400).json({success: false, message: 'Dealer id is required when sales executive is placing order.'});
         }
 
-        const { items, totalPrice, entityId = 1 } = req.body;
+        const { items, totalPrice, entityId, warehouseId, branchId, narration } = req.body;
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ success: false, message: 'No items provided for order.' });
+        }
+        if (req.user.accountType === 'SalesExecutive') {
+            if (!entityId) return res.status(400).json({ success: false, message: 'Entity is required.' });
+            if (!warehouseId) return res.status(400).json({ success: false, message: 'Warehouse is required.' });
+            if (!branchId) return res.status(400).json({ success: false, message: 'Branch is required.' });
         }
 
         // Fetch every referenced offer so we can (a) enrich Focus 8 IDs and
@@ -245,7 +255,11 @@ exports.createOrder = async (req, res) => {
             createdBy: userId || '',
             status: orderStatus,
             isVerified: isVerified,
-            statusHistory: [{ status: orderStatus, changedAt: new Date() }]
+            statusHistory: [{ status: orderStatus, changedAt: new Date() }],
+            entityId,
+            warehouseId,
+            branchId,
+            ...(narration ? { narration } : {})
         };
         if (req.body.dealerId) {
             orderObj.dealerId = req.body.dealerId;
@@ -266,7 +280,7 @@ exports.createOrder = async (req, res) => {
         // focusSyncStatus: PENDING so the client can poll. Persist via updateOne
         // (not order.save) to avoid racing the in-memory document.
         if (req.user.accountType === 'SalesExecutive') {
-            runFocusSync(order._id, orderId, order, orderCreatedForDetails, entityId);
+            runFocusSync(order._id, orderId, order, orderCreatedForDetails, { entityId, warehouseId, branchId, narration });
         }
 
         // const pdfBuffer = await generateInvoicePdf(order, req.user);
@@ -316,7 +330,7 @@ exports.getOrders = async (req, res) => {
         let query = {};
         let populateOptions = {
             path: 'createdBy',
-            select: 'name mobile accountType'
+            select: 'name mobile accountType dealerCode'
         };
         let orders;
         let totalOrders;
@@ -327,6 +341,7 @@ exports.getOrders = async (req, res) => {
             orders = await orderModel
                 .find(query)
                 .populate(populateOptions)
+                .populate({ path: 'dealerId', select: 'name dealerCode mobile' })
                 .sort({ createdAt: -1 }) // Latest orders first
                 .skip((page - 1) * limit)
                 .limit(limit)
@@ -527,7 +542,7 @@ exports.getOrderDetails = async (req, res) => {
 
 exports.updateOrderStatus = async (req, res) => {
     try {
-        const { orderId, isVerified, entityId = 1 } = req.body;
+        const { orderId, isVerified, entityId, warehouseId, branchId, narration } = req.body;
         const user = req.user;
 
         // Check if the user is a SalesExecutive
@@ -600,7 +615,12 @@ exports.updateOrderStatus = async (req, res) => {
         if (isVerified === 1) {
             const dealer = await userModel.findById(order.createdBy);
             if (dealer) {
-                runFocusSync(updatedOrder._id, orderId, updatedOrder, dealer, entityId);
+                runFocusSync(updatedOrder._id, orderId, updatedOrder, dealer, {
+                    entityId: entityId || order.entityId,
+                    warehouseId: warehouseId || order.warehouseId,
+                    branchId: branchId || order.branchId,
+                    narration: narration || order.narration
+                });
             } else {
                 logger.error('Dealer not found for order ', { orderId });
             }
