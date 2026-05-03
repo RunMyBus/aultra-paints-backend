@@ -122,6 +122,54 @@ All 114 tests across 6 suites pass (`npx jest tests/controllers/ --no-coverage`)
 
 ---
 
+### Product Categories master + offer/dealer category tagging (as of 2026-05-03)
+
+A new **Product Categories** master entity replaces the `routeScheme` SE-mobile filter for controlling which dealers see which product offers.
+
+#### Backend — new files
+- `models/ProductCategory.js` — Mongoose model for `productcategories` collection. Fields: `name` (String, required, unique). ObjectId `_id` is the canonical key.
+- `controllers/productCategoryController.js` — full CRUD: `createProductCategory`, `getProductCategories` (sorted by name), `updateProductCategory`, `deleteProductCategory`. Whitespace-only names are rejected (`!name || !name.trim()`). Duplicate-check on update excludes self via `{ _id: { $ne: req.params.id } }`.
+- `routes/productCategoryRoutes.js` — JWT auth applied to all routes via `router.use(passport.authenticate('jwt', { session: false }))`. `POST /`, `PUT /:id`, `DELETE /:id` require `requireRole(ADMIN)`; `GET /all` is authenticated-only.
+
+#### Backend — changed files
+- `routes/index.js` — registered `productCategoryRoutes` at `/productCategories`.
+- `models/User.js` — added `productCategories: [{ type: Schema.Types.ObjectId, ref: 'ProductCategory' }]` (array of ObjectId refs; used to tag dealers with their visible offer categories).
+- `models/productOffers.model.js` — added `productCategory: { type: Schema.Types.ObjectId, ref: 'ProductCategory', default: null }`. Legacy `routeScheme` field removed from schema (field still exists in DB — harmless).
+- `controllers/productOffers.controller.js`:
+  - `createProductOffer` — accepts `req.body.productCategory` and saves it on the new document.
+  - `updateProductOffer` — includes `productCategory: req.body.productCategory || null` in the `findByIdAndUpdate` payload.
+  - `searchProductOffers` — replaced routeScheme filter with category-based logic:
+    - **Dealer**: `{ productCategory: { $in: dealer.productCategories } }` — sees only offers matching their tagged categories.
+    - **SalesExecutive**: `{ productCategory: { $ne: null, $exists: true } }` — sees all offers that have a category set.
+    - **SuperUser**: no additional filter — sees all offers including those with `productCategory: null`.
+- `controllers/userController.js` — added `'productCategories'` to `USER_ALLOWED_CREATE_FIELDS` whitelist. Without this, `pickFields()` silently stripped the field before `updateOne`, making category saves on dealers a silent no-op.
+- `database/mongoose.js` — added startup code to `dropIndex('categoryId_1')` on the `productcategories` collection, swallowing `IndexNotFound` errors. Required because a prior version of the model had a `categoryId` unique field; the stale index persisted in MongoDB after the field was removed from the schema and caused `E11000` duplicate-key errors on every second insert.
+
+#### Frontend — new files (`aultra-paints-frontend/src/app/product-category-list/`)
+- `product-category-list.component.ts` — standalone Angular component; CRUD via `apiRequestService.*Master()` methods.
+- `product-category-list.component.html` — table (S.NO, Category Name, Actions) with inline add/edit modal (single `name` field).
+- `product-category-list.component.css` — empty placeholder.
+
+#### Frontend — changed files
+- `src/app/services/api-urls.service.ts` — added `createProductCategory`, `getProductCategories`, `updateProductCategory`, `deleteProductCategory` URL constants.
+- `src/app/services/api-request.service.ts` — added `getProductCategories()`, `createProductCategoryMaster()`, `updateProductCategoryMaster()`, `deleteProductCategoryMaster()` methods (named `*Master` to avoid collision with the existing `deleteProductCategory` catalog method).
+- `src/app/app.routes.ts` — added `{ path: 'product-category-list', component: ProductCategoryListComponent, canActivate: [RoleGuard], data: { roles: ADMIN } }`.
+- `src/app/layout/layout.component.html` — added "Product Categories" nav item to the Masters submenu (`bx-category` icon).
+- `src/app/product-offers/product-offers.component.ts` — replaced `salesExecutives`/`loadSalesExecutives()` with `productCategories`/`loadProductCategories()`; replaced `routeScheme: []` default with `productCategory: null`; removed `getSeName()`/`asArray()` helpers; added `getCategoryName(id)` lookup; FormData now sends `productCategory` instead of `routeScheme`.
+- `src/app/product-offers/product-offers.component.html` — replaced Route Scheme multi-select with a single-select `ng-select` bound to `currentOffer.productCategory` (`bindValue="_id"`).
+- `src/app/user-list/user-list.component.ts` — added `NgSelectModule`, `productCategories[]`, `loadProductCategories()`, manual validation in `submitForm()` and `updateUser()` (Angular `[required]` on `ng-select` does not integrate with template-driven form validation — explicit JS guard required for Dealer accountType).
+- `src/app/user-list/user-list.component.html` — added product-categories multi-select (`bindValue="_id"`, `[multiple]="true"`) in both Add and Edit dealer modals.
+
+#### Tests
+- `tests/controllers/productCategoryController.test.js` *(new)* — 18 tests covering all four CRUD operations including whitespace rejection, duplicate-name self-exclusion on update, 404 handling, and DB errors.
+- `tests/controllers/productOffers.controller.test.js` — replaced `routeScheme filtering` describe with `productCategory filtering` (7 tests: Dealer `$in` filter, SE non-null filter, SuperUser no filter, search query combined with `$and`); added 4 tests for `createProductOffer`/`updateProductOffer` productCategory handling.
+- `tests/controllers/userController.test.js` — added `userUpdate — productCategories` describe (5 tests: field passes whitelist, empty array preserved, absent when not provided, correct `_id` filter, 400 on missing mobile).
+- `tests/controllers/ordersController.test.js` — fixed 2 pre-existing failures: SE order tests now include `entityId`, `warehouseId`, `branchId` in `req.body` (required fields added in the Focus8 warehouse/branch feature; tests were not updated at that time).
+
+**Total test suite: 149 tests across 7 suites, all passing.**
+
+---
+
 ## Latest Scanned Code Changes (as of 2026-02-28)
 - Added Focus8-related pricing/effective-date logic in `services/focus8Order.service.js` and `controllers/productCatlogController.js`.
 - Credit note flow was updated across `controllers/transactionLedgerController.js`, `templates/creditNoteTemplate.html`, and `utils/pdfGenerator.js`.

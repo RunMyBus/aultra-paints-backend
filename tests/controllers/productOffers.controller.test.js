@@ -321,10 +321,11 @@ describe('ProductOffersController', () => {
             });
         });
 
-        // ── Route scheme filtering (recent change) ────────────────────────────
-        describe('routeScheme filtering', () => {
+        // ── Product category filtering ─────────────────────────────────────────
+        describe('productCategory filtering', () => {
             const DEALER_ID = new mongoose.Types.ObjectId();
-            const SE_MOBILE = '9876500001';
+            const CAT_A = new mongoose.Types.ObjectId();
+            const CAT_B = new mongoose.Types.ObjectId();
 
             function wireFind(offers = []) {
                 productOffersModel.find.mockReturnValue({
@@ -343,79 +344,125 @@ describe('ProductOffersController', () => {
                 wireFind();
             });
 
-            test('SuperUser bypasses routeScheme filter — query has neither $or nor $and for routeScheme', async () => {
+            test('SuperUser sees all offers — no productCategory filter applied', async () => {
                 const req = {
                     body: { page: 1, limit: 10 },
-                    user: { _id: DEALER_ID, accountType: 'SuperUser', mobile: '9999999999' },
+                    user: { _id: DEALER_ID, accountType: 'SuperUser' },
                 };
                 const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
 
                 await searchProductOffers(req, res);
 
-                const queryArg = productOffersModel.find.mock.calls[0][0];
-                // The only clause should be offerAvailable:true — no routeScheme filter
-                expect(queryArg).not.toHaveProperty('$and');
-                // If there IS an $or it must not contain any routeScheme condition
-                if (queryArg['$or']) {
-                    const hasRouteFilter = queryArg['$or'].some(
-                        clause => clause.routeScheme !== undefined
-                    );
-                    expect(hasRouteFilter).toBe(false);
-                }
-                expect(queryArg.offerAvailable).toBe(true);
+                const query = productOffersModel.find.mock.calls[0][0];
+                // SuperUser query must not contain any productCategory filter
+                expect(query).not.toHaveProperty('productCategory');
+                const allClauses = [
+                    ...(query['$or'] || []),
+                    ...(query['$and'] || []).flatMap(c => c['$or'] || [c]),
+                ];
+                const hasCatFilter = allClauses.some(c => c.productCategory !== undefined);
+                expect(hasCatFilter).toBe(false);
+                expect(query.offerAvailable).toBe(true);
             });
 
-            test('Dealer gets routeScheme filter scoped to their salesExecutive mobile', async () => {
+            test('Dealer query uses $in filter with their productCategories', async () => {
                 const req = {
                     body: { page: 1, limit: 10 },
-                    user: { _id: DEALER_ID, accountType: 'Dealer', salesExecutive: SE_MOBILE },
+                    user: { _id: DEALER_ID, accountType: 'Dealer', productCategories: [CAT_A, CAT_B] },
                 };
                 const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
 
                 await searchProductOffers(req, res);
 
-                const queryArg = productOffersModel.find.mock.calls[0][0];
-                // Expect routeScheme clauses to be present (either via $or at top level or inside $and)
-                const flatClauses = queryArg['$or'] ||
-                    (queryArg['$and'] || []).flatMap(c => c['$or'] || []);
-                const routeClauses = flatClauses.filter(c => c.routeScheme !== undefined);
-                expect(routeClauses.length).toBeGreaterThan(0);
-                // One of the clauses must allow offers with SE_MOBILE
-                const hasMobileClause = routeClauses.some(c => c.routeScheme === SE_MOBILE);
-                expect(hasMobileClause).toBe(true);
+                const query = productOffersModel.find.mock.calls[0][0];
+                // Either directly on the query or nested inside $and
+                const catFilter =
+                    query.productCategory ||
+                    (query['$and'] || []).map(c => c.productCategory).find(Boolean);
+                expect(catFilter).toBeDefined();
+                expect(catFilter.$in).toEqual([CAT_A, CAT_B]);
             });
 
-            test('SalesExecutive gets routeScheme filter scoped to their own mobile', async () => {
+            test('Dealer with no productCategories gets an empty $in — sees no offers', async () => {
                 const req = {
                     body: { page: 1, limit: 10 },
-                    user: { _id: DEALER_ID, accountType: 'SalesExecutive', mobile: SE_MOBILE },
+                    user: { _id: DEALER_ID, accountType: 'Dealer', productCategories: [] },
                 };
-                // SalesExecutive path also calls UserModel.find — mock it
-                const UserModel = require('../../models/User');
-                jest.mock('../../models/User');
+                const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+                await searchProductOffers(req, res);
+
+                const query = productOffersModel.find.mock.calls[0][0];
+                const catFilter =
+                    query.productCategory ||
+                    (query['$and'] || []).map(c => c.productCategory).find(Boolean);
+                expect(catFilter).toBeDefined();
+                expect(catFilter.$in).toHaveLength(0);
+            });
+
+            test('Dealer with undefined productCategories falls back to empty $in', async () => {
+                const req = {
+                    body: { page: 1, limit: 10 },
+                    user: { _id: DEALER_ID, accountType: 'Dealer' },
+                };
+                const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+                await searchProductOffers(req, res);
+
+                const query = productOffersModel.find.mock.calls[0][0];
+                const catFilter =
+                    query.productCategory ||
+                    (query['$and'] || []).map(c => c.productCategory).find(Boolean);
+                expect(catFilter.$in).toEqual([]);
+            });
+
+            test('SalesExecutive sees only offers where productCategory is set (not null)', async () => {
                 UserModel.find = jest.fn().mockResolvedValue([]);
-
+                const req = {
+                    body: { page: 1, limit: 10 },
+                    user: { _id: DEALER_ID, accountType: 'SalesExecutive', mobile: '9876500001' },
+                };
                 const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
 
                 await searchProductOffers(req, res);
 
-                const queryArg = productOffersModel.find.mock.calls[0][0];
-                const flatClauses = queryArg['$or'] ||
-                    (queryArg['$and'] || []).flatMap(c => c['$or'] || []);
-                const hasMobileClause = flatClauses.some(c => c.routeScheme === SE_MOBILE);
-                expect(hasMobileClause).toBe(true);
+                const query = productOffersModel.find.mock.calls[0][0];
+                const catFilter =
+                    query.productCategory ||
+                    (query['$and'] || []).map(c => c.productCategory).find(Boolean);
+                expect(catFilter).toBeDefined();
+                expect(catFilter.$ne).toBe(null);
+                expect(catFilter.$exists).toBe(true);
+            });
+
+            test('Dealer category filter combines with search $or via $and', async () => {
+                const req = {
+                    body: { page: 1, limit: 10, searchQuery: 'paint' },
+                    user: { _id: DEALER_ID, accountType: 'Dealer', productCategories: [CAT_A] },
+                };
+                const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+                await searchProductOffers(req, res);
+
+                const query = productOffersModel.find.mock.calls[0][0];
+                // When searchQuery is present, clauses should be merged via $and
+                expect(query).toHaveProperty('$and');
+                const andClauses = query['$and'];
+                const hasCatClause = andClauses.some(c => c.productCategory && c.productCategory.$in);
+                expect(hasCatClause).toBe(true);
+                const hasSearchClause = andClauses.some(c => c['$or'] !== undefined);
+                expect(hasSearchClause).toBe(true);
             });
 
             test('sort argument is { createdAt: -1 }', async () => {
                 const req = {
                     body: { page: 1, limit: 10 },
-                    user: { _id: DEALER_ID, accountType: 'SuperUser', mobile: '9999999999' },
+                    user: { _id: DEALER_ID, accountType: 'SuperUser' },
                 };
                 const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
 
                 await searchProductOffers(req, res);
 
-                // The sort() call is chained on the find query — grab its argument
                 const findChain = productOffersModel.find.mock.results[0].value;
                 const sortArg = findChain.skip.mock.results[0].value
                     .limit.mock.results[0].value
@@ -550,6 +597,49 @@ describe('ProductOffersController', () => {
             await createProductOffer(req, res);
 
             expect(res.status).toHaveBeenCalledWith(201);
+        });
+
+        test('saves productCategory from request body', async () => {
+            const CAT_ID = new mongoose.Types.ObjectId();
+            const req = {
+                body: {
+                    productOfferImage: VALID_IMAGE,
+                    productOfferDescription: 'Test',
+                    productOfferStatus: 'Active',
+                    cashback: 5,
+                    redeemPoints: 10,
+                    price: VALID_PRICE,
+                    productCategory: CAT_ID.toString(),
+                }
+            };
+            const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+            await createProductOffer(req, res);
+
+            expect(productOffersModel).toHaveBeenCalledWith(
+                expect.objectContaining({ productCategory: CAT_ID.toString() })
+            );
+        });
+
+        test('saves productCategory as null when not provided', async () => {
+            const req = {
+                body: {
+                    productOfferImage: VALID_IMAGE,
+                    productOfferDescription: 'Test',
+                    productOfferStatus: 'Active',
+                    cashback: 5,
+                    redeemPoints: 10,
+                    price: VALID_PRICE,
+                    // no productCategory
+                }
+            };
+            const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+            await createProductOffer(req, res);
+
+            expect(productOffersModel).toHaveBeenCalledWith(
+                expect.objectContaining({ productCategory: null })
+            );
         });
 
         test('returns 400 when offer with same description already exists', async () => {
@@ -720,6 +810,45 @@ describe('ProductOffersController', () => {
 
             expect(s3Mock.upload).not.toHaveBeenCalled();
             expect(s3Mock.deleteObject).not.toHaveBeenCalled();
+        });
+
+        test('passes productCategory to findByIdAndUpdate', async () => {
+            const CAT_ID = new mongoose.Types.ObjectId();
+            const req = {
+                params: { id: OFFER_ID },
+                body: {
+                    productOfferDescription: 'Updated',
+                    productOfferStatus: 'Active',
+                    cashback: 5,
+                    redeemPoints: 10,
+                    price: VALID_PRICE,
+                    productCategory: CAT_ID.toString(),
+                }
+            };
+
+            await updateProductOffer(req, makeRes());
+
+            const updateArg = productOffersModel.findByIdAndUpdate.mock.calls[0][1];
+            expect(updateArg).toHaveProperty('productCategory', CAT_ID.toString());
+        });
+
+        test('sets productCategory to null in findByIdAndUpdate when not provided', async () => {
+            const req = {
+                params: { id: OFFER_ID },
+                body: {
+                    productOfferDescription: 'Updated',
+                    productOfferStatus: 'Active',
+                    cashback: 5,
+                    redeemPoints: 10,
+                    price: VALID_PRICE,
+                    // no productCategory
+                }
+            };
+
+            await updateProductOffer(req, makeRes());
+
+            const updateArg = productOffersModel.findByIdAndUpdate.mock.calls[0][1];
+            expect(updateArg).toHaveProperty('productCategory', null);
         });
 
         test('skips thumbnail deletion when no previous thumbnailUrl exists', async () => {

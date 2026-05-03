@@ -15,7 +15,7 @@ const USER_PROTECTED_FIELDS = ['rewardPoints', 'cash', 'legacyCash', 'token', '_
 const USER_ALLOWED_CREATE_FIELDS = [
     'name', 'mobile', 'address', 'email', 'primaryContactPerson', 'primaryContactPersonMobile',
     'dealerCode', 'parentDealerCode', 'accountType', 'upiID', 'salesExecutive',
-    'state', 'zone', 'district', 'status'
+    'state', 'zone', 'district', 'status', 'productCategories'
 ];
 const USER_ALLOWED_UPDATE_FIELDS = USER_ALLOWED_CREATE_FIELDS.filter(f => f !== 'accountType');
 

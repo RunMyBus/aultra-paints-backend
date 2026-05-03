@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
 const productOffersSchema = new mongoose.Schema({
     productOfferImageUrl: { type: String },
@@ -18,7 +19,7 @@ const productOffersSchema = new mongoose.Schema({
         }
     ],
     offerAvailable: { type: Boolean, default: true },
-    routeScheme: { type: [String], default: null },
+    productCategory: { type: Schema.Types.ObjectId, ref: 'ProductCategory', default: null },
     focusProductId: {type: Number},
     focusUnitId: {type: Number},
     focusProductMapping: [{
