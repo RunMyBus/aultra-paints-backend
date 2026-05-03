@@ -3,7 +3,7 @@ const Product = require('../models/Product');
 const Brand = require('../models/Brand'); // assuming Brand still exists and is referenced
 const Transaction = require("../models/Transaction");
 const { getAllUnifiedProducts } = require('../services/productService');
-const { getProductMaster, getEntityMaster } = require('../services/focus8Order.service');
+const { getProductMaster, getEntityMaster, getWarehouseMaster, getBranchMaster } = require('../services/focus8Order.service');
 const { escapeRegex, clampLimit, clampPage } = require('../utils/validators');
 
 // Create a new product and associate it with a brand
@@ -281,6 +281,26 @@ const getFocusEntities = async (req, res) => {
   }
 };
 
+const getFocusWarehouses = async (req, res) => {
+  try {
+    const warehouses = await getWarehouseMaster();
+    return res.status(200).json({ success: true, warehouses });
+  } catch (error) {
+    logger.error('Error fetching warehouses from Focus8', { message: error.message });
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getFocusBranches = async (req, res) => {
+  try {
+    const warehouses = await getBranchMaster();
+    return res.status(200).json({ success: true, warehouses });
+  } catch (error) {
+    logger.error('Error fetching warehouses from Focus8', { message: error.message });
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
 module.exports = {
   createProduct,
   getProductsByBrandId,
@@ -291,5 +311,7 @@ module.exports = {
   getProductsByName,
   getUnifiedProductList,
   getFocusProducts,
-  getFocusEntities
+  getFocusEntities,
+  getFocusWarehouses,
+  getFocusBranches
 };

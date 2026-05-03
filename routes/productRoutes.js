@@ -11,7 +11,9 @@ const {
   getProductsByName,
   getUnifiedProductList,
   getFocusProducts,
-  getFocusEntities
+  getFocusEntities,
+  getFocusWarehouses,
+  getFocusBranches
 } = require('../controllers/productController');
 
 // Route to create a new product
@@ -40,6 +42,12 @@ router.get('/focus-products', getFocusProducts);
 
 // Route to get entity master from Focus
 router.get('/focus-entities', getFocusEntities);
+
+// Route to get warehouse master from Focus
+router.get('/focus-warehouses', getFocusWarehouses);
+
+// Route to get branch master from Focus
+router.get('/focus-branches', getFocusBranches);
 
 // Route to get all products for a specific brand by brandId
 router.get('/:brandId', getProductsByBrandId);

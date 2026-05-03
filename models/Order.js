@@ -52,6 +52,12 @@ const orderSchema = new Schema({
     changedAt: { type: Date, default: Date.now }
   }],
 
+  // Sales order context (user-selected in mobile app)
+  entityId: { type: Number },
+  warehouseId: { type: Number },
+  branchId: { type: Number },
+  narration: { type: String },
+
   // Focus Integration Fields
   focusSyncStatus: { type: String, enum: ['PENDING', 'SUCCESS', 'FAILED'], default: 'PENDING' },
   focusOrderId: { type: String }, // SO VoucherNo returned by Focus
