@@ -27,7 +27,7 @@ jest.mock('../../utils/logger', () => ({
 
 const mongoose = require('mongoose');
 const userModel = require('../../models/User');
-const { getAllDealers } = require('../../controllers/userController');
+const { getAllDealers, userUpdate } = require('../../controllers/userController');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -163,5 +163,88 @@ describe('getAllDealers', () => {
         expect(res.status).toHaveBeenCalledWith(200);
         const body = res.json.mock.calls[0][0];
         expect(body.data).toHaveLength(0);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// userUpdate — productCategories whitelist
+// ─────────────────────────────────────────────────────────────────────────────
+describe('userUpdate — productCategories', () => {
+    const USER_ID = new mongoose.Types.ObjectId().toString();
+    const CAT_A   = new mongoose.Types.ObjectId();
+    const CAT_B   = new mongoose.Types.ObjectId();
+
+    // Minimal valid non-dealer body that passes all validation
+    function dealerBody(overrides = {}) {
+        return {
+            mobile: '9876500001',
+            name: 'Test Dealer',
+            accountType: 'Dealer',
+            primaryContactPerson: 'Contact',
+            primaryContactPersonMobile: '9876500002',
+            salesExecutive: '9876500003',
+            dealerCode: 'D001',
+            address: '123 Main St',
+            productCategories: [CAT_A, CAT_B],
+            ...overrides,
+        };
+    }
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        // No duplicate mobile, no duplicate dealer code
+        userModel.findOne.mockResolvedValue(null);
+        userModel.updateOne.mockResolvedValue({ modifiedCount: 1 });
+    });
+
+    test('productCategories is included in the $set payload sent to updateOne', async () => {
+        const result = jest.fn();
+
+        await userUpdate(USER_ID, dealerBody(), result);
+
+        expect(result).toHaveBeenCalledWith(expect.objectContaining({ status: 200 }));
+        const setPayload = userModel.updateOne.mock.calls[0][1].$set;
+        expect(setPayload).toHaveProperty('productCategories');
+        expect(setPayload.productCategories).toEqual([CAT_A, CAT_B]);
+    });
+
+    test('empty productCategories array is preserved in $set (not stripped)', async () => {
+        const result = jest.fn();
+
+        await userUpdate(USER_ID, dealerBody({ productCategories: [] }), result);
+
+        const setPayload = userModel.updateOne.mock.calls[0][1].$set;
+        expect(setPayload.productCategories).toEqual([]);
+    });
+
+    test('productCategories is NOT present in $set when omitted from body', async () => {
+        const body = dealerBody();
+        delete body.productCategories;
+        const result = jest.fn();
+
+        await userUpdate(USER_ID, body, result);
+
+        const setPayload = userModel.updateOne.mock.calls[0][1].$set;
+        expect(setPayload).not.toHaveProperty('productCategories');
+    });
+
+    test('updateOne is called with the correct user _id filter', async () => {
+        const result = jest.fn();
+
+        await userUpdate(USER_ID, dealerBody(), result);
+
+        const filter = userModel.updateOne.mock.calls[0][0];
+        expect(filter._id.toString()).toBe(USER_ID);
+    });
+
+    test('400 with errors array when mobile is missing', async () => {
+        const body = dealerBody({ mobile: '' });
+        const result = jest.fn();
+
+        await userUpdate(USER_ID, body, result);
+
+        expect(result).toHaveBeenCalledWith(expect.objectContaining({ status: 400 }));
+        expect(result.mock.calls[0][0].errors).toContain('Enter mobile number');
+        expect(userModel.updateOne).not.toHaveBeenCalled();
     });
 });

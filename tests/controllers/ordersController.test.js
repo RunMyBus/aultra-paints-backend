@@ -282,7 +282,7 @@ describe('createOrder', () => {
 
         const req = {
             user: seUser,
-            body: { items: baseItems(), totalPrice: 200, dealerId: DEALER_ID },
+            body: { items: baseItems(), totalPrice: 200, dealerId: DEALER_ID, entityId: 'E1', warehouseId: 'W1', branchId: 'B1' },
         };
         await ordersController.createOrder(req, res);
 
@@ -305,7 +305,7 @@ describe('createOrder', () => {
 
         const req = {
             user: seUser,
-            body: { items: baseItems(), totalPrice: 200, dealerId: DEALER_ID },
+            body: { items: baseItems(), totalPrice: 200, dealerId: DEALER_ID, entityId: 'E1', warehouseId: 'W1', branchId: 'B1' },
         };
         await ordersController.createOrder(req, res);
 

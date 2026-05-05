@@ -15,30 +15,11 @@ async function generateThumbnail(imageBuffer) {
         .toBuffer();
 }
 
-/**
- * Parse routeScheme from a FormData field.
- * Accepts: JSON array string '["m1","m2"]', single string "m1", empty string, or null.
- * Returns: non-empty string[] or null (null means "show to all dealers").
- */
-function parseRouteScheme(raw) {
-    if (!raw) return null;
-    let parsed;
-    try {
-        parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    } catch {
-        parsed = raw; // treat as plain string
-    }
-    if (Array.isArray(parsed)) {
-        const filtered = parsed.filter(Boolean);
-        return filtered.length ? filtered : null;
-    }
-    return parsed || null;
-}
 
 // Create a new productOffer
 exports.createProductOffer = async (req, res) => {
     let {productOfferDescription, validUntil, productOfferStatus, cashback, redeemPoints, price} = req.body;
-    const routeScheme = parseRouteScheme(req.body.routeScheme);
+    const productCategory = req.body.productCategory || null;
     if (!req.body.productOfferImage) {
         return res.status(400).json({message: 'Image is required'});
     }
@@ -76,7 +57,7 @@ exports.createProductOffer = async (req, res) => {
         cashback,
         redeemPoints,
         price : parsedPrice,
-        routeScheme: routeScheme || null
+        productCategory
     });
 
     try {
@@ -228,25 +209,25 @@ exports.searchProductOffers = async (req, res) => {
         }
         query['offerAvailable'] = true;
 
-        // SuperUser sees all offers regardless of route scheme.
-        // Dealers and SalesExecutives are filtered to their own route.
-        if (req.user.accountType !== 'SuperUser') {
-            let seMobile = null;
-            if (req.user.accountType === 'Dealer') {
-                seMobile = req.user.salesExecutive || null;
-            } else if (req.user.accountType === 'SalesExecutive') {
-                seMobile = req.user.mobile;
-            }
-            const routeSchemeFilter = { $or: [
-                { routeScheme: null },
-                { routeScheme: { $exists: false } },
-                { routeScheme: seMobile }
-            ]};
+        // SuperUser sees all offers regardless of product category.
+        // Dealers see only offers whose productCategory matches one of their assigned categories.
+        // SalesExecutives see all offers that have a productCategory set.
+        if (req.user.accountType === 'Dealer') {
+            const dealerCategories = req.user.productCategories || [];
+            const categoryFilter = { productCategory: { $in: dealerCategories } };
             if (query['$or']) {
-                query['$and'] = [{ $or: query['$or'] }, routeSchemeFilter];
+                query['$and'] = [{ $or: query['$or'] }, categoryFilter];
                 delete query['$or'];
             } else {
-                query['$or'] = routeSchemeFilter['$or'];
+                Object.assign(query, categoryFilter);
+            }
+        } else if (req.user.accountType === 'SalesExecutive') {
+            const seCategoryFilter = { productCategory: { $ne: null, $exists: true } };
+            if (query['$or']) {
+                query['$and'] = [{ $or: query['$or'] }, seCategoryFilter];
+                delete query['$or'];
+            } else {
+                Object.assign(query, seCategoryFilter);
             }
         }
 
@@ -378,7 +359,7 @@ exports.updateProductOffer = async (req, res) => {
             productOfferImageUrl: req.body.productOfferImageUrl,
             updatedBy: req.body.updatedBy,
             price: parsedPrice,
-            routeScheme: parseRouteScheme(req.body.routeScheme),
+            productCategory: req.body.productCategory || null,
             productOfferThumbnailUrl: req.body.productOfferThumbnailUrl,
         };
 

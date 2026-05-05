@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
 const userSchema = new mongoose.Schema({
     name: {type: String, required: true},
@@ -22,7 +23,8 @@ const userSchema = new mongoose.Schema({
     salesExecutive: {type: String},
     state: { type: String },
     zone: { type: String },
-    district: { type: String }
+    district: { type: String },
+    productCategories: [{ type: Schema.Types.ObjectId, ref: 'ProductCategory' }]
 }, {timestamps: true})
 
 const User = mongoose.model('User', userSchema);
