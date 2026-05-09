@@ -331,9 +331,24 @@ exports.searchProductCatlog = async (req, res) => {
       ];
     }
 
+    let targetDealerId = req.body.dealerId || req.user._id.toString();
+    const needsDealerPrices = accountType === 'Dealer' || (accountType === 'SalesExecutive' && req.body.dealerId);
+
+    // For SE with dealerId: fetch the dealer upfront so we can use their productCategories
+    // for the query filter and their dealerCode for Focus8 pricing (avoids a second DB round-trip).
+    let prefetchedDealer = null;
+    if (accountType === 'SalesExecutive' && req.body.dealerId) {
+      try {
+        prefetchedDealer = await UserModel.findById(req.body.dealerId).select('productCategories dealerCode');
+      } catch (err) {
+        logger.error('Error fetching dealer for SE catalog search', { dealerId: req.body.dealerId, error: err.message });
+      }
+    }
+
     // SuperUser sees all catalog items regardless of product category.
     // Dealers see only items whose productCategory matches one of their assigned categories.
-    // SalesExecutives see only items that have a productCategory set.
+    // SalesExecutives see only items whose productCategory matches one of their own assigned
+    //   categories, or — when dealerId is provided — the dealer's assigned categories.
     if (req.user.accountType === 'Dealer') {
       const dealerCategories = req.user.productCategories || [];
       const categoryFilter = { productCategory: { $in: dealerCategories } };
@@ -344,7 +359,9 @@ exports.searchProductCatlog = async (req, res) => {
         Object.assign(query, categoryFilter);
       }
     } else if (req.user.accountType === 'SalesExecutive') {
-      const seCategoryFilter = { productCategory: { $ne: null, $exists: true } };
+      const seCategoryFilter = prefetchedDealer
+        ? { productCategory: { $in: prefetchedDealer.productCategories || [] } }
+        : { productCategory: { $ne: null, $exists: true } };
       if (query['$or']) {
         query['$and'] = [{ $or: query['$or'] }, seCategoryFilter];
         delete query['$or'];
@@ -355,12 +372,9 @@ exports.searchProductCatlog = async (req, res) => {
 
     // ── Run find + count in parallel ─────────────────────────────────────
     const [data, total] = await Promise.all([
-      productOfferModel.find(query).skip((page - 1) * limit).limit(limit).sort({ createdAt: -1 }),
+      productOfferModel.find(query).populate('productCategory').skip((page - 1) * limit).limit(limit).sort({ createdAt: -1 }),
       productOfferModel.countDocuments(query),
     ]);
-
-    let targetDealerId = req.body.dealerId || req.user._id.toString();
-    const needsDealerPrices = accountType === 'Dealer' || (accountType === 'SalesExecutive' && req.body.dealerId);
 
     // ── Dealer info + Focus8 (cached) ────────────────────────────────────
     let dealerCode = null;
@@ -368,11 +382,15 @@ exports.searchProductCatlog = async (req, res) => {
     let focusAccountId = null;
 
     if (needsDealerPrices) {
-      try {
-        const dealerUser = await UserModel.findById(targetDealerId).select('dealerCode');
-        dealerCode = dealerUser?.dealerCode || null;
-      } catch (err) {
-        logger.error('Error fetching dealer details', { targetDealerId, error: err.message });
+      if (prefetchedDealer) {
+        dealerCode = prefetchedDealer.dealerCode || null;
+      } else {
+        try {
+          const dealerUser = await UserModel.findById(targetDealerId).select('dealerCode');
+          dealerCode = dealerUser?.dealerCode || null;
+        } catch (err) {
+          logger.error('Error fetching dealer details', { targetDealerId, error: err.message });
+        }
       }
     }
 
@@ -490,7 +508,6 @@ exports.searchProductCatlog = async (req, res) => {
 
 
 exports.updateProductCatlog = async (req, res) => {
-  console.log('req.body:', req.body);
   try {
     const { price, focusProductId, focusUnitId, focusProductMapping, productCategory } = req.body;
     const existingProductCatlog = await productOfferModel.findOne({

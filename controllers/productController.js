@@ -286,7 +286,7 @@ const getFocusWarehouses = async (req, res) => {
     const warehouses = await getWarehouseMaster();
     return res.status(200).json({ success: true, warehouses });
   } catch (error) {
-    logger.error('Error fetching warehouses from Focus8', { message: error.message });
+    console.error('Error fetching warehouses from Focus8', { message: error.message });
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -296,7 +296,7 @@ const getFocusBranches = async (req, res) => {
     const warehouses = await getBranchMaster();
     return res.status(200).json({ success: true, warehouses });
   } catch (error) {
-    logger.error('Error fetching warehouses from Focus8', { message: error.message });
+    console.error('Error fetching branches from Focus8', { message: error.message });
     return res.status(500).json({ success: false, message: error.message });
   }
 }
