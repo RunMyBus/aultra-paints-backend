@@ -606,6 +606,27 @@ exports.getOrderDetails = async (req, res) => {
     }
 };
 
+exports.getOrderDealers = async (req, res) => {
+    try {
+        const { accountType, mobile } = req.user;
+        if (!['SuperUser', 'SalesExecutive'].includes(accountType)) {
+            return res.status(403).json({ success: false, message: 'Forbidden' });
+        }
+        const filter = { accountType: 'Dealer', status: 'active' };
+        if (accountType === 'SalesExecutive') {
+            filter.salesExecutive = mobile;
+        }
+        const dealers = await userModel
+            .find(filter, { _id: 1, dealerCode: 1, name: 1 })
+            .sort({ dealerCode: 1 })
+            .lean();
+        return res.status(200).json({ success: true, dealers });
+    } catch (error) {
+        logger.error('Error fetching order dealers', error);
+        return res.status(500).json({ success: false, message: 'Error fetching dealers' });
+    }
+};
+
 exports.updateOrderStatus = async (req, res) => {
     try {
         const { orderId, isVerified, entityId, warehouseId, branchId, narration } = req.body;

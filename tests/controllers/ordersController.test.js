@@ -583,6 +583,64 @@ describe('getOrders', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// getOrderDealers
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('getOrderDealers', () => {
+    let res;
+    beforeEach(() => {
+        jest.clearAllMocks();
+        res = makeRes();
+    });
+
+    test('SuperUser receives all active dealers sorted by dealerCode', async () => {
+        const dealers = [
+            { _id: 'a', dealerCode: 'D0001', name: 'Alpha' },
+            { _id: 'b', dealerCode: 'D0002', name: 'Beta' },
+        ];
+        userModel.find = jest.fn().mockReturnValue({
+            sort: jest.fn().mockReturnValue({
+                lean: jest.fn().mockResolvedValue(dealers),
+            }),
+        });
+        const req = { user: superUser };
+        await ordersController.getOrderDealers(req, res);
+        expect(userModel.find).toHaveBeenCalledWith(
+            { accountType: 'Dealer', status: 'active' },
+            { _id: 1, dealerCode: 1, name: 1 }
+        );
+        expect(res.status).toHaveBeenCalledWith(200);
+        expect(res.json).toHaveBeenCalledWith({ success: true, dealers });
+    });
+
+    test('SalesExecutive receives only mapped dealers', async () => {
+        const dealers = [{ _id: 'a', dealerCode: 'D0001', name: 'Alpha' }];
+        userModel.find = jest.fn().mockReturnValue({
+            sort: jest.fn().mockReturnValue({
+                lean: jest.fn().mockResolvedValue(dealers),
+            }),
+        });
+        const req = { user: seUser };
+        await ordersController.getOrderDealers(req, res);
+        expect(userModel.find).toHaveBeenCalledWith(
+            {
+                accountType: 'Dealer',
+                status: 'active',
+                salesExecutive: seUser.mobile,
+            },
+            { _id: 1, dealerCode: 1, name: 1 }
+        );
+        expect(res.json).toHaveBeenCalledWith({ success: true, dealers });
+    });
+
+    test('Dealer is rejected with 403', async () => {
+        const req = { user: dealerUser };
+        await ordersController.getOrderDealers(req, res);
+        expect(res.status).toHaveBeenCalledWith(403);
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // getOrderDetails
 // ═══════════════════════════════════════════════════════════════════════════
 
