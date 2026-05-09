@@ -35,7 +35,7 @@ async function _cachedDealerAccountId(dealerCode) {
 
 // Create Product Catlog
 exports.createProductCatlog = async (req, res) => {
-  let { productDescription, productStatus, price, focusProductId, focusUnitId = 1, focusProductMapping } = req.body;
+  let { productDescription, productStatus, price, focusProductId, focusUnitId = 1, focusProductMapping, productCategory } = req.body;
 
   if (!req.body.productImage) {
     return res.status(400).json({ message: 'Product  image is required' });
@@ -134,6 +134,7 @@ exports.createProductCatlog = async (req, res) => {
     productOfferStatus: productStatus,
     price: parsedPrice,
     offerAvailable: false,
+    productCategory: productCategory || null,
     focusProductId: focusProductId ? Number(focusProductId) : null,
     focusUnitId: focusUnitId ? Number(focusUnitId) : null,
     focusProductMapping: parsedFocusMapping || undefined
@@ -325,9 +326,31 @@ exports.searchProductCatlog = async (req, res) => {
     query['offerAvailable'] = false;
 
     if (req.body.searchQuery) {
-      query['productOfferDescription'] = {
-        $regex: new RegExp(req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
-      };
+      query['$or'] = [
+        { 'productOfferDescription': { $regex: new RegExp(req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') } },
+      ];
+    }
+
+    // SuperUser sees all catalog items regardless of product category.
+    // Dealers see only items whose productCategory matches one of their assigned categories.
+    // SalesExecutives see only items that have a productCategory set.
+    if (req.user.accountType === 'Dealer') {
+      const dealerCategories = req.user.productCategories || [];
+      const categoryFilter = { productCategory: { $in: dealerCategories } };
+      if (query['$or']) {
+        query['$and'] = [{ $or: query['$or'] }, categoryFilter];
+        delete query['$or'];
+      } else {
+        Object.assign(query, categoryFilter);
+      }
+    } else if (req.user.accountType === 'SalesExecutive') {
+      const seCategoryFilter = { productCategory: { $ne: null, $exists: true } };
+      if (query['$or']) {
+        query['$and'] = [{ $or: query['$or'] }, seCategoryFilter];
+        delete query['$or'];
+      } else {
+        Object.assign(query, seCategoryFilter);
+      }
     }
 
     // ── Run find + count in parallel ─────────────────────────────────────
@@ -469,7 +492,7 @@ exports.searchProductCatlog = async (req, res) => {
 exports.updateProductCatlog = async (req, res) => {
   console.log('req.body:', req.body);
   try {
-    const { price, focusProductId, focusUnitId, focusProductMapping } = req.body;
+    const { price, focusProductId, focusUnitId, focusProductMapping, productCategory } = req.body;
     const existingProductCatlog = await productOfferModel.findOne({
       productOfferDescription: req.body.productDescription,
       _id: { $ne: req.params.id }
@@ -590,6 +613,7 @@ exports.updateProductCatlog = async (req, res) => {
       productOfferStatus: req.body.productStatus,
       price: parsedPrice,
       updatedBy: req.body.updatedBy,
+      productCategory: productCategory || null,
       focusProductId: focusProductId ? Number(focusProductId) : null,
       focusUnitId: focusUnitId ? Number(focusUnitId) : null
     };
