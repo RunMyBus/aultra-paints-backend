@@ -470,6 +470,32 @@ describe('getOrders', () => {
         expect(payload.orders).toHaveLength(0);
     });
 
+    // ── status filter ────────────────────────────────────────────────────────
+
+    test('SuperUser with status filter narrows the order query', async () => {
+        orderModel.countDocuments = jest.fn().mockResolvedValue(1);
+        orderModel.find = jest.fn().mockReturnValue(buildOrderQuery());
+
+        const req = { user: superUser, body: { page: 1, limit: 10, status: 'PENDING' } };
+        await ordersController.getOrders(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(200);
+        expect(orderModel.find).toHaveBeenCalledWith(
+            expect.objectContaining({ status: 'PENDING' })
+        );
+    });
+
+    test('rejects unknown status with 400', async () => {
+        const req = { user: superUser, body: { page: 1, limit: 10, status: 'WAT' } };
+        await ordersController.getOrders(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+            success: false,
+            message: 'Invalid status',
+        }));
+    });
+
     // ── Focus8 failure is non-fatal ──────────────────────────────────────────
 
     test('continues successfully even when Focus8 enrichment fails', async () => {

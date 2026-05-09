@@ -314,7 +314,14 @@ exports.getOrders = async (req, res) => {
     try {
         const user = req.user;
         const { accountType } = user;
-        const { page, limit } = req.body;
+        const { page, limit, status } = req.body;
+
+        const ALLOWED_STATUSES = ['PENDING', 'VERIFIED', 'REJECTED', 'DISPATCHED', 'IN-PARCEL'];
+        if (status !== undefined && status !== null && status !== '') {
+            if (!ALLOWED_STATUSES.includes(status)) {
+                return res.status(400).json({ success: false, message: 'Invalid status' });
+            }
+        }
 
         // If the user is neither SuperUser nor Dealer, returning an empty array
         if (!['SuperUser', 'Dealer', 'SalesExecutive'].includes(accountType)) {
@@ -337,6 +344,9 @@ exports.getOrders = async (req, res) => {
 
         // If SuperUser, fetch all orders with user details
         if (accountType === 'SuperUser') {
+            if (status) {
+                query.status = status;
+            }
             totalOrders = await orderModel.countDocuments(query);
             orders = await orderModel
                 .find(query)
@@ -360,6 +370,9 @@ exports.getOrders = async (req, res) => {
 
             const dealerIds = mappedDealers.map(dealer => dealer._id);
             query = { $or: [{ createdBy: { $in: dealerIds } }, { dealerId: { $in: dealerIds } }] };
+            if (status) {
+                query.status = status;
+            }
             totalOrders = await orderModel.countDocuments(query);
             orders = await orderModel
                 .find(query)
@@ -380,6 +393,9 @@ exports.getOrders = async (req, res) => {
             // For Dealers, fetch only their orders
             // query = { createdBy: user._id };
             query = { $or: [{ createdBy: user._id }, { dealerId: user._id }] };
+            if (status) {
+                query.status = status;
+            }
             totalOrders = await orderModel.countDocuments(query);
             orders = await orderModel
                 .find(query)
