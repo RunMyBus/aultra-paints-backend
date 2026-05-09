@@ -314,7 +314,7 @@ exports.getOrders = async (req, res) => {
     try {
         const user = req.user;
         const { accountType } = user;
-        const { page, limit, status } = req.body;
+        const { page, limit, status, dealerCode } = req.body;
 
         const ALLOWED_STATUSES = ['PENDING', 'VERIFIED', 'REJECTED', 'DISPATCHED', 'IN-PARCEL'];
         if (status !== undefined && status !== null && status !== '') {
@@ -334,6 +334,32 @@ exports.getOrders = async (req, res) => {
             });
         }
 
+        // Resolve dealerCode (server-side) to a User._id. Dealers ignore this
+        // filter — they always see only their own orders. For SuperUser/SE,
+        // an unknown code short-circuits to an empty page.
+        let dealerIdFromCode = null;
+        if (dealerCode && typeof dealerCode === 'string' && dealerCode.trim()) {
+            const trimmed = dealerCode.trim();
+            if (accountType === 'Dealer') {
+                // Dealers always see only their own orders; ignore filter silently.
+            } else {
+                const dealerDoc = await userModel.findOne(
+                    { dealerCode: trimmed, accountType: 'Dealer' },
+                    { _id: 1 }
+                ).lean();
+                if (!dealerDoc) {
+                    return res.status(200).json({
+                        success: true,
+                        orders: [],
+                        total: 0,
+                        pages: 0,
+                        currentPage: page,
+                    });
+                }
+                dealerIdFromCode = dealerDoc._id;
+            }
+        }
+
         let query = {};
         let populateOptions = {
             path: 'createdBy',
@@ -346,6 +372,12 @@ exports.getOrders = async (req, res) => {
         if (accountType === 'SuperUser') {
             if (status) {
                 query.status = status;
+            }
+            if (dealerIdFromCode) {
+                query.$or = [
+                    { createdBy: dealerIdFromCode },
+                    { dealerId: dealerIdFromCode },
+                ];
             }
             totalOrders = await orderModel.countDocuments(query);
             orders = await orderModel
@@ -369,7 +401,25 @@ exports.getOrders = async (req, res) => {
             ).lean();
 
             const dealerIds = mappedDealers.map(dealer => dealer._id);
-            query = { $or: [{ createdBy: { $in: dealerIds } }, { dealerId: { $in: dealerIds } }] };
+            // If a dealerCode was supplied, intersect with the SE's mapped dealers.
+            // If the typed code resolves to a dealer outside the SE's set, the
+            // intersection is empty — short-circuit to an empty page rather than
+            // issuing a $in: [] query.
+            let effectiveDealerIds = dealerIds;
+            if (dealerIdFromCode) {
+                const typedId = dealerIdFromCode.toString();
+                effectiveDealerIds = dealerIds.filter(id => id.toString() === typedId);
+                if (effectiveDealerIds.length === 0) {
+                    return res.status(200).json({
+                        success: true,
+                        orders: [],
+                        total: 0,
+                        pages: 0,
+                        currentPage: page,
+                    });
+                }
+            }
+            query = { $or: [{ createdBy: { $in: effectiveDealerIds } }, { dealerId: { $in: effectiveDealerIds } }] };
             if (status) {
                 query.status = status;
             }

@@ -496,6 +496,75 @@ describe('getOrders', () => {
         }));
     });
 
+    // ── dealerCode filter ────────────────────────────────────────────────────
+
+    test('SuperUser with dealerCode resolves dealer and filters by id', async () => {
+        userModel.findOne = jest.fn().mockReturnValue({
+            lean: jest.fn().mockResolvedValue({ _id: DEALER_ID }),
+        });
+        orderModel.countDocuments = jest.fn().mockResolvedValue(1);
+        orderModel.find = jest.fn().mockReturnValue(buildOrderQuery());
+
+        const req = { user: superUser, body: { page: 1, limit: 10, dealerCode: 'D0001' } };
+        await ordersController.getOrders(req, res);
+
+        expect(userModel.findOne).toHaveBeenCalledWith(
+            expect.objectContaining({ dealerCode: 'D0001', accountType: 'Dealer' }),
+            expect.anything()
+        );
+        expect(orderModel.find).toHaveBeenCalledWith(
+            expect.objectContaining({
+                $or: expect.arrayContaining([
+                    expect.objectContaining({ createdBy: DEALER_ID }),
+                    expect.objectContaining({ dealerId: DEALER_ID }),
+                ]),
+            })
+        );
+    });
+
+    test('SuperUser with unknown dealerCode returns empty page', async () => {
+        userModel.findOne = jest.fn().mockReturnValue({
+            lean: jest.fn().mockResolvedValue(null),
+        });
+
+        const req = { user: superUser, body: { page: 1, limit: 10, dealerCode: 'NOPE' } };
+        await ordersController.getOrders(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(200);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+            orders: [], total: 0, pages: 0, currentPage: 1,
+        }));
+    });
+
+    test('SalesExecutive with dealerCode of unmapped dealer returns empty page', async () => {
+        // SE's mapped dealers: [DEALER_ID]; user typed code that resolves to a different id.
+        userModel.find = jest.fn().mockReturnValueOnce({
+            lean: jest.fn().mockResolvedValue([{ _id: DEALER_ID }]),
+        });
+        userModel.findOne = jest.fn().mockReturnValue({
+            lean: jest.fn().mockResolvedValue({ _id: 'OTHER_DEALER_ID' }),
+        });
+
+        const req = { user: seUser, body: { page: 1, limit: 10, dealerCode: 'D9999' } };
+        await ordersController.getOrders(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(200);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+            orders: [], total: 0,
+        }));
+    });
+
+    test('Dealer ignores dealerCode (own orders only)', async () => {
+        orderModel.countDocuments = jest.fn().mockResolvedValue(1);
+        orderModel.find = jest.fn().mockReturnValue(buildOrderQuery());
+
+        const req = { user: dealerUser, body: { page: 1, limit: 10, dealerCode: 'D0001' } };
+        await ordersController.getOrders(req, res);
+
+        // userModel.findOne should NOT be called for Dealer
+        expect(userModel.findOne).not.toHaveBeenCalled();
+    });
+
     // ── Focus8 failure is non-fatal ──────────────────────────────────────────
 
     test('continues successfully even when Focus8 enrichment fails', async () => {
