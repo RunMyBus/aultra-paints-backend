@@ -470,6 +470,101 @@ describe('getOrders', () => {
         expect(payload.orders).toHaveLength(0);
     });
 
+    // ── status filter ────────────────────────────────────────────────────────
+
+    test('SuperUser with status filter narrows the order query', async () => {
+        orderModel.countDocuments = jest.fn().mockResolvedValue(1);
+        orderModel.find = jest.fn().mockReturnValue(buildOrderQuery());
+
+        const req = { user: superUser, body: { page: 1, limit: 10, status: 'PENDING' } };
+        await ordersController.getOrders(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(200);
+        expect(orderModel.find).toHaveBeenCalledWith(
+            expect.objectContaining({ status: 'PENDING' })
+        );
+    });
+
+    test('rejects unknown status with 400', async () => {
+        const req = { user: superUser, body: { page: 1, limit: 10, status: 'WAT' } };
+        await ordersController.getOrders(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+            success: false,
+            message: 'Invalid status',
+        }));
+    });
+
+    // ── dealerCode filter ────────────────────────────────────────────────────
+
+    test('SuperUser with dealerCode resolves dealer and filters by id', async () => {
+        userModel.findOne = jest.fn().mockReturnValue({
+            lean: jest.fn().mockResolvedValue({ _id: DEALER_ID }),
+        });
+        orderModel.countDocuments = jest.fn().mockResolvedValue(1);
+        orderModel.find = jest.fn().mockReturnValue(buildOrderQuery());
+
+        const req = { user: superUser, body: { page: 1, limit: 10, dealerCode: 'D0001' } };
+        await ordersController.getOrders(req, res);
+
+        expect(userModel.findOne).toHaveBeenCalledWith(
+            expect.objectContaining({ dealerCode: 'D0001', accountType: 'Dealer' }),
+            expect.anything()
+        );
+        expect(orderModel.find).toHaveBeenCalledWith(
+            expect.objectContaining({
+                $or: expect.arrayContaining([
+                    expect.objectContaining({ createdBy: DEALER_ID }),
+                    expect.objectContaining({ dealerId: DEALER_ID }),
+                ]),
+            })
+        );
+    });
+
+    test('SuperUser with unknown dealerCode returns empty page', async () => {
+        userModel.findOne = jest.fn().mockReturnValue({
+            lean: jest.fn().mockResolvedValue(null),
+        });
+
+        const req = { user: superUser, body: { page: 1, limit: 10, dealerCode: 'NOPE' } };
+        await ordersController.getOrders(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(200);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+            orders: [], total: 0, pages: 0, currentPage: 1,
+        }));
+    });
+
+    test('SalesExecutive with dealerCode of unmapped dealer returns empty page', async () => {
+        // SE's mapped dealers: [DEALER_ID]; user typed code that resolves to a different id.
+        userModel.find = jest.fn().mockReturnValueOnce({
+            lean: jest.fn().mockResolvedValue([{ _id: DEALER_ID }]),
+        });
+        userModel.findOne = jest.fn().mockReturnValue({
+            lean: jest.fn().mockResolvedValue({ _id: 'OTHER_DEALER_ID' }),
+        });
+
+        const req = { user: seUser, body: { page: 1, limit: 10, dealerCode: 'D9999' } };
+        await ordersController.getOrders(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(200);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+            orders: [], total: 0,
+        }));
+    });
+
+    test('Dealer ignores dealerCode (own orders only)', async () => {
+        orderModel.countDocuments = jest.fn().mockResolvedValue(1);
+        orderModel.find = jest.fn().mockReturnValue(buildOrderQuery());
+
+        const req = { user: dealerUser, body: { page: 1, limit: 10, dealerCode: 'D0001' } };
+        await ordersController.getOrders(req, res);
+
+        // userModel.findOne should NOT be called for Dealer
+        expect(userModel.findOne).not.toHaveBeenCalled();
+    });
+
     // ── Focus8 failure is non-fatal ──────────────────────────────────────────
 
     test('continues successfully even when Focus8 enrichment fails', async () => {
@@ -484,6 +579,64 @@ describe('getOrders', () => {
         const payload = res.json.mock.calls[0][0];
         // focusData defaults to empty array when enrichment fails
         payload.orders.forEach(order => expect(order.focusData).toEqual([]));
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// getOrderDealers
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('getOrderDealers', () => {
+    let res;
+    beforeEach(() => {
+        jest.clearAllMocks();
+        res = makeRes();
+    });
+
+    test('SuperUser receives all active dealers sorted by dealerCode', async () => {
+        const dealers = [
+            { _id: 'a', dealerCode: 'D0001', name: 'Alpha' },
+            { _id: 'b', dealerCode: 'D0002', name: 'Beta' },
+        ];
+        userModel.find = jest.fn().mockReturnValue({
+            sort: jest.fn().mockReturnValue({
+                lean: jest.fn().mockResolvedValue(dealers),
+            }),
+        });
+        const req = { user: superUser };
+        await ordersController.getOrderDealers(req, res);
+        expect(userModel.find).toHaveBeenCalledWith(
+            { accountType: 'Dealer', status: 'active' },
+            { _id: 1, dealerCode: 1, name: 1 }
+        );
+        expect(res.status).toHaveBeenCalledWith(200);
+        expect(res.json).toHaveBeenCalledWith({ success: true, dealers });
+    });
+
+    test('SalesExecutive receives only mapped dealers', async () => {
+        const dealers = [{ _id: 'a', dealerCode: 'D0001', name: 'Alpha' }];
+        userModel.find = jest.fn().mockReturnValue({
+            sort: jest.fn().mockReturnValue({
+                lean: jest.fn().mockResolvedValue(dealers),
+            }),
+        });
+        const req = { user: seUser };
+        await ordersController.getOrderDealers(req, res);
+        expect(userModel.find).toHaveBeenCalledWith(
+            {
+                accountType: 'Dealer',
+                status: 'active',
+                salesExecutive: seUser.mobile,
+            },
+            { _id: 1, dealerCode: 1, name: 1 }
+        );
+        expect(res.json).toHaveBeenCalledWith({ success: true, dealers });
+    });
+
+    test('Dealer is rejected with 403', async () => {
+        const req = { user: dealerUser };
+        await ordersController.getOrderDealers(req, res);
+        expect(res.status).toHaveBeenCalledWith(403);
     });
 });
 

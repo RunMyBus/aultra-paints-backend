@@ -314,7 +314,14 @@ exports.getOrders = async (req, res) => {
     try {
         const user = req.user;
         const { accountType } = user;
-        const { page, limit } = req.body;
+        const { page, limit, status, dealerCode } = req.body;
+
+        const ALLOWED_STATUSES = ['PENDING', 'VERIFIED', 'REJECTED', 'DISPATCHED', 'IN-PARCEL'];
+        if (status !== undefined && status !== null && status !== '') {
+            if (!ALLOWED_STATUSES.includes(status)) {
+                return res.status(400).json({ success: false, message: 'Invalid status' });
+            }
+        }
 
         // If the user is neither SuperUser nor Dealer, returning an empty array
         if (!['SuperUser', 'Dealer', 'SalesExecutive'].includes(accountType)) {
@@ -327,6 +334,32 @@ exports.getOrders = async (req, res) => {
             });
         }
 
+        // Resolve dealerCode (server-side) to a User._id. Dealers ignore this
+        // filter — they always see only their own orders. For SuperUser/SE,
+        // an unknown code short-circuits to an empty page.
+        let dealerIdFromCode = null;
+        if (dealerCode && typeof dealerCode === 'string' && dealerCode.trim()) {
+            const trimmed = dealerCode.trim();
+            if (accountType === 'Dealer') {
+                // Dealers always see only their own orders; ignore filter silently.
+            } else {
+                const dealerDoc = await userModel.findOne(
+                    { dealerCode: trimmed, accountType: 'Dealer' },
+                    { _id: 1 }
+                ).lean();
+                if (!dealerDoc) {
+                    return res.status(200).json({
+                        success: true,
+                        orders: [],
+                        total: 0,
+                        pages: 0,
+                        currentPage: page,
+                    });
+                }
+                dealerIdFromCode = dealerDoc._id;
+            }
+        }
+
         let query = {};
         let populateOptions = {
             path: 'createdBy',
@@ -337,6 +370,15 @@ exports.getOrders = async (req, res) => {
 
         // If SuperUser, fetch all orders with user details
         if (accountType === 'SuperUser') {
+            if (status) {
+                query.status = status;
+            }
+            if (dealerIdFromCode) {
+                query.$or = [
+                    { createdBy: dealerIdFromCode },
+                    { dealerId: dealerIdFromCode },
+                ];
+            }
             totalOrders = await orderModel.countDocuments(query);
             orders = await orderModel
                 .find(query)
@@ -359,7 +401,28 @@ exports.getOrders = async (req, res) => {
             ).lean();
 
             const dealerIds = mappedDealers.map(dealer => dealer._id);
-            query = { $or: [{ createdBy: { $in: dealerIds } }, { dealerId: { $in: dealerIds } }] };
+            // If a dealerCode was supplied, intersect with the SE's mapped dealers.
+            // If the typed code resolves to a dealer outside the SE's set, the
+            // intersection is empty — short-circuit to an empty page rather than
+            // issuing a $in: [] query.
+            let effectiveDealerIds = dealerIds;
+            if (dealerIdFromCode) {
+                const typedId = dealerIdFromCode.toString();
+                effectiveDealerIds = dealerIds.filter(id => id.toString() === typedId);
+                if (effectiveDealerIds.length === 0) {
+                    return res.status(200).json({
+                        success: true,
+                        orders: [],
+                        total: 0,
+                        pages: 0,
+                        currentPage: page,
+                    });
+                }
+            }
+            query = { $or: [{ createdBy: { $in: effectiveDealerIds } }, { dealerId: { $in: effectiveDealerIds } }] };
+            if (status) {
+                query.status = status;
+            }
             totalOrders = await orderModel.countDocuments(query);
             orders = await orderModel
                 .find(query)
@@ -380,6 +443,9 @@ exports.getOrders = async (req, res) => {
             // For Dealers, fetch only their orders
             // query = { createdBy: user._id };
             query = { $or: [{ createdBy: user._id }, { dealerId: user._id }] };
+            if (status) {
+                query.status = status;
+            }
             totalOrders = await orderModel.countDocuments(query);
             orders = await orderModel
                 .find(query)
@@ -537,6 +603,27 @@ exports.getOrderDetails = async (req, res) => {
     } catch (error) {
         logger.error('Error fetching order details', error);
         return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.getOrderDealers = async (req, res) => {
+    try {
+        const { accountType, mobile } = req.user;
+        if (!['SuperUser', 'SalesExecutive'].includes(accountType)) {
+            return res.status(403).json({ success: false, message: 'Forbidden' });
+        }
+        const filter = { accountType: 'Dealer', status: 'active' };
+        if (accountType === 'SalesExecutive') {
+            filter.salesExecutive = mobile;
+        }
+        const dealers = await userModel
+            .find(filter, { _id: 1, dealerCode: 1, name: 1 })
+            .sort({ dealerCode: 1 })
+            .lean();
+        return res.status(200).json({ success: true, dealers });
+    } catch (error) {
+        logger.error('Error fetching order dealers', error);
+        return res.status(500).json({ success: false, message: 'Error fetching dealers' });
     }
 };
 
