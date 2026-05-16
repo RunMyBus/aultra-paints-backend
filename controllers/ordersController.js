@@ -314,7 +314,7 @@ exports.getOrders = async (req, res) => {
     try {
         const user = req.user;
         const { accountType } = user;
-        const { page, limit, status, dealerCode } = req.body;
+        const { page, limit, status, dealerCode, salesExecutiveMobile } = req.body;
 
         const ALLOWED_STATUSES = ['PENDING', 'VERIFIED', 'REJECTED', 'DISPATCHED', 'IN-PARCEL'];
         if (status !== undefined && status !== null && status !== '') {
@@ -378,6 +378,19 @@ exports.getOrders = async (req, res) => {
                     { createdBy: dealerIdFromCode },
                     { dealerId: dealerIdFromCode },
                 ];
+            } else if (salesExecutiveMobile && typeof salesExecutiveMobile === 'string' && salesExecutiveMobile.trim()) {
+                const seDealers = await userModel.find(
+                    { salesExecutive: salesExecutiveMobile.trim(), accountType: 'Dealer', status: 'active' },
+                    '_id'
+                ).lean();
+                const seDealerIds = seDealers.map(d => d._id);
+                if (seDealerIds.length === 0) {
+                    return res.status(200).json({ success: true, orders: [], total: 0, pages: 0, currentPage: page });
+                }
+                query.$or = [
+                    { createdBy: { $in: seDealerIds } },
+                    { dealerId: { $in: seDealerIds } },
+                ];
             }
             totalOrders = await orderModel.countDocuments(query);
             orders = await orderModel
@@ -388,12 +401,22 @@ exports.getOrders = async (req, res) => {
                 .skip((page - 1) * limit)
                 .limit(limit)
                 .lean();
-        } // If SalesExecutive, fetch orders from mapped dealers
+        } // If SalesExecutive, fetch orders from mapped dealers (including junior SEs' dealers)
         else if (accountType === 'SalesExecutive') {
-            // First, find all dealers mapped to this sales executive
+            // Include dealers mapped to this SE and to any junior SEs reporting to them.
+            const juniorSEs = await userModel.find(
+                { parentSalesExecutive: user.mobile, accountType: 'SalesExecutive', status: 'active' },
+                'mobile'
+            ).lean();
+            const seeMobiles = [user.mobile, ...juniorSEs.map(j => j.mobile)];
+            // If a specific SE mobile is requested and it's within the allowed set, narrow the scope.
+            let filteredMobiles = seeMobiles;
+            if (salesExecutiveMobile && typeof salesExecutiveMobile === 'string' && seeMobiles.includes(salesExecutiveMobile.trim())) {
+                filteredMobiles = [salesExecutiveMobile.trim()];
+            }
             const mappedDealers = await userModel.find(
                 {
-                    salesExecutive: user.mobile,
+                    salesExecutive: { $in: filteredMobiles },
                     accountType: 'Dealer',
                     status: 'active'
                 },
@@ -614,7 +637,12 @@ exports.getOrderDealers = async (req, res) => {
         }
         const filter = { accountType: 'Dealer', status: 'active' };
         if (accountType === 'SalesExecutive') {
-            filter.salesExecutive = mobile;
+            const juniorSEs = await userModel.find(
+                { parentSalesExecutive: mobile, accountType: 'SalesExecutive', status: 'active' },
+                'mobile'
+            ).lean();
+            const seeMobiles = [mobile, ...juniorSEs.map(j => j.mobile)];
+            filter.salesExecutive = { $in: seeMobiles };
         }
         const dealers = await userModel
             .find(filter, { _id: 1, dealerCode: 1, name: 1 })

@@ -33,6 +33,13 @@ exports.getAllTransactions = async (req, res) => {
             query.narration = { $regex: safeCode, $options: 'i' };
         }
 
+        // Apply credit note status filter if provided
+        if (req.body.creditNoteStatus === 'issued') {
+            query.creditNoteIssued = true;
+        } else if (req.body.creditNoteStatus === 'pending') {
+            query.creditNoteIssued = { $ne: true };
+        }
+
         // Apply date filter if provided
         if (req.body.date) {
             const dateStr = req.body.date;
@@ -192,6 +199,13 @@ exports.generateTransactionLedgerTemplate = async (req, res) => {
         );
 
         if (senderEntry) {
+          // Also mark the SuperUser's corresponding "Received reward points from dealer"
+          // entry so the credit-note status filter works for both sides.
+          await TransactionLedger.updateOne(
+            { uniqueCode: txnForPdf.uniqueCode, narration: 'Received reward points from dealer' },
+            { $set: { creditNoteIssued: true } }
+          );
+
           // First time credit note is generated for this transfer — deduct from Super User
           const superUserMobile = process.env.SUPER_USER_MOBILE;
           const superUser = await User.findOne({ mobile: superUserMobile, accountType: 'SuperUser' });
@@ -212,13 +226,15 @@ exports.generateTransactionLedgerTemplate = async (req, res) => {
               { new: true }
             );
 
-            // Insert a ledger record for the deduction so it is fully traceable
+            // Insert a ledger record for the deduction so it is fully traceable.
+            // creditNoteIssued=true from creation — this row IS the issuance event.
             await TransactionLedger.create({
               narration: 'Credit Note reward deduction',
               pointsCredited: `- ${amountVal}`,
               pointsBalance: updatedSuperUser.rewardPoints,
               userId: superUser._id.toString(),
               uniqueCode: `CN_${txnForPdf.uniqueCode}`, // prefixed to keep it unique
+              creditNoteIssued: true,
             });
 
             console.log(

@@ -14,7 +14,7 @@ const { escapeRegex, clampLimit, clampPage, isValidMobile } = require('../utils/
 const USER_PROTECTED_FIELDS = ['rewardPoints', 'cash', 'legacyCash', 'token', '_id', 'createdAt', 'updatedAt', '__v'];
 const USER_ALLOWED_CREATE_FIELDS = [
     'name', 'mobile', 'address', 'email', 'primaryContactPerson', 'primaryContactPersonMobile',
-    'dealerCode', 'parentDealerCode', 'accountType', 'upiID', 'salesExecutive',
+    'dealerCode', 'parentDealerCode', 'accountType', 'upiID', 'salesExecutive', 'parentSalesExecutive',
     'state', 'zone', 'district', 'status', 'productCategories'
 ];
 const USER_ALLOWED_UPDATE_FIELDS = USER_ALLOWED_CREATE_FIELDS.filter(f => f !== 'accountType');
@@ -544,8 +544,14 @@ exports.getDealers = async (req, res) => {
         let query = { accountType: 'Dealer' };
         
         // If the requesting user is a SalesExecutive, filter dealers by their mobile
+        // (includes dealers of any junior SEs reporting to them)
         if (user && user.accountType === 'SalesExecutive') {
-            query.salesExecutive = user.mobile;
+            const juniorSEs = await userModel.find(
+                { parentSalesExecutive: user.mobile, accountType: 'SalesExecutive', status: 'active' },
+                'mobile'
+            ).lean();
+            const seeMobiles = [user.mobile, ...juniorSEs.map(j => j.mobile)];
+            query.salesExecutive = { $in: seeMobiles };
             query.status = 'active'; // Only show active dealers
         }
         
@@ -605,6 +611,19 @@ exports.getAllSalesExecutives = async (req, res) => {
             status: 'error',
             message: 'Error fetching sales executives'
         });
+    }
+};
+
+exports.getJuniorSalesExecutives = async (req, res) => {
+    try {
+        const { mobile } = req.user;
+        const juniors = await userModel.find(
+            { parentSalesExecutive: mobile, accountType: 'SalesExecutive' },
+            { name: 1, mobile: 1 }
+        ).sort({ name: 1 }).lean();
+        return res.status(200).json({ status: 'success', data: juniors });
+    } catch (error) {
+        return res.status(500).json({ status: 'error', message: 'Error fetching junior sales executives' });
     }
 };
 

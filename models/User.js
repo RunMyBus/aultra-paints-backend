@@ -21,6 +21,7 @@ const userSchema = new mongoose.Schema({
     accountType: { type: String, default: 'Painter'},
     upiID: { type: String },
     salesExecutive: {type: String},
+    parentSalesExecutive: { type: String }, // mobile of the senior SE overseeing this SE (SE accounts only)
     state: { type: String },
     zone: { type: String },
     district: { type: String },
