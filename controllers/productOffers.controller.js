@@ -20,6 +20,7 @@ async function generateThumbnail(imageBuffer) {
 exports.createProductOffer = async (req, res) => {
     let {productOfferDescription, validUntil, productOfferStatus, cashback, redeemPoints, price} = req.body;
     const productCategory = req.body.productCategory || null;
+    const offerType = req.body.offerType || 'ongoing';
     if (!req.body.productOfferImage) {
         return res.status(400).json({message: 'Image is required'});
     }
@@ -57,7 +58,8 @@ exports.createProductOffer = async (req, res) => {
         cashback,
         redeemPoints,
         price : parsedPrice,
-        productCategory
+        productCategory,
+        offerType,
     });
 
     try {
@@ -249,8 +251,12 @@ exports.searchProductOffers = async (req, res) => {
                 dealerId: dealerIds
             })
             return {
-                ...productOffer._doc,  // Spread product offer details
-                productPrice: priceData ? priceData.price : null  // Add price if found, else null
+                ...productOffer._doc,
+                // Use the mongoose model accessor (.offerType, not ._doc.offerType) so
+                // the schema default 'ongoing' is applied for documents that pre-date
+                // this field and don't have it stored in MongoDB.
+                offerType: productOffer.offerType || 'ongoing',
+                productPrice: priceData ? priceData.price : null,
             };
         }))
 
@@ -361,6 +367,7 @@ exports.updateProductOffer = async (req, res) => {
             price: parsedPrice,
             productCategory: req.body.productCategory || null,
             productOfferThumbnailUrl: req.body.productOfferThumbnailUrl,
+            offerType: req.body.offerType || 'ongoing',
         };
 
         const productOffer = await productOffersModel.findByIdAndUpdate(req.params.id,  productOfferData, {new: true});

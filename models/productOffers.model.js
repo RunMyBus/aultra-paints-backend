@@ -19,6 +19,7 @@ const productOffersSchema = new mongoose.Schema({
         }
     ],
     offerAvailable: { type: Boolean, default: true },
+    offerType: { type: String, enum: ['ongoing', 'this_week', 'this_month'], default: 'ongoing' },
     productCategory: { type: Schema.Types.ObjectId, ref: 'ProductCategory', default: null },
     focusProductId: {type: Number},
     focusUnitId: {type: Number},
