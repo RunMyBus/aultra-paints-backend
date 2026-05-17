@@ -314,17 +314,23 @@ exports.getOrders = async (req, res) => {
     try {
         const user = req.user;
         const { accountType } = user;
-        const { page, limit, status, dealerCode, salesExecutiveMobile } = req.body;
+        const { page, limit, status, dealerCode, salesExecutiveMobile, branchId } = req.body;
 
-        const ALLOWED_STATUSES = ['PENDING', 'VERIFIED', 'REJECTED', 'DISPATCHED', 'IN-PARCEL'];
+        const ALLOWED_STATUSES = ['PENDING', 'VERIFIED', 'REJECTED', 'DISPATCHED', 'PARTIALLY_DISPATCHED'];
         if (status !== undefined && status !== null && status !== '') {
             if (!ALLOWED_STATUSES.includes(status)) {
                 return res.status(400).json({ success: false, message: 'Invalid status' });
             }
         }
 
+        if (branchId !== undefined && branchId !== null) {
+            if (typeof branchId !== 'number' || branchId <= 0) {
+                return res.status(400).json({ success: false, message: 'Invalid branchId' });
+            }
+        }
+
         // If the user is neither SuperUser nor Dealer, returning an empty array
-        if (!['SuperUser', 'Dealer', 'SalesExecutive'].includes(accountType)) {
+        if (!['SuperUser', 'Dealer', 'SalesExecutive', 'ProductionManager'].includes(accountType)) {
             return res.status(200).json({
                 success: true,
                 orders: [],
@@ -369,9 +375,12 @@ exports.getOrders = async (req, res) => {
         let totalOrders;
 
         // If SuperUser, fetch all orders with user details
-        if (accountType === 'SuperUser') {
+        if (accountType === 'SuperUser' || accountType === 'ProductionManager') {
             if (status) {
                 query.status = status;
+            }
+            if (branchId !== undefined && branchId !== null) {
+                query.branchId = branchId;
             }
             if (dealerIdFromCode) {
                 query.$or = [
@@ -446,6 +455,9 @@ exports.getOrders = async (req, res) => {
             if (status) {
                 query.status = status;
             }
+            if (branchId !== undefined && branchId !== null) {
+                query.branchId = branchId;
+            }
             totalOrders = await orderModel.countDocuments(query);
             orders = await orderModel
                 .find(query)
@@ -468,6 +480,9 @@ exports.getOrders = async (req, res) => {
             query = { $or: [{ createdBy: user._id }, { dealerId: user._id }] };
             if (status) {
                 query.status = status;
+            }
+            if (branchId !== undefined && branchId !== null) {
+                query.branchId = branchId;
             }
             totalOrders = await orderModel.countDocuments(query);
             orders = await orderModel
@@ -521,6 +536,7 @@ exports.getOrderDetails = async (req, res) => {
             .findOne({ orderId })
             .populate({ path: 'createdBy', select: 'name mobile accountType dealerCode' })
             .populate({ path: 'dealerId', select: 'name dealerCode mobile' })
+            .populate({ path: 'statusHistory.changedBy', select: 'name accountType' })
             .lean();
 
         if (!order) {
@@ -577,7 +593,7 @@ exports.getOrderDetails = async (req, res) => {
                         itemStatus = 'DISPATCHED';
                         fullyDispatched++;
                     } else if (dcQty > 0) {
-                        itemStatus = 'IN-PARCEL';
+                        itemStatus = 'PARTIALLY_DISPATCHED';
                         partiallyDispatched++;
                     }
                     return { ...item, dispatchStatus: itemStatus, dispatchedQty: dcQty };
@@ -589,7 +605,7 @@ exports.getOrderDetails = async (req, res) => {
                 if (fullyDispatched === itemsWithStatus.length) {
                     derivedStatus = 'DISPATCHED';
                 } else if (fullyDispatched > 0 || partiallyDispatched > 0) {
-                    derivedStatus = 'IN-PARCEL';
+                    derivedStatus = 'PARTIALLY_DISPATCHED';
                 }
 
                 // Extract unique DC invoice IDs from fetched rows
@@ -632,9 +648,7 @@ exports.getOrderDetails = async (req, res) => {
 exports.getOrderDealers = async (req, res) => {
     try {
         const { accountType, mobile } = req.user;
-        if (!['SuperUser', 'SalesExecutive'].includes(accountType)) {
-            return res.status(403).json({ success: false, message: 'Forbidden' });
-        }
+
         const filter = { accountType: 'Dealer', status: 'active' };
         if (accountType === 'SalesExecutive') {
             const juniorSEs = await userModel.find(
@@ -749,6 +763,63 @@ exports.updateOrderStatus = async (req, res) => {
 
     } catch (error) {
         logger.error('Error updating order status: ', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Error updating order status',
+            error: error.message
+        });
+    }
+};
+
+exports.updateOrderStatusManual = async (req, res) => {
+    try {
+        const { orderId, status, remarks } = req.body;
+        const user = req.user;
+
+        if (!orderId || !status) {
+            return res.status(400).json({ success: false, message: 'orderId and status are required' });
+        }
+
+        const MANUAL_ALLOWED_STATUSES = ['DISPATCHED', 'MANUALLY_DISPATCHED'];
+        if (!MANUAL_ALLOWED_STATUSES.includes(status)) {
+            return res.status(400).json({ success: false, message: 'Invalid status for manual update' });
+        }
+
+        const order = await orderModel.findOne({ orderId });
+        if (!order) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+
+        const update = {
+            $set: { status },
+            $push: {
+                statusHistory: {
+                    status,
+                    changedAt: new Date(),
+                    changedBy: user._id,
+                    remarks: remarks || null
+                }
+            }
+        };
+
+        const updatedOrder = await orderModel.findOneAndUpdate(
+            { orderId },
+            update,
+            { new: true }
+        ).populate({
+            path: 'statusHistory.changedBy',
+            select: 'name accountType'
+        });
+
+        logger.info(`Order status updated manually`, { orderId, status, remarks, updatedBy: user.name });
+
+        res.json({
+            success: true,
+            message: `Order status updated to ${status}`,
+            order: updatedOrder
+        });
+    } catch (error) {
+        logger.error('Error updating order status manually: ', error);
         return res.status(500).json({
             success: false,
             message: 'Error updating order status',

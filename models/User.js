@@ -28,6 +28,14 @@ const userSchema = new mongoose.Schema({
     productCategories: [{ type: Schema.Types.ObjectId, ref: 'ProductCategory' }]
 }, {timestamps: true})
 
+userSchema.pre('save', function (next) {
+    const VALID_ACCOUNT_TYPES = ['Painter', 'Dealer', 'SalesExecutive', 'SuperUser', 'ProductionManager'];
+    if (this.accountType && !VALID_ACCOUNT_TYPES.includes(this.accountType)) {
+        return next(new Error(`Invalid accountType. Must be one of: ${VALID_ACCOUNT_TYPES.join(', ')}`));
+    }
+    next();
+});
+
 const User = mongoose.model('User', userSchema);
 
 module.exports = User;
