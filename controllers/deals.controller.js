@@ -3,12 +3,27 @@ const s3 = require('../config/aws');
 const { decodeBase64Image } = require('../services/utils.service');
 const logger = require('../utils/logger');
 const UserModel = require('../models/User');
+const mongoose = require('mongoose');
 
 const BUCKET = process.env.AWS_BUCKET_DEALS;
+if (!BUCKET) {
+    logger.warn('AWS_BUCKET_DEALS is not set; deal image upload/delete will fail at runtime.');
+}
+
+function buildS3UploadParams(dealId, imageData) {
+    return {
+        Bucket: BUCKET,
+        Key: `${dealId}.png`,
+        Body: imageData.data,
+        ContentType: imageData.type,
+        ACL: 'public-read',
+    };
+}
 
 // POST /api/deals — admin only.
 // Body: { title, description?, expirationDate, active?, category, dealImage (data URI) }
 exports.createDeal = async (req, res) => {
+    let savedDeal;
     try {
         const { title, description, expirationDate, active, category, dealImage } = req.body;
 
@@ -19,7 +34,12 @@ exports.createDeal = async (req, res) => {
             return res.status(400).json({ message: 'Image is required' });
         }
 
-        const imageData = await decodeBase64Image(dealImage);
+        let imageData;
+        try {
+            imageData = await decodeBase64Image(dealImage);
+        } catch (_) {
+            imageData = new Error('Invalid image data');
+        }
         if (imageData instanceof Error) {
             return res.status(400).json({ message: 'Invalid image data' });
         }
@@ -34,22 +54,18 @@ exports.createDeal = async (req, res) => {
             dealImageUrl: 'pending', // overwritten right after upload
             createdBy: req.user && req.user.mobile,
         });
-        const savedDeal = await deal.save();
+        savedDeal = await deal.save();
 
-        const params = {
-            Bucket: BUCKET,
-            Key: `${savedDeal._id}.png`,
-            Body: imageData.data,
-            ContentType: imageData.type,
-            ACL: 'public-read',
-        };
-        const data = await s3.upload(params).promise();
+        const data = await s3.upload(buildS3UploadParams(savedDeal._id, imageData)).promise();
 
         savedDeal.dealImageUrl = data.Location;
         await savedDeal.save();
 
         return res.status(201).json(savedDeal);
     } catch (error) {
+        if (savedDeal && savedDeal._id) {
+            await Deal.findByIdAndDelete(savedDeal._id).catch(() => {});
+        }
         logger.error('createDeal failed', { error: error.message });
         return res.status(500).json({ message: error.message });
     }
@@ -59,8 +75,8 @@ exports.createDeal = async (req, res) => {
 // Query: ?page=1&limit=20&active=true&category=<id>&search=foo
 exports.getDeals = async (req, res) => {
     try {
-        const page = parseInt(req.query.page || 1, 10);
-        const limit = parseInt(req.query.limit || 20, 10);
+        const page = Math.max(1, parseInt(req.query.page || 1, 10));
+        const limit = Math.max(1, parseInt(req.query.limit || 20, 10));
         const skip = (page - 1) * limit;
 
         const filter = {};
@@ -97,6 +113,9 @@ exports.getDeals = async (req, res) => {
 
 // GET /api/deals/:id — admin only.
 exports.getDealById = async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({ message: 'Invalid deal id' });
+    }
     try {
         const deal = await Deal.findById(req.params.id).populate('category', 'categoryName');
         if (!deal) return res.status(404).json({ message: 'Deal not found' });
@@ -110,6 +129,9 @@ exports.getDealById = async (req, res) => {
 // PUT /api/deals/:id — admin only.
 // Body: any subset of { title, description, expirationDate, active, category, dealImage (data URI) }
 exports.updateDeal = async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({ message: 'Invalid deal id' });
+    }
     try {
         const existing = await Deal.findById(req.params.id);
         if (!existing) return res.status(404).json({ message: 'Deal not found' });
@@ -123,18 +145,16 @@ exports.updateDeal = async (req, res) => {
         if (req.user && req.user.mobile) updates.updatedBy = req.user.mobile;
 
         if (req.body.dealImage) {
-            const imageData = await decodeBase64Image(req.body.dealImage);
+            let imageData;
+            try {
+                imageData = await decodeBase64Image(req.body.dealImage);
+            } catch (_) {
+                imageData = new Error('Invalid image data');
+            }
             if (imageData instanceof Error) {
                 return res.status(400).json({ message: 'Invalid image data' });
             }
-            const params = {
-                Bucket: BUCKET,
-                Key: `${existing._id}.png`,
-                Body: imageData.data,
-                ContentType: imageData.type,
-                ACL: 'public-read',
-            };
-            const data = await s3.upload(params).promise();
+            const data = await s3.upload(buildS3UploadParams(existing._id, imageData)).promise();
             updates.dealImageUrl = data.Location;
         }
 
@@ -149,6 +169,9 @@ exports.updateDeal = async (req, res) => {
 
 // DELETE /api/deals/:id — admin only.
 exports.deleteDeal = async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({ message: 'Invalid deal id' });
+    }
     try {
         const deal = await Deal.findById(req.params.id);
         if (!deal) return res.status(404).json({ message: 'Deal not found' });
