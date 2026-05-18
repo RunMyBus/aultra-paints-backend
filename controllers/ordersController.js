@@ -316,7 +316,7 @@ exports.getOrders = async (req, res) => {
         const { accountType } = user;
         const { page, limit, status, dealerCode, salesExecutiveMobile, branchId } = req.body;
 
-        const ALLOWED_STATUSES = ['PENDING', 'VERIFIED', 'REJECTED', 'DISPATCHED', 'PARTIALLY_DISPATCHED'];
+        const ALLOWED_STATUSES = ['PENDING', 'VERIFIED', 'REJECTED', 'DISPATCHED', 'PARTIALLY_DISPATCHED', 'MANUALLY_DISPATCHED'];
         if (status !== undefined && status !== null && status !== '') {
             if (!ALLOWED_STATUSES.includes(status)) {
                 return res.status(400).json({ success: false, message: 'Invalid status' });
@@ -367,10 +367,10 @@ exports.getOrders = async (req, res) => {
         }
 
         let query = {};
-        let populateOptions = {
-            path: 'createdBy',
-            select: 'name mobile accountType dealerCode'
-        };
+        let populateOptions = [
+            { path: 'createdBy', select: 'name mobile accountType dealerCode' },
+            { path: 'statusHistory.changedBy', select: 'name accountType' },
+        ];
         let orders;
         let totalOrders;
 
@@ -614,11 +614,15 @@ exports.getOrderDetails = async (req, res) => {
                 const idsChanged = dcInvoiceIds.slice().sort().join(',') !== existingIds;
                 order.focusDCInvoiceId = dcInvoiceIds;
 
-                // Persist status and/or DC invoice IDs if anything changed
-                if (derivedStatus !== order.status || idsChanged) {
-                    const updateDoc = { focusDCInvoiceId: dcInvoiceIds };
-                    if (derivedStatus !== order.status) {
-                        updateDoc.status = derivedStatus;
+                // Persist status and/or DC invoice IDs if anything changed.
+                // Never overwrite a manually-set status with a Focus8-derived one.
+                const manualStatuses = ['MANUALLY_DISPATCHED'];
+                const canSyncStatus = !manualStatuses.includes(order.status);
+                const statusChanged = canSyncStatus && derivedStatus !== order.status;
+                if (statusChanged || idsChanged) {
+                    const updateDoc = { $set: { focusDCInvoiceId: dcInvoiceIds } };
+                    if (statusChanged) {
+                        updateDoc.$set.status = derivedStatus;
                         updateDoc.$push = { statusHistory: { status: derivedStatus, changedAt: new Date() } };
                         order.status = derivedStatus;
                     }
@@ -671,7 +675,10 @@ exports.getOrderDealers = async (req, res) => {
 
 exports.updateOrderStatus = async (req, res) => {
     try {
-        const { orderId, isVerified, entityId, warehouseId, branchId, narration } = req.body;
+        const { orderId, isVerified, narration } = req.body;
+        const entityId = req.body.entityId != null ? Number(req.body.entityId) : null;
+        const warehouseId = req.body.warehouseId != null ? Number(req.body.warehouseId) : null;
+        const branchId = req.body.branchId != null ? Number(req.body.branchId) : null;
         const user = req.user;
 
         // Check if the user is a SalesExecutive
@@ -711,17 +718,21 @@ exports.updateOrderStatus = async (req, res) => {
         let updateData = {};
         if (isVerified === 1) {
             updateData = {
-                status: 'VERIFIED',
-                isVerified: true,
-                isRejected: false,
-                $push: { statusHistory: { status: 'VERIFIED', changedAt: new Date() } }
+                $set: {
+                    status: 'VERIFIED',
+                    isVerified: true,
+                    isRejected: false,
+                    ...(entityId != null && { entityId }),
+                    ...(warehouseId != null && { warehouseId }),
+                    ...(branchId != null && { branchId }),
+                    ...(narration && { narration }),
+                },
+                $push: { statusHistory: { status: 'VERIFIED', changedAt: new Date() } },
             };
         } else if (isVerified === 0) {
             updateData = {
-                status: 'REJECTED',
-                isVerified: false,
-                isRejected: true,
-                $push: { statusHistory: { status: 'REJECTED', changedAt: new Date() } }
+                $set: { status: 'REJECTED', isVerified: false, isRejected: true },
+                $push: { statusHistory: { status: 'REJECTED', changedAt: new Date() } },
             };
         } else {
             return res.status(400).json({
