@@ -34,6 +34,7 @@ This Express/Jest backend powers Aultra Paints services. Use the guidance below 
 - Configure secrets via `.env` (never commit it); document new variables in your PR description so ops can update their environments.
 - Update the `config/express.js` CORS whitelist when onboarding new clients, and adjust `middleware/passport.js` for auth tweaks.
 - Validate and sanitize user inputs at controllers/services, and favor parameterized queries or ORM helpers when touching raw SQL.
+- **JSON body limit is `8mb`** (set in `config/express.js`). Image uploads — product offers, product catalog items, reward schemes — ship as base64 data URIs inside JSON, so this ceiling caps the effective upload size at ~5 MB of original-photo bytes after base64 inflation (~33%). Keep the frontend's compressImage `targetBytes` aligned with any change to this limit.
 
 ## Changes (as of 2026-04-26)
 
