@@ -40,8 +40,12 @@ var distDir = '../../dist/';
 //     res.sendFile(path.join(__dirname, '../../dist/index.html'));
 // });
 
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+// 8 MB ceiling for JSON bodies covers a ~5 MB user-uploaded image after
+// base64 inflation (~33%) plus the rest of the JSON request fields. Image
+// uploads (product offers, product catalog items, reward schemes) ship as
+// base64 data URIs inside JSON, so the body-parser limit governs them.
+app.use(bodyParser.json({ limit: '8mb' }));
+app.use(bodyParser.urlencoded({ limit: '8mb', extended: true }));
 
 app.use(cookieParser());
 app.use(compress());
