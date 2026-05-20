@@ -25,12 +25,14 @@ function requireRole(...allowed) {
 
 // Commonly-used role groups.
 const ADMIN = ['SuperUser'];
-const STAFF = ['SuperUser', 'SalesExecutive'];
+const STAFF = ['SuperUser', 'SalesExecutive', 'ProductionManager'];
 const ORDER_CREATORS = ['SuperUser', 'SalesExecutive', 'Dealer'];
+const ORDER_EDITORS = ['SuperUser', 'ProductionManager'];
 
 module.exports = {
     requireRole,
     ADMIN,
     STAFF,
     ORDER_CREATORS,
+    ORDER_EDITORS,
 };

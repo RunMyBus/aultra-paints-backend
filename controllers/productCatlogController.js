@@ -35,163 +35,105 @@ async function _cachedDealerAccountId(dealerCode) {
 
 // Create Product Catlog
 exports.createProductCatlog = async (req, res) => {
-  let { productDescription, productStatus, price, focusProductId, focusUnitId = 1, focusProductMapping, productCategory } = req.body;
+  let { productDescription, productStatus, focusProductId, focusUnitId = 1, focusProductMapping, productCategory } = req.body;
 
   if (!req.body.productImage) {
-    return res.status(400).json({ message: 'Product  image is required' });
+    return res.status(400).json({ message: 'Product image is required' });
   }
 
-  // Decode the base64 image
   const imageData = await decodeBase64Image(req.body.productImage);
   if (imageData instanceof Error) {
     return res.status(400).json({ message: 'Invalid image data' });
   }
 
-  // Parse and validate price field
-  let parsedPrice = [];
+  // focusProductMapping is required — prices are seeded from Focus8, not entered manually
+  if (!focusProductMapping) {
+    return res.status(400).json({ message: 'focusProductMapping is required' });
+  }
+
+  let parsedFocusMapping;
   try {
-    const priceData = typeof price === 'string' ? JSON.parse(price) : price;
-    if (typeof priceData !== 'object' || priceData === null) {
-      throw new Error('Price data must be an object');
+    const mappingData = typeof focusProductMapping === 'string'
+      ? JSON.parse(focusProductMapping)
+      : focusProductMapping;
+
+    if (!Array.isArray(mappingData) || mappingData.length === 0) {
+      throw new Error('focusProductMapping must be a non-empty array');
     }
 
-    // Transform the price data to match the schema
-    for (const [volume, priceEntries] of Object.entries(priceData)) {
-      if (!Array.isArray(priceEntries)) continue;
+    parsedFocusMapping = mappingData.map(m => {
+      if (!m.volume || !m.focusProductId) {
+        throw new Error('Each mapping must have volume and focusProductId');
+      }
+      return {
+        volume: m.volume,
+        focusProductId: Number(m.focusProductId),
+        focusUnitId: m.focusUnitId ? Number(m.focusUnitId) : 1,
+      };
+    });
 
-      priceEntries.forEach(entry => {
-        const [[refId, priceValue]] = Object.entries(entry);
-        if (refId && priceValue !== undefined) {
-          parsedPrice.push({
-            volume,
-            refId,
-            price: Number(priceValue)
-          });
-        }
-      });
-    }
-
-    if (parsedPrice.length === 0) {
-      throw new Error('No valid price entries found');
+    const volumeCounts = {};
+    parsedFocusMapping.forEach(m => { volumeCounts[m.volume] = (volumeCounts[m.volume] || 0) + 1; });
+    const duplicates = Object.keys(volumeCounts).filter(v => volumeCounts[v] > 1);
+    if (duplicates.length > 0) {
+      throw new Error(`Duplicate volumes in mapping: ${duplicates.join(', ')}`);
     }
   } catch (error) {
-    console.error('Error parsing price data:', error);
-    return res.status(400).json({ message: 'Invalid price format: ' + error.message });
+    return res.status(400).json({ message: 'Invalid focusProductMapping: ' + error.message });
   }
 
-  // Parse and validate focusProductMapping if provided
-  let parsedFocusMapping = null;
-  if (focusProductMapping) {
-    try {
-      const mappingData = typeof focusProductMapping === 'string' 
-        ? JSON.parse(focusProductMapping) 
-        : focusProductMapping;
-
-      if (!Array.isArray(mappingData)) {
-        throw new Error('focusProductMapping must be an array');
-      }
-
-      // Validate mapping structure
-      parsedFocusMapping = mappingData.map(mapping => {
-        if (!mapping.volume || !mapping.focusProductId) {
-          throw new Error('Each mapping must have volume and focusProductId');
-        }
-        return {
-          volume: mapping.volume,
-          focusProductId: Number(mapping.focusProductId),
-          focusUnitId: mapping.focusUnitId ? Number(mapping.focusUnitId) : 1
-        };
-      });
-
-      // Validate that all volumes in price have corresponding mapping
-      const priceVolumes = [...new Set(parsedPrice.map(p => p.volume))];
-      const mappingVolumes = parsedFocusMapping.map(m => m.volume);
-      const missingVolumes = priceVolumes.filter(v => !mappingVolumes.includes(v));
-      
-      if (missingVolumes.length > 0) {
-        throw new Error(`Missing focus product mapping for volumes: ${missingVolumes.join(', ')}`);
-      }
-
-      // Check for duplicate volumes in mapping
-      const volumeCounts = {};
-      mappingVolumes.forEach(v => {
-        volumeCounts[v] = (volumeCounts[v] || 0) + 1;
-      });
-      const duplicates = Object.keys(volumeCounts).filter(v => volumeCounts[v] > 1);
-      if (duplicates.length > 0) {
-        throw new Error(`Duplicate volumes in focus product mapping: ${duplicates.join(', ')}`);
-      }
-
-    } catch (error) {
-      console.error('Error parsing focus product mapping:', error);
-      return res.status(400).json({ message: 'Invalid focus product mapping: ' + error.message });
-    }
-  }
-
-  // Create the product catlog document
-  const productCatlog = new productOfferModel({
-    productOfferDescription: productDescription,
-    productOfferStatus: productStatus,
-    price: parsedPrice,
-    offerAvailable: false,
-    productCategory: productCategory || null,
-    focusProductId: focusProductId ? Number(focusProductId) : null,
-    focusUnitId: focusUnitId ? Number(focusUnitId) : null,
-    focusProductMapping: parsedFocusMapping || undefined
-  });
-
+  let savedProductCatlog;
   try {
-    const existingProductCatlog = await productOfferModel.findOne({ productOfferDescription: productDescription });
-    if (existingProductCatlog) {
-      return res.status(400).json({ message: 'Product catlog with the same description already exists' });
+    const existing = await productOfferModel.findOne({ productOfferDescription: productDescription });
+    if (existing) {
+      return res.status(400).json({ message: 'Product catalog with the same description already exists' });
     }
 
-    // Save the product catlog
-    let savedProductCatlog = await productCatlog.save();
-    const savedProductCatlogId = savedProductCatlog._id;
+    savedProductCatlog = await new productOfferModel({
+      productOfferDescription: productDescription,
+      productOfferStatus: productStatus,
+      price: [],
+      offerAvailable: false,
+      productCategory: productCategory || null,
+      focusProductId: focusProductId ? Number(focusProductId) : null,
+      focusUnitId: focusUnitId ? Number(focusUnitId) : null,
+      focusProductMapping: parsedFocusMapping,
+    }).save();
 
-    // Upload the image to AWS S3 if image data exists
     if (imageData) {
-      const params = {
+      const s3Data = await s3.upload({
         Bucket: process.env.AWS_BUCKET_PRODUCT_CATEGORY,
-        Key: `${savedProductCatlogId}.png`,
+        Key: `${savedProductCatlog._id}.png`,
         Body: imageData.data,
         ContentType: imageData.type,
         ACL: 'public-read',
-      };
-
-      const data = await s3.upload(params).promise();
+      }).promise();
       await productOfferModel.updateOne(
         { _id: savedProductCatlog._id },
-        { $set: { productOfferImageUrl: data.Location } }
+        { $set: { productOfferImageUrl: s3Data.Location } }
       );
-      savedProductCatlog.productOfferImageUrl = data.Location;
+      savedProductCatlog.productOfferImageUrl = s3Data.Location;
     }
 
-    await processProductCatlogPrices(savedProductCatlogId, parsedPrice);
+    await seedPricesFromFocus(savedProductCatlog);
 
     return res.status(201).json(savedProductCatlog);
   } catch (error) {
-    console.log(error);
-    if (error instanceof multer.MulterError) {
-      if (error.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ error: 'File size exceeds the limit (4 MB)' });
-      }
-    } else {
-      return res.status(500).json({ message: error.message });
+    // Roll back the saved document if price seeding failed
+    if (savedProductCatlog?._id) {
+      await productOfferModel.findByIdAndDelete(savedProductCatlog._id).catch(() => {});
     }
+    console.log(error);
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File size exceeds the limit (4 MB)' });
+    }
+    return res.status(502).json({ message: error.message });
   }
 };
 
 
-/**
- * Helper function to parse Focus8 date string
- * @param {string|number} dateStr - Date string in DD-MM-YYYY format or timestamp
- * @returns {number} Days since epoch
- */
 const parseFocusDate = (dateStr) => {
   if (!dateStr) return 0;
-  
   if (typeof dateStr === 'string' && dateStr.includes('-')) {
     const parts = dateStr.split('-');
     if (parts.length === 3) {
@@ -199,47 +141,64 @@ const parseFocusDate = (dateStr) => {
       return Math.floor(date.getTime() / (1000 * 60 * 60 * 24));
     }
   }
-  
   if (!isNaN(dateStr)) return Number(dateStr);
   return 0;
 };
 
-/**
- * Helper function to get the effective price from Focus8 pricebook
- * @param {number} focusProductId - The Focus8 product ID
- * @param {number} focusAccountId - The Focus8 account ID (iMasterId)
- * @param {Array} priceBookRecords - All pricebook records from Focus8
- * @param {number} catalogPrice - Fallback price from product catalog
- * @returns {number} The effective price
- */
-const getEffectivePriceFromFocus = (focusProductId, focusAccountId, priceBookRecords, catalogPrice) => {
-  if (!focusProductId || !focusAccountId || !priceBookRecords || priceBookRecords.length === 0) {
-    return catalogPrice;
-  }
-
-  const currentDate = Math.floor(Date.now() / 1000 / 60 / 60 / 24); // Days since epoch
-
-  // Filter records matching product and account
-  const matchingRecords = priceBookRecords.filter(record => 
-    Number(record.iProductId) === Number(focusProductId) && 
-    Number(record.iAccountId) === Number(focusAccountId) &&
-    parseFocusDate(record.iStartDate) <= currentDate // Only prices that are already effective
+// Returns the latest iAccountId=0 (universal) base price for a focus product.
+// Returns null when no matching record exists.
+const getBasePriceFromFocus = (focusProductId, priceBookRecords) => {
+  if (!focusProductId || !priceBookRecords || priceBookRecords.length === 0) return null;
+  const currentDate = Math.floor(Date.now() / 1000 / 60 / 60 / 24);
+  const records = priceBookRecords.filter(r =>
+    Number(r.iProductId) === Number(focusProductId) &&
+    Number(r.iAccountId) === 0 &&
+    parseFocusDate(r.iStartDate) <= currentDate
   );
+  if (!records.length) return null;
+  records.sort((a, b) => parseFocusDate(b.iStartDate) - parseFocusDate(a.iStartDate));
+  return Number(records[0].fVal1) || null;
+};
 
-  if (matchingRecords.length === 0) {
+// 3-step price resolution:
+//   1. dealer-specific  (iAccountId === focusAccountId)
+//   2. universal base   (iAccountId === 0)
+//   3. stored catalog   (fallback when Focus8 unreachable)
+const getEffectivePriceFromFocus = (focusProductId, focusAccountId, priceBookRecords, catalogPrice) => {
+  if (!focusProductId || !priceBookRecords || priceBookRecords.length === 0) {
     return catalogPrice;
   }
 
-  // Sort by iStartDate descending (latest first)
-  matchingRecords.sort((a, b) => parseFocusDate(b.iStartDate) - parseFocusDate(a.iStartDate));
+  const currentDate = Math.floor(Date.now() / 1000 / 60 / 60 / 24);
 
-  // Return the latest price (fVal1)
-  const effectivePrice = Number(matchingRecords[0].fVal1);
-  
-  logger.info(`FOCUS8 :: Found custom price for product ${focusProductId}, account ${focusAccountId}: ${effectivePrice}`);
-  
-  return effectivePrice || catalogPrice;
+  const findLatest = (accountId) => {
+    const matching = priceBookRecords.filter(r =>
+      Number(r.iProductId) === Number(focusProductId) &&
+      Number(r.iAccountId) === Number(accountId) &&
+      parseFocusDate(r.iStartDate) <= currentDate
+    );
+    if (!matching.length) return null;
+    matching.sort((a, b) => parseFocusDate(b.iStartDate) - parseFocusDate(a.iStartDate));
+    return Number(matching[0].fVal1) || null;
+  };
+
+  if (focusAccountId) {
+    const dealerPrice = findLatest(focusAccountId);
+    if (dealerPrice !== null) {
+      logger.info(`FOCUS8 :: Dealer-specific price for product ${focusProductId}, account ${focusAccountId}: ${dealerPrice}`);
+      return dealerPrice;
+    }
+  }
+
+  const basePrice = findLatest(0);
+  if (basePrice !== null) {
+    logger.info(`FOCUS8 :: Base price (iAccountId=0) for product ${focusProductId}: ${basePrice}`);
+    return basePrice;
+  }
+
+  return catalogPrice;
 };
+
 
 
 const processProductCatlogPrices = async (productcatlogId, parsedPrices) => {
@@ -298,6 +257,40 @@ const processProductCatlogPrices = async (productcatlogId, parsedPrices) => {
       errorObj: JSON.stringify(error)
     });
   }
+};
+
+// Fetches the Focus8 pricebook, resolves iAccountId=0 base prices for every
+// volume in product.focusProductMapping, persists them to price[] and
+// rebuilds ProductPrice records for all dealers. Throws on Focus8 failure.
+const seedPricesFromFocus = async (product) => {
+  const mapping = product.focusProductMapping;
+  if (!mapping || mapping.length === 0) {
+    throw new Error('No focus product mapping defined — cannot seed prices from Focus8');
+  }
+
+  const priceBookRecords = await getPriceBookData();
+  if (!priceBookRecords || priceBookRecords.length === 0) {
+    throw new Error('Could not fetch price data from Focus8. Please try again.');
+  }
+
+  const parsedPrice = [];
+  for (const entry of mapping) {
+    const basePrice = getBasePriceFromFocus(entry.focusProductId, priceBookRecords);
+    if (basePrice === null) {
+      throw new Error(`No base price found in Focus8 for volume "${entry.volume}" (focus product ID ${entry.focusProductId})`);
+    }
+    parsedPrice.push({ volume: entry.volume, refId: 'All', price: basePrice });
+  }
+
+  await productOfferModel.updateOne(
+    { _id: product._id },
+    { $set: { price: parsedPrice } }
+  );
+
+  await processProductCatlogPrices(product._id, parsedPrice);
+
+  logger.info(`FOCUS8 :: Seeded ${parsedPrice.length} prices for product ${product._id}`);
+  return parsedPrice;
 };
 
 exports.getProductCatlogs = async (req, res) => {
@@ -509,143 +502,87 @@ exports.searchProductCatlog = async (req, res) => {
 
 exports.updateProductCatlog = async (req, res) => {
   try {
-    const { price, focusProductId, focusUnitId, focusProductMapping, productCategory } = req.body;
-    const existingProductCatlog = await productOfferModel.findOne({
+    const { focusProductId, focusUnitId, focusProductMapping, productCategory } = req.body;
+
+    const duplicate = await productOfferModel.findOne({
       productOfferDescription: req.body.productDescription,
-      _id: { $ne: req.params.id }
+      _id: { $ne: req.params.id },
     });
-    if (existingProductCatlog) {
-      return res.status(400).json({ message: 'Product catlog with the same description already exists.' });
+    if (duplicate) {
+      return res.status(400).json({ message: 'Product catalog with the same description already exists.' });
     }
 
-    // Check if an image is being uploaded
     if (req.body.productImage) {
       if (req.body.productImageUrl) {
-        let imgUrlSplit = req.body.productImageUrl.split('/').pop();
-        const paramsRemove = {
-          Bucket: process.env.AWS_BUCKET_PRODUCT_CATEGORY,
-          Key: imgUrlSplit,
-        };
-        await s3.deleteObject(paramsRemove).promise();
+        const key = req.body.productImageUrl.split('/').pop();
+        await s3.deleteObject({ Bucket: process.env.AWS_BUCKET_PRODUCT_CATEGORY, Key: key }).promise();
       }
-
-      // Decode the base64 image and upload it to S3
       const imageData = await decodeBase64Image(req.body.productImage);
-      const params = {
+      const s3Data = await s3.upload({
         Bucket: process.env.AWS_BUCKET_PRODUCT_CATEGORY,
         Key: `${req.params.id}.png`,
         Body: imageData.data,
         ContentType: imageData.type,
-        ACL: 'public-read'
-      };
-
-      const data = await s3.upload(params).promise();
-      req.body.productImageUrl = data.Location;
+        ACL: 'public-read',
+      }).promise();
+      req.body.productImageUrl = s3Data.Location;
     }
 
-    // Parse and validate price field
-    let parsedPrice = [];
-    try {
-      const priceData = typeof price === 'string' ? JSON.parse(price) : price;
-
-      if (typeof priceData !== 'object' || priceData === null) {
-        throw new Error('Price data must be an object');
-      }
-
-      // Transform the price data to match the schema
-      for (const [volume, priceEntries] of Object.entries(priceData)) {
-        if (!Array.isArray(priceEntries)) continue;
-
-        priceEntries.forEach(entry => {
-          const [[refId, priceValue]] = Object.entries(entry);
-          if (refId && priceValue !== undefined) {
-            parsedPrice.push({
-              volume,
-              refId,
-              price: Number(priceValue)
-            });
-          }
-        });
-      }
-
-      if (parsedPrice.length === 0) {
-        throw new Error('No valid price entries found');
-      }
-    } catch (error) {
-      console.error('Error parsing price data:', error);
-      return res.status(400).json({ message: 'Invalid price format: ' + error.message });
-    }
-
-    // Parse and validate focusProductMapping if provided
+    // Parse focusProductMapping if supplied; null means "don't re-seed prices"
     let parsedFocusMapping = null;
     if (focusProductMapping) {
       try {
-        const mappingData = typeof focusProductMapping === 'string' 
-          ? JSON.parse(focusProductMapping) 
+        const mappingData = typeof focusProductMapping === 'string'
+          ? JSON.parse(focusProductMapping)
           : focusProductMapping;
 
-        if (!Array.isArray(mappingData)) {
-          throw new Error('focusProductMapping must be an array');
+        if (!Array.isArray(mappingData) || mappingData.length === 0) {
+          throw new Error('focusProductMapping must be a non-empty array');
         }
 
-        // Validate mapping structure
-        parsedFocusMapping = mappingData.map(mapping => {
-          if (!mapping.volume || !mapping.focusProductId) {
+        parsedFocusMapping = mappingData.map(m => {
+          if (!m.volume || !m.focusProductId) {
             throw new Error('Each mapping must have volume and focusProductId');
           }
           return {
-            volume: mapping.volume,
-            focusProductId: Number(mapping.focusProductId),
-            focusUnitId: mapping.focusUnitId ? Number(mapping.focusUnitId) : 1
+            volume: m.volume,
+            focusProductId: Number(m.focusProductId),
+            focusUnitId: m.focusUnitId ? Number(m.focusUnitId) : 1,
           };
         });
 
-        // Validate that all volumes in price have corresponding mapping
-        const priceVolumes = [...new Set(parsedPrice.map(p => p.volume))];
-        const mappingVolumes = parsedFocusMapping.map(m => m.volume);
-        const missingVolumes = priceVolumes.filter(v => !mappingVolumes.includes(v));
-        
-        if (missingVolumes.length > 0) {
-          throw new Error(`Missing focus product mapping for volumes: ${missingVolumes.join(', ')}`);
-        }
-
-        // Check for duplicate volumes in mapping
         const volumeCounts = {};
-        mappingVolumes.forEach(v => {
-          volumeCounts[v] = (volumeCounts[v] || 0) + 1;
-        });
+        parsedFocusMapping.forEach(m => { volumeCounts[m.volume] = (volumeCounts[m.volume] || 0) + 1; });
         const duplicates = Object.keys(volumeCounts).filter(v => volumeCounts[v] > 1);
         if (duplicates.length > 0) {
-          throw new Error(`Duplicate volumes in focus product mapping: ${duplicates.join(', ')}`);
+          throw new Error(`Duplicate volumes in mapping: ${duplicates.join(', ')}`);
         }
       } catch (error) {
-        console.error('Error parsing focus product mapping:', error);
-        return res.status(400).json({ message: 'Invalid focus product mapping: ' + error.message });
+        return res.status(400).json({ message: 'Invalid focusProductMapping: ' + error.message });
       }
     }
 
-    // Prepare update data
     const updateData = {
       productOfferDescription: req.body.productDescription,
       productOfferStatus: req.body.productStatus,
-      price: parsedPrice,
       updatedBy: req.body.updatedBy,
       productCategory: productCategory || null,
       focusProductId: focusProductId ? Number(focusProductId) : null,
-      focusUnitId: focusUnitId ? Number(focusUnitId) : null
+      focusUnitId: focusUnitId ? Number(focusUnitId) : null,
     };
 
-    // Add focusProductMapping if provided
     if (parsedFocusMapping !== null) {
       updateData.focusProductMapping = parsedFocusMapping;
     }
 
-    // Add image URL if it was updated
     if (req.body.productImageUrl) {
       updateData.productOfferImageUrl = req.body.productImageUrl;
     }
 
-    // Update the product catalog
+    // Capture old prices before update for rollback on seed failure
+    const before = await productOfferModel.findById(req.params.id).select('price');
+    const oldPrice = before?.price ?? [];
+
     const productCatlog = await productOfferModel.findByIdAndUpdate(
       req.params.id,
       updateData,
@@ -656,19 +593,23 @@ exports.updateProductCatlog = async (req, res) => {
       return res.status(404).json({ message: 'Product catalog not found' });
     }
 
-    // Update the product prices
-    await processProductCatlogPrices(req.params.id, parsedPrice);
+    if (parsedFocusMapping !== null) {
+      try {
+        await seedPricesFromFocus(productCatlog);
+      } catch (seedErr) {
+        // Restore old prices so the product stays consistent
+        await productOfferModel.updateOne({ _id: req.params.id }, { $set: { price: oldPrice } }).catch(() => {});
+        return res.status(502).json({ message: seedErr.message });
+      }
+    }
 
     return res.status(200).json({ data: productCatlog });
   } catch (error) {
     console.log(error);
-    if (error instanceof multer.MulterError) {
-      if (error.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ error: 'File size exceeds 4 MB!' });
-      }
-    } else {
-      return res.status(500).json({ message: error.message });
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File size exceeds 4 MB!' });
     }
+    return res.status(500).json({ message: error.message });
   }
 };
 
@@ -682,5 +623,50 @@ exports.deleteProductCatlog = async (req, res) => {
     res.status(200).json({ message: 'Product catlog deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+// Sync prices for a single product from Focus8 pricebook
+exports.syncProductPrices = async (req, res) => {
+  try {
+    const product = await productOfferModel.findById(req.params.id);
+    if (!product) return res.status(404).json({ message: 'Product not found' });
+    const seeded = await seedPricesFromFocus(product);
+    return res.status(200).json({ success: true, pricesSynced: seeded.length });
+  } catch (error) {
+    logger.error('Error syncing product prices', { id: req.params.id, error: error.message });
+    return res.status(502).json({ message: error.message });
+  }
+};
+
+// Sync prices for all products that have a focusProductMapping
+exports.syncAllProductPrices = async (req, res) => {
+  try {
+    const products = await productOfferModel.find({
+      'focusProductMapping.0': { $exists: true },
+    });
+
+    let synced = 0;
+    let skipped = 0;
+    const errors = [];
+
+    for (const product of products) {
+      try {
+        await seedPricesFromFocus(product);
+        synced++;
+      } catch (err) {
+        skipped++;
+        errors.push(`${product.productOfferDescription}: ${err.message}`);
+        logger.warn('FOCUS8 :: Skipped product during sync-all', {
+          productId: product._id,
+          error: err.message,
+        });
+      }
+    }
+
+    return res.status(200).json({ success: true, synced, skipped, errors });
+  } catch (error) {
+    logger.error('Error in syncAllProductPrices', { error: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };

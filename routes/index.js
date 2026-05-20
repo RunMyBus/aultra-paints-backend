@@ -20,6 +20,7 @@ const orderRoutes = require('./orderRoutes.js');
 const chartRoutes = require('./chartRoutes');
 const creditNoteRoutes = require('./creditNote.route');
 const productCategoryRoutes = require('./productCategoryRoutes');
+const dealsRoutes = require('./deals.route');
 
 /** GET /health-check - Check service health */
 router.get('/health-check', (req, res) => res.send('OK'));
@@ -44,5 +45,6 @@ router.use('/order', orderRoutes);
 router.use('/chart', chartRoutes);
 router.use('/creditNotes', creditNoteRoutes);
 router.use('/productCategories', productCategoryRoutes);
+router.use('/deals', dealsRoutes);
 
 module.exports = router;

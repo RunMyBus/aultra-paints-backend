@@ -49,7 +49,9 @@ const orderSchema = new Schema({
   // Status History
   statusHistory: [{
     status: { type: String, required: true },
-    changedAt: { type: Date, default: Date.now }
+    changedAt: { type: Date, default: Date.now },
+    changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    remarks: { type: String }
   }],
 
   // Sales order context (user-selected in mobile app)
