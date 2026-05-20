@@ -192,22 +192,21 @@ exports.deleteDeal = async (req, res) => {
 };
 
 // GET /api/deals/active — authenticated, any role.
-// Returns deals where active=true, expirationDate>=now, category in user.productCategories.
+// Returns deals where active=true, expirationDate>=now.
+// When the user has productCategories assigned, results are filtered to those
+// categories. When they have none (e.g. Painters, SuperUsers), all active deals
+// are returned so every account type can see deals.
 exports.getActiveDealsForUser = async (req, res) => {
     try {
         // Re-fetch the user to get productCategories (JWT may not carry it).
         const user = await UserModel.findById(req.user._id).select('productCategories').lean();
         const categories = (user && user.productCategories) || [];
 
-        if (categories.length === 0) {
-            return res.status(200).json([]);
-        }
-
         const now = new Date();
         const deals = await Deal.find({
             active: true,
             expirationDate: { $gte: now },
-            category: { $in: categories },
+            ...(categories.length > 0 && { category: { $in: categories } }),
         })
             .select('_id title dealImageUrl expirationDate updatedAt')
             .sort({ createdAt: -1 })
