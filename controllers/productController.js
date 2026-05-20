@@ -197,8 +197,8 @@ const getProductsByName = async (req, res) => {
         $addFields: {
           brandObjId: {
             $cond: {
-              if: { $regexMatch: { input: "$brandId", regex: /^[0-9a-fA-F]{24}$/ } },
-              then: { $toObjectId: "$brandId" },
+              if: { $regexMatch: { input: { $toString: "$brandId" }, regex: /^[0-9a-fA-F]{24}$/ } },
+              then: { $toObjectId: { $toString: "$brandId" } },
               else: null
             }
           }
@@ -293,8 +293,8 @@ const getFocusWarehouses = async (req, res) => {
 
 const getFocusBranches = async (req, res) => {
   try {
-    const warehouses = await getBranchMaster();
-    return res.status(200).json({ success: true, warehouses });
+    const branches = await getBranchMaster();
+    return res.status(200).json({ success: true, branches });
   } catch (error) {
     console.error('Error fetching branches from Focus8', { message: error.message });
     return res.status(500).json({ success: false, message: error.message });

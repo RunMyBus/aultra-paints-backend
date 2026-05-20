@@ -765,7 +765,7 @@ describe('getOrderDetails', () => {
         expect(order.status).toBe('DISPATCHED');
     });
 
-    test('enriches items with IN-PARCEL status when qty partially delivered', async () => {
+    test('enriches items with PARTIALLY_DISPATCHED status when qty partially delivered', async () => {
         const syncedOrder = {
             ...baseOrder,
             focusSyncStatus: 'SUCCESS',
@@ -786,8 +786,8 @@ describe('getOrderDetails', () => {
         await ordersController.getOrderDetails(req, res);
 
         const { order } = res.json.mock.calls[0][0];
-        expect(order.items[0].dispatchStatus).toBe('IN-PARCEL');
-        expect(order.status).toBe('IN-PARCEL');
+        expect(order.items[0].dispatchStatus).toBe('PARTIALLY_DISPATCHED');
+        expect(order.status).toBe('PARTIALLY_DISPATCHED');
     });
 
     test('persists derived status to DB when status changes', async () => {

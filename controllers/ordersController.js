@@ -8,7 +8,55 @@ const path = require('path');
 const fs = require('fs');
 const productOffersModel = require("../models/productOffers.model");
 const userModel = require("../models/User");
-const { pushOrderToFocus8, getSOMobileAppOrders, getDCInvoiceForOrder, getProductMaster } = require("../services/focus8Order.service");
+const { pushOrderToFocus8, getSOMobileAppOrders, getDCInvoiceForOrder, getProductMaster, getBranchMaster, getPriceBookData, getDealerAccountId } = require("../services/focus8Order.service");
+
+// ── Focus8 price helpers (mirrors productCatlogController) ────────────────
+const _orderF8Cache = { priceBook: { data: null, ts: 0 } };
+const F8_TTL = 10 * 60 * 1000;
+
+async function _cachedPriceBook() {
+    if (_orderF8Cache.priceBook.data && Date.now() - _orderF8Cache.priceBook.ts < F8_TTL) {
+        return _orderF8Cache.priceBook.data;
+    }
+    const data = await getPriceBookData();
+    _orderF8Cache.priceBook = { data, ts: Date.now() };
+    return data;
+}
+
+function _parseFocusDate(dateStr) {
+    if (!dateStr) return 0;
+    if (typeof dateStr === 'string' && dateStr.includes('/')) {
+        const parts = dateStr.split('/');
+        if (parts.length === 3) {
+            const date = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00Z`);
+            return Math.floor(date.getTime() / (1000 * 60 * 60 * 24));
+        }
+    }
+    if (!isNaN(dateStr)) return Number(dateStr);
+    return 0;
+}
+
+function _getEffectivePriceFromFocus(focusProductId, focusAccountId, priceBookRecords, fallbackPrice) {
+    if (!focusProductId || !priceBookRecords || priceBookRecords.length === 0) return fallbackPrice;
+    const today = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
+    const findLatest = (accountId) => {
+        const matching = priceBookRecords.filter(r =>
+            Number(r.iProductId) === Number(focusProductId) &&
+            Number(r.iAccountId) === Number(accountId) &&
+            _parseFocusDate(r.iStartDate) <= today
+        );
+        if (!matching.length) return null;
+        matching.sort((a, b) => _parseFocusDate(b.iStartDate) - _parseFocusDate(a.iStartDate));
+        return Number(matching[0].fVal1) || null;
+    };
+    if (focusAccountId) {
+        const dealerPrice = findLatest(focusAccountId);
+        if (dealerPrice !== null) return dealerPrice;
+    }
+    const basePrice = findLatest(0);
+    return basePrice !== null ? basePrice : fallbackPrice;
+}
+// ─────────────────────────────────────────────────────────────────────────
 
 
 async function generateInvoicePdf(order, user) {
@@ -167,6 +215,24 @@ exports.createOrder = async (req, res) => {
             .select('focusProductId focusUnitId focusProductMapping productOfferDescription price offerAvailable');
         const offerMap = new Map(offers.map(o => [o._id.toString(), o]));
 
+        // For dealer accounts, resolve the dealer's Focus8 account ID and pricebook so we
+        // can apply the same 3-step price resolution the catalog uses (dealer-specific →
+        // iAccountId=0 base → stored fallback). This prevents mismatch for dealers with
+        // special Focus8 pricing.
+        let dealerFocusAccountId = null;
+        let priceBookRecords = [];
+        const orderingDealerCode = req.user.dealerCode;
+        if (orderingDealerCode) {
+            try {
+                [dealerFocusAccountId, priceBookRecords] = await Promise.all([
+                    getDealerAccountId(orderingDealerCode),
+                    _cachedPriceBook(),
+                ]);
+            } catch (err) {
+                logger.warn(`ORDER :: Could not fetch Focus8 prices for dealer ${orderingDealerCode}: ${err.message}`);
+            }
+        }
+
         for (const item of items) {
             if (!item._id || !offerMap.has(item._id.toString())) {
                 return res.status(400).json({
@@ -193,8 +259,20 @@ exports.createOrder = async (req, res) => {
                     message: `No price configured for ${offer.productOfferDescription} @ ${item.volume}`
                 });
             }
+
+            // For dealers, apply the same 3-step Focus8 resolution the catalog uses so the
+            // price the dealer saw matches the price the order is validated against.
+            let resolvedPrice = priceTier.price;
+            if (priceBookRecords.length > 0) {
+                const volumeMapping = offer.focusProductMapping?.find(m => m.volume === item.volume);
+                const focusPid = volumeMapping?.focusProductId ?? offer.focusProductId;
+                if (focusPid) {
+                    resolvedPrice = _getEffectivePriceFromFocus(focusPid, dealerFocusAccountId, priceBookRecords, priceTier.price);
+                }
+            }
+
             // Overwrite any client-supplied price with the server-side value.
-            item.productPrice = priceTier.price;
+            item.productPrice = resolvedPrice;
 
             // Resolve Focus 8 IDs.
             if (!item.focusProductId || !item.focusUnitId) {
@@ -314,17 +392,23 @@ exports.getOrders = async (req, res) => {
     try {
         const user = req.user;
         const { accountType } = user;
-        const { page, limit, status, dealerCode, salesExecutiveMobile } = req.body;
+        const { page, limit, status, dealerCode, salesExecutiveMobile, branchId } = req.body;
 
-        const ALLOWED_STATUSES = ['PENDING', 'VERIFIED', 'REJECTED', 'DISPATCHED', 'IN-PARCEL'];
+        const ALLOWED_STATUSES = ['PENDING', 'VERIFIED', 'REJECTED', 'DISPATCHED', 'PARTIALLY_DISPATCHED', 'MANUALLY_DISPATCHED'];
         if (status !== undefined && status !== null && status !== '') {
             if (!ALLOWED_STATUSES.includes(status)) {
                 return res.status(400).json({ success: false, message: 'Invalid status' });
             }
         }
 
+        if (branchId !== undefined && branchId !== null) {
+            if (typeof branchId !== 'number' || branchId <= 0) {
+                return res.status(400).json({ success: false, message: 'Invalid branchId' });
+            }
+        }
+
         // If the user is neither SuperUser nor Dealer, returning an empty array
-        if (!['SuperUser', 'Dealer', 'SalesExecutive'].includes(accountType)) {
+        if (!['SuperUser', 'Dealer', 'SalesExecutive', 'ProductionManager'].includes(accountType)) {
             return res.status(200).json({
                 success: true,
                 orders: [],
@@ -361,17 +445,20 @@ exports.getOrders = async (req, res) => {
         }
 
         let query = {};
-        let populateOptions = {
-            path: 'createdBy',
-            select: 'name mobile accountType dealerCode'
-        };
+        let populateOptions = [
+            { path: 'createdBy', select: 'name mobile accountType dealerCode' },
+            { path: 'statusHistory.changedBy', select: 'name accountType' },
+        ];
         let orders;
         let totalOrders;
 
         // If SuperUser, fetch all orders with user details
-        if (accountType === 'SuperUser') {
+        if (accountType === 'SuperUser' || accountType === 'ProductionManager') {
             if (status) {
                 query.status = status;
+            }
+            if (branchId !== undefined && branchId !== null) {
+                query.branchId = branchId;
             }
             if (dealerIdFromCode) {
                 query.$or = [
@@ -446,6 +533,9 @@ exports.getOrders = async (req, res) => {
             if (status) {
                 query.status = status;
             }
+            if (branchId !== undefined && branchId !== null) {
+                query.branchId = branchId;
+            }
             totalOrders = await orderModel.countDocuments(query);
             orders = await orderModel
                 .find(query)
@@ -468,6 +558,9 @@ exports.getOrders = async (req, res) => {
             query = { $or: [{ createdBy: user._id }, { dealerId: user._id }] };
             if (status) {
                 query.status = status;
+            }
+            if (branchId !== undefined && branchId !== null) {
+                query.branchId = branchId;
             }
             totalOrders = await orderModel.countDocuments(query);
             orders = await orderModel
@@ -521,6 +614,7 @@ exports.getOrderDetails = async (req, res) => {
             .findOne({ orderId })
             .populate({ path: 'createdBy', select: 'name mobile accountType dealerCode' })
             .populate({ path: 'dealerId', select: 'name dealerCode mobile' })
+            .populate({ path: 'statusHistory.changedBy', select: 'name accountType' })
             .lean();
 
         if (!order) {
@@ -577,7 +671,7 @@ exports.getOrderDetails = async (req, res) => {
                         itemStatus = 'DISPATCHED';
                         fullyDispatched++;
                     } else if (dcQty > 0) {
-                        itemStatus = 'IN-PARCEL';
+                        itemStatus = 'PARTIALLY_DISPATCHED';
                         partiallyDispatched++;
                     }
                     return { ...item, dispatchStatus: itemStatus, dispatchedQty: dcQty };
@@ -589,7 +683,7 @@ exports.getOrderDetails = async (req, res) => {
                 if (fullyDispatched === itemsWithStatus.length) {
                     derivedStatus = 'DISPATCHED';
                 } else if (fullyDispatched > 0 || partiallyDispatched > 0) {
-                    derivedStatus = 'IN-PARCEL';
+                    derivedStatus = 'PARTIALLY_DISPATCHED';
                 }
 
                 // Extract unique DC invoice IDs from fetched rows
@@ -598,11 +692,15 @@ exports.getOrderDetails = async (req, res) => {
                 const idsChanged = dcInvoiceIds.slice().sort().join(',') !== existingIds;
                 order.focusDCInvoiceId = dcInvoiceIds;
 
-                // Persist status and/or DC invoice IDs if anything changed
-                if (derivedStatus !== order.status || idsChanged) {
-                    const updateDoc = { focusDCInvoiceId: dcInvoiceIds };
-                    if (derivedStatus !== order.status) {
-                        updateDoc.status = derivedStatus;
+                // Persist status and/or DC invoice IDs if anything changed.
+                // Never overwrite a manually-set status with a Focus8-derived one.
+                const manualStatuses = ['MANUALLY_DISPATCHED'];
+                const canSyncStatus = !manualStatuses.includes(order.status);
+                const statusChanged = canSyncStatus && derivedStatus !== order.status;
+                if (statusChanged || idsChanged) {
+                    const updateDoc = { $set: { focusDCInvoiceId: dcInvoiceIds } };
+                    if (statusChanged) {
+                        updateDoc.$set.status = derivedStatus;
                         updateDoc.$push = { statusHistory: { status: derivedStatus, changedAt: new Date() } };
                         order.status = derivedStatus;
                     }
@@ -622,6 +720,37 @@ exports.getOrderDetails = async (req, res) => {
             order.focusData = [];
         }
 
+        // Enrich order items with product image URLs from productOffers
+        try {
+            const itemIds = order.items.map(i => i._id).filter(Boolean);
+            if (itemIds.length > 0) {
+                const offers = await productOffersModel
+                    .find({ _id: { $in: itemIds } })
+                    .select('productOfferThumbnailUrl productOfferImageUrl')
+                    .lean();
+                const imageMap = new Map(offers.map(o => [o._id.toString(), o]));
+                order.items = order.items.map(item => {
+                    const offer = imageMap.get(item._id.toString());
+                    return offer
+                        ? { ...item, productOfferThumbnailUrl: offer.productOfferThumbnailUrl, productOfferImageUrl: offer.productOfferImageUrl }
+                        : item;
+                });
+            }
+        } catch (err) {
+            logger.warn(`Failed to enrich order items with image URLs for order ${orderId}`, { message: err.message });
+        }
+
+        // Resolve branchId -> branchName for display
+        if (order.branchId != null) {
+            try {
+                const branches = await getBranchMaster();
+                const match = branches.find(b => b.iMasterId === order.branchId);
+                if (match) order.branchName = match.sName;
+            } catch (err) {
+                logger.warn(`FOCUS8 :: Failed to resolve branchName for order ${orderId}`, { message: err.message });
+            }
+        }
+
         return res.status(200).json({ success: true, order });
     } catch (error) {
         logger.error('Error fetching order details', error);
@@ -632,9 +761,7 @@ exports.getOrderDetails = async (req, res) => {
 exports.getOrderDealers = async (req, res) => {
     try {
         const { accountType, mobile } = req.user;
-        if (!['SuperUser', 'SalesExecutive'].includes(accountType)) {
-            return res.status(403).json({ success: false, message: 'Forbidden' });
-        }
+
         const filter = { accountType: 'Dealer', status: 'active' };
         if (accountType === 'SalesExecutive') {
             const juniorSEs = await userModel.find(
@@ -657,7 +784,10 @@ exports.getOrderDealers = async (req, res) => {
 
 exports.updateOrderStatus = async (req, res) => {
     try {
-        const { orderId, isVerified, entityId, warehouseId, branchId, narration } = req.body;
+        const { orderId, isVerified, narration } = req.body;
+        const entityId = req.body.entityId != null ? Number(req.body.entityId) : null;
+        const warehouseId = req.body.warehouseId != null ? Number(req.body.warehouseId) : null;
+        const branchId = req.body.branchId != null ? Number(req.body.branchId) : null;
         const user = req.user;
 
         // Check if the user is a SalesExecutive
@@ -697,17 +827,21 @@ exports.updateOrderStatus = async (req, res) => {
         let updateData = {};
         if (isVerified === 1) {
             updateData = {
-                status: 'VERIFIED',
-                isVerified: true,
-                isRejected: false,
-                $push: { statusHistory: { status: 'VERIFIED', changedAt: new Date() } }
+                $set: {
+                    status: 'VERIFIED',
+                    isVerified: true,
+                    isRejected: false,
+                    ...(entityId != null && { entityId }),
+                    ...(warehouseId != null && { warehouseId }),
+                    ...(branchId != null && { branchId }),
+                    ...(narration && { narration }),
+                },
+                $push: { statusHistory: { status: 'VERIFIED', changedAt: new Date() } },
             };
         } else if (isVerified === 0) {
             updateData = {
-                status: 'REJECTED',
-                isVerified: false,
-                isRejected: true,
-                $push: { statusHistory: { status: 'REJECTED', changedAt: new Date() } }
+                $set: { status: 'REJECTED', isVerified: false, isRejected: true },
+                $push: { statusHistory: { status: 'REJECTED', changedAt: new Date() } },
             };
         } else {
             return res.status(400).json({
@@ -749,6 +883,63 @@ exports.updateOrderStatus = async (req, res) => {
 
     } catch (error) {
         logger.error('Error updating order status: ', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Error updating order status',
+            error: error.message
+        });
+    }
+};
+
+exports.updateOrderStatusManual = async (req, res) => {
+    try {
+        const { orderId, status, remarks } = req.body;
+        const user = req.user;
+
+        if (!orderId || !status) {
+            return res.status(400).json({ success: false, message: 'orderId and status are required' });
+        }
+
+        const MANUAL_ALLOWED_STATUSES = ['DISPATCHED', 'MANUALLY_DISPATCHED'];
+        if (!MANUAL_ALLOWED_STATUSES.includes(status)) {
+            return res.status(400).json({ success: false, message: 'Invalid status for manual update' });
+        }
+
+        const order = await orderModel.findOne({ orderId });
+        if (!order) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+
+        const update = {
+            $set: { status },
+            $push: {
+                statusHistory: {
+                    status,
+                    changedAt: new Date(),
+                    changedBy: user._id,
+                    remarks: remarks || null
+                }
+            }
+        };
+
+        const updatedOrder = await orderModel.findOneAndUpdate(
+            { orderId },
+            update,
+            { new: true }
+        ).populate({
+            path: 'statusHistory.changedBy',
+            select: 'name accountType'
+        });
+
+        logger.info(`Order status updated manually`, { orderId, status, remarks, updatedBy: user.name });
+
+        res.json({
+            success: true,
+            message: `Order status updated to ${status}`,
+            order: updatedOrder
+        });
+    } catch (error) {
+        logger.error('Error updating order status manually: ', error);
         return res.status(500).json({
             success: false,
             message: 'Error updating order status',

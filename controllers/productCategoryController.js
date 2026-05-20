@@ -2,7 +2,7 @@ const ProductCategory = require('../models/ProductCategory');
 
 exports.createProductCategory = async (req, res) => {
     try {
-        const { name } = req.body;
+        const { name, description } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ message: 'Category name is required.' });
         }
@@ -10,7 +10,7 @@ exports.createProductCategory = async (req, res) => {
         if (existing) {
             return res.status(400).json({ message: 'Category name already exists.' });
         }
-        const category = new ProductCategory({ name: name.trim() });
+        const category = new ProductCategory({ name: name.trim(), description: description ?? '' });
         await category.save();
         return res.status(201).json({ message: 'Product category created successfully', data: category });
     } catch (err) {
@@ -29,7 +29,7 @@ exports.getProductCategories = async (req, res) => {
 
 exports.updateProductCategory = async (req, res) => {
     try {
-        const { name } = req.body;
+        const { name, description } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ message: 'Category name is required.' });
         }
@@ -42,7 +42,7 @@ exports.updateProductCategory = async (req, res) => {
         }
         const category = await ProductCategory.findByIdAndUpdate(
             req.params.id,
-            { name: name.trim() },
+            { name: name.trim(), ...(description !== undefined && { description }) },
             { new: true }
         );
         if (!category) {

@@ -19,4 +19,8 @@ router.put('/update/:id', upload.none(), productCatlogController.updateProductCa
 
 router.delete('/delete/:id', productCatlogController.deleteProductCatlog);
 
+router.put('/syncPrices/:id', productCatlogController.syncProductPrices);
+
+router.put('/syncAllPrices', productCatlogController.syncAllProductPrices);
+
 module.exports = router;

@@ -3,7 +3,7 @@ const { escapeRegex, clampLimit, clampPage } = require('../utils/validators');
 
 // Create a new brand
 const createBrand = async (req, res) => {
-  const { name } = req.body;
+  const { name, description } = req.body;
 
   try {
     const existingBrand = await Brand.findOne({ name });
@@ -12,7 +12,7 @@ const createBrand = async (req, res) => {
       return res.status(400).json({ error: 'This brand name already exists.' });
     }
 
-    const newBrand = new Brand({ name });
+    const newBrand = new Brand({ name, description: description ?? '' });
     await newBrand.save();
     res.status(201).json(newBrand);
 
@@ -83,7 +83,7 @@ const getBrandByName = async (req, res) => {
 // Update brand by ID
 const updateBrand = async (req, res) => {
   const { id } = req.params;
-  const { name } = req.body;
+  const { name, description } = req.body;
 
   try {
     const brand = await Brand.findById(id);
@@ -96,11 +96,11 @@ const updateBrand = async (req, res) => {
       return res.status(400).json({ error: 'This brand name already exists.' });
     }
 
-    if (brand.name === name) {
-      return res.status(200).json(brand);
-    }
-
-    const updatedBrand = await Brand.findByIdAndUpdate(id, { name }, { new: true });
+    const updatedBrand = await Brand.findByIdAndUpdate(
+      id,
+      { name, description: description ?? brand.description ?? '' },
+      { new: true },
+    );
 
     if (!updatedBrand) {
       return res.status(404).json({ error: 'Brand not found' });
