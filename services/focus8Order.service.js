@@ -359,7 +359,7 @@ async function pushOrderToFocus8(order, user, { entityId, warehouseId, branchId,
             IsIGST,
             MobileAppOrderId: order.orderId || ''
         };
-        if (narration) header.Narration = narration; //TODO: narration field name should be confirmed by focus
+        if (narration) header.sNarration = narration; //TODO: narration field name should be confirmed by focus
 
         payload = {
             data: [{

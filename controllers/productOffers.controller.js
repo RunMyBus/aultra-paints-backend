@@ -202,35 +202,12 @@ exports.searchProductOffers = async (req, res) => {
         let page = parseInt(req.body.page || 1);
         let limit = parseInt(req.body.limit || 10);
         let dealerId = req.user._id.toString();
-        let query = {};
+        let query = { offerAvailable: true };
         if (req.body.searchQuery) {
             query['$or'] = [
                 // {'productOfferTitle': {$regex: new RegExp(req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}},
                 {'productOfferDescription': {$regex: new RegExp(req.body.searchQuery.toString().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i")}},
             ];
-        }
-        query['offerAvailable'] = true;
-
-        // SuperUser sees all offers regardless of product category.
-        // Dealers see only offers whose productCategory matches one of their assigned categories.
-        // SalesExecutives see all offers that have a productCategory set.
-        if (req.user.accountType === 'Dealer') {
-            const dealerCategories = req.user.productCategories || [];
-            const categoryFilter = { productCategory: { $in: dealerCategories } };
-            if (query['$or']) {
-                query['$and'] = [{ $or: query['$or'] }, categoryFilter];
-                delete query['$or'];
-            } else {
-                Object.assign(query, categoryFilter);
-            }
-        } else if (req.user.accountType === 'SalesExecutive') {
-            const seCategoryFilter = { productCategory: { $ne: null, $exists: true } };
-            if (query['$or']) {
-                query['$and'] = [{ $or: query['$or'] }, seCategoryFilter];
-                delete query['$or'];
-            } else {
-                Object.assign(query, seCategoryFilter);
-            }
         }
 
         let data = await productOffersModel.find(query).skip((page - 1) * limit).limit(parseInt(limit)).sort({createdAt: -1});
