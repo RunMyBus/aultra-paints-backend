@@ -51,6 +51,7 @@ class TransactionService {
                 const safeKey = escapeRegex(String(searchKey));
                 query.$or = [
                     { couponCode: parseInt(searchKey) },
+                    { UDID: { $regex: safeKey, $options: 'i' } },
                     { pointsRedeemedBy: { $regex: safeKey, $options: 'i' } },
                     { cashRedeemedBy: { $regex: safeKey, $options: 'i' } }
                 ];
@@ -131,11 +132,18 @@ class TransactionService {
             }
 
             if (showUsedCoupons) {
-                // If showUsedCoupons is true, check if pointsRedeemedBy or cashRedeemedBy exists
-                query.$or = [
+                // Must not overwrite an existing $or (e.g. from searchKey).
+                // Use $and to combine both conditions.
+                const usedFilter = [
                     { pointsRedeemedBy: { $exists: true } },
                     { cashRedeemedBy: { $exists: true } }
                 ];
+                if (query.$or) {
+                    query.$and = [{ $or: query.$or }, { $or: usedFilter }];
+                    delete query.$or;
+                } else {
+                    query.$or = usedFilter;
+                }
                 logger.debug('Show used coupons filter added', {
                     showUsedCoupons,
                     pid: process.pid
@@ -193,6 +201,7 @@ class TransactionService {
                         updatedBy: 1,
                         qr_code: 1,
                         isProcessed: 1,
+                        UDID: 1,
                         createdAt: 1,
                         updatedAt: 1,
                         pointsRedeemedBy: 1,
@@ -274,6 +283,7 @@ class TransactionService {
                 const safeKey = escapeRegex(String(searchKey));
                 query.$or = [
                     { couponCode: parseInt(searchKey) },
+                    { UDID: { $regex: safeKey, $options: 'i' } },
                     { pointsRedeemedBy: { $regex: safeKey, $options: 'i' } },
                     { cashRedeemedBy: { $regex: safeKey, $options: 'i' } }
                 ];
@@ -354,11 +364,18 @@ class TransactionService {
             }
 
             if (showUsedCoupons && showUsedCoupons === 'true') {
-                // If showUsedCoupons is true, check if pointsRedeemedBy or cashRedeemedBy exists
-                query.$or = [
+                // Must not overwrite an existing $or (e.g. from searchKey).
+                // Use $and to combine both conditions.
+                const usedFilter = [
                     { pointsRedeemedBy: { $exists: true } },
                     { cashRedeemedBy: { $exists: true } }
                 ];
+                if (query.$or) {
+                    query.$and = [{ $or: query.$or }, { $or: usedFilter }];
+                    delete query.$or;
+                } else {
+                    query.$or = usedFilter;
+                }
                 logger.debug('Show used coupons filter added', {
                     showUsedCoupons,
                     pid: process.pid
