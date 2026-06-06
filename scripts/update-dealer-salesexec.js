@@ -2,6 +2,7 @@ require('dotenv').config();
 require('../database/mongoose'); // Connects to MongoDB
 const User = require('../models/User');
 const axios = require('axios');
+const { normalizePhone } = require('../utils/CommonFuctions');
 
 const FOCUS8_BASE_URL = process.env.FOCUS8_BASE_URL;
 const FOCUS8_USERNAME = process.env.FOCUS8_USERNAME;
@@ -33,29 +34,44 @@ async function updateSalesmanPhones() {
         });
         const salesmanData = salesmanRes.data?.data || [];
         
+        // Core__salesman master carries BOTH the route (sName, e.g. R-A) and the
+        // actual salesman (SalesmanName, e.g. S-A). Many routes share one salesman/phone.
         const salesmanMap = new Map();
         for (const sm of salesmanData) {
             if (sm.sName && sm.SalesManPhNO) {
-                const rawPhone = sm.SalesManPhNO.split(',')[0].replace(/[\s+]/g, '').replace(/^91/, '');
-                const firstPhone = rawPhone.slice(-10);
-                salesmanMap.set(sm.sName.trim().toLowerCase(), { 
+                const firstPhone = normalizePhone(sm.SalesManPhNO);
+                const routeName = sm.sName.trim();
+                // Fall back to the route name if the salesman name column is empty.
+                const salesmanName = sm.SalesmanName && sm.SalesmanName.trim() ? sm.SalesmanName.trim() : routeName;
+                salesmanMap.set(routeName.toLowerCase(), {
                     phone: firstPhone,
-                    name: sm.sName.trim()
+                    routeName: routeName,
+                    salesmanName: salesmanName
                 });
             }
         }
-        console.log(`Mapped ${salesmanMap.size} distinct salesman names to info objects.`);
+        console.log(`Mapped ${salesmanMap.size} distinct routes to salesman info objects.`);
 
-        // 1.5 Ensure Sales Executives exist in MongoDB
+        // 1.5 Ensure Sales Executives exist in MongoDB and correct stale names
         console.log("Checking and creating missing Sales Executives...");
+
+        // Desired SE name per phone = the actual salesman (S-A). Many routes share a
+        // phone; the first salesman name seen for a phone wins (matches creation dedup).
+        const phoneToSalesmanName = new Map();
+        for (const info of salesmanMap.values()) {
+            if (!phoneToSalesmanName.has(info.phone)) {
+                phoneToSalesmanName.set(info.phone, info.salesmanName);
+            }
+        }
+
         const allMobilesInDB = new Set((await User.find({}, { mobile: 1 })).filter(u => u.mobile).map(u => u.mobile.trim()));
         let newSalesExecs = [];
         let newlyAddedMobiles = new Set();
-        
-        for (const [sNameLower, info] of salesmanMap.entries()) {
+
+        for (const [routeNameLower, info] of salesmanMap.entries()) {
             if (!allMobilesInDB.has(info.phone) && !newlyAddedMobiles.has(info.phone)) {
                 newSalesExecs.push({
-                    name: info.name,
+                    name: info.salesmanName, // the actual salesman (S-A), not the route
                     mobile: info.phone,
                     accountType: 'SalesExecutive',
                     status: 'active'
@@ -74,6 +90,32 @@ async function updateSalesmanPhones() {
             }
         } else {
             console.log("All necessary Sales Executives already exist in the database.");
+        }
+
+        // Correct names of EXISTING Sales Executive users (e.g. ones previously named
+        // after the route sName). Match by mobile; only update when the name differs.
+        let seNamesCorrected = 0;
+        const existingSalesExecs = await User.find({ accountType: 'SalesExecutive' }, { mobile: 1, name: 1 });
+        const seNameOps = [];
+        for (const se of existingSalesExecs) {
+            const mobile = se.mobile ? se.mobile.trim() : null;
+            if (!mobile) continue;
+            const desiredName = phoneToSalesmanName.get(mobile);
+            if (desiredName && se.name !== desiredName) {
+                seNameOps.push({
+                    updateOne: {
+                        filter: { _id: se._id },
+                        update: { $set: { name: desiredName } }
+                    }
+                });
+            }
+        }
+        if (seNameOps.length > 0) {
+            const result = await User.bulkWrite(seNameOps);
+            seNamesCorrected = result.modifiedCount;
+            console.log(`Corrected names for ${seNamesCorrected} existing Sales Executive users.`);
+        } else {
+            console.log("No existing Sales Executive names needed correction.");
         }
 
         // 2. Fetch Account Data to link Salesman -> Dealer
@@ -117,6 +159,7 @@ async function updateSalesmanPhones() {
         let alreadyUpToDateCount = 0;
         
         let salesExecUpdatedCount = 0;
+        let routeNameUpdatedCount = 0;
         let primaryContactPersonUpdatedCount = 0;
         let primaryContactPersonMobileUpdatedCount = 0;
 
@@ -126,23 +169,31 @@ async function updateSalesmanPhones() {
             const code = user.dealerCode ? user.dealerCode.trim().toLowerCase() : null;
             if (!code) continue;
 
-            const salesmanInfo = dealerCodeToPhone.get(code); // returns { phone, name }
+            const salesmanInfo = dealerCodeToPhone.get(code); // returns { phone, routeName, salesmanName }
             if (salesmanInfo) {
                 let updates = {};
 
+                // salesExecutive = actual salesman's (S-A) mobile. Always keep in sync.
                 if (user.salesExecutive !== salesmanInfo.phone) {
                     updates.salesExecutive = salesmanInfo.phone;
                     salesExecUpdatedCount++;
                 }
 
-                // Conditionally update primaryContactPerson
-                if (!user.primaryContactPerson || user.primaryContactPerson.trim() === '') {
-                    updates.primaryContactPerson = salesmanInfo.name;
+                // routeName = the route (R-A) the dealer is mapped to. Always overwrite so
+                // a re-map in Focus propagates instead of going stale.
+                if (user.routeName !== salesmanInfo.routeName) {
+                    updates.routeName = salesmanInfo.routeName;
+                    routeNameUpdatedCount++;
+                }
+
+                // primaryContactPerson = actual salesman name (S-A). Refresh on every run.
+                if (user.primaryContactPerson !== salesmanInfo.salesmanName) {
+                    updates.primaryContactPerson = salesmanInfo.salesmanName;
                     primaryContactPersonUpdatedCount++;
                 }
 
-                // Conditionally update primaryContactPersonMobile
-                if (!user.primaryContactPersonMobile || user.primaryContactPersonMobile.trim() === '') {
+                // primaryContactPersonMobile = salesman's (S-A) mobile. Refresh on every run.
+                if (user.primaryContactPersonMobile !== salesmanInfo.phone) {
                     updates.primaryContactPersonMobile = salesmanInfo.phone;
                     primaryContactPersonMobileUpdatedCount++;
                 }
@@ -182,14 +233,16 @@ async function updateSalesmanPhones() {
 
         console.log(`\n--- Summary ---`);
         console.log(`New Sales Executive accounts created: ${newSalesExecs.length}`);
+        console.log(`Existing Sales Executive names corrected: ${seNamesCorrected}`);
         console.log(`Total Dealer users processed: ${dbUsers.length}`);
         console.log(`Dealers skipping update due to missing Salesman Mapping: ${notFoundInMappingCount}`);
         console.log(`Dealers completely up to date already: ${alreadyUpToDateCount}`);
         console.log(`\n--- Fields Updated ---`);
         console.log(`Total Dealers updated: ${bulkOps.length}`);
         console.log(`  - 'salesExecutive' modified: ${salesExecUpdatedCount}`);
-        console.log(`  - 'primaryContactPerson' filled: ${primaryContactPersonUpdatedCount}`);
-        console.log(`  - 'primaryContactPersonMobile' filled: ${primaryContactPersonMobileUpdatedCount}\n`);
+        console.log(`  - 'routeName' modified: ${routeNameUpdatedCount}`);
+        console.log(`  - 'primaryContactPerson' modified: ${primaryContactPersonUpdatedCount}`);
+        console.log(`  - 'primaryContactPersonMobile' modified: ${primaryContactPersonMobileUpdatedCount}\n`);
 
         process.exit(0);
 

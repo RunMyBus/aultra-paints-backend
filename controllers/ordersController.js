@@ -106,11 +106,20 @@ async function generateInvoicePdf(order, user) {
 async function runFocusSync(orderDocId, orderId, order, dealer, { entityId, warehouseId, branchId, narration } = {}) {
     try {
         const result = await pushOrderToFocus8(order, dealer, { entityId, warehouseId, branchId, narration });
+        // Group the Focus master references actually posted into a single subdoc.
+        const focusRefs = {};
+        if (result.customerAccountId != null) focusRefs.customerAccountId = Number(result.customerAccountId);
+        if (result.salesmanId != null) focusRefs.salesmanId = Number(result.salesmanId);
+        if (result.districtsId != null) focusRefs.districtsId = Number(result.districtsId);
+        if (result.isIGST != null) focusRefs.isIGST = Number(result.isIGST);
         const update = result.success
             ? {
                 focusSyncStatus: 'SUCCESS',
                 focusOrderId: result.voucherNo,
                 focusSyncResponse: result.focus8Response,
+                // Authoritative route (display) + Focus reference IDs actually posted.
+                ...(result.routeName && { routeName: result.routeName }),
+                ...(Object.keys(focusRefs).length && { focusRefs }),
             }
             : {
                 focusSyncStatus: 'FAILED',
@@ -323,6 +332,14 @@ exports.createOrder = async (req, res) => {
             isVerified = true;
         }
 
+        // Resolve the dealer this order is for (SE places for a dealer; otherwise self).
+        let orderCreatedForDetails;
+        if (req.body.dealerId) {
+            orderCreatedForDetails = await userModel.findById(req.body.dealerId);
+        } else {
+            orderCreatedForDetails = req.user;
+        }
+
         // Save order
         let orderObj = {
             orderId,
@@ -337,7 +354,11 @@ exports.createOrder = async (req, res) => {
             entityId,
             warehouseId,
             branchId,
-            ...(narration ? { narration } : {})
+            ...(narration ? { narration } : {}),
+            // Route / salesman snapshot from the dealer's current Focus mapping.
+            // salesmanId (Focus route iMasterId) is filled after the Focus sync resolves it.
+            ...(orderCreatedForDetails?.routeName ? { routeName: orderCreatedForDetails.routeName } : {}),
+            ...(orderCreatedForDetails?.salesExecutive ? { salesExecutiveMobile: orderCreatedForDetails.salesExecutive } : {})
         };
         if (req.body.dealerId) {
             orderObj.dealerId = req.body.dealerId;
@@ -345,14 +366,6 @@ exports.createOrder = async (req, res) => {
         const order = new orderModel(orderObj);
 
         await order.save();
-
-        let orderCreatedForDetails;
-
-        if (req.body.dealerId) {
-            orderCreatedForDetails = await userModel.findById(req.body.dealerId);
-        } else {
-            orderCreatedForDetails = req.user;
-        }
 
         // Kick off Focus 8 sync but return the API response immediately with
         // focusSyncStatus: PENDING so the client can poll. Persist via updateOne
@@ -612,8 +625,8 @@ exports.getOrderDetails = async (req, res) => {
 
         const order = await orderModel
             .findOne({ orderId })
-            .populate({ path: 'createdBy', select: 'name mobile accountType dealerCode' })
-            .populate({ path: 'dealerId', select: 'name dealerCode mobile' })
+            .populate({ path: 'createdBy', select: 'name mobile accountType dealerCode salesExecutive routeName' })
+            .populate({ path: 'dealerId', select: 'name dealerCode mobile salesExecutive routeName' })
             .populate({ path: 'statusHistory.changedBy', select: 'name accountType' })
             .lean();
 
@@ -639,6 +652,19 @@ exports.getOrderDetails = async (req, res) => {
                 return res.status(403).json({ success: false, message: 'Access denied' });
             }
         }
+
+        // Resolve explicit dealer and salesExecutive fields for the mobile client,
+        // regardless of who placed the order.
+        // When a Dealer self-places an order, dealerId is not set — fall back to createdBy.
+        const dealerSource = order.dealerId ?? (order.createdBy?.accountType === 'Dealer' ? order.createdBy : null);
+        order.dealer = dealerSource ? { name: dealerSource.name, mobile: dealerSource.mobile } : null;
+
+        // Display the ROUTE in place of "sales executive". Prefer the order-time
+        // snapshot (stable history) and fall back to the dealer's current mapping.
+        // mobile carries the actual salesman's (S-A) number for that route.
+        const routeName = order.routeName || dealerSource?.routeName || null;
+        const routeMobile = order.salesExecutiveMobile || dealerSource?.salesExecutive || null;
+        order.salesExecutive = routeName ? { name: routeName, mobile: routeMobile } : null;
 
         if (order.focusSyncStatus === 'SUCCESS' && order.focusOrderId) {
             try {

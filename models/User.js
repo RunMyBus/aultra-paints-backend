@@ -20,7 +20,8 @@ const userSchema = new mongoose.Schema({
     parentDealerCode: { type: String },  // valid only for painter user type
     accountType: { type: String, default: 'Painter'},
     upiID: { type: String },
-    salesExecutive: {type: String},
+    salesExecutive: {type: String}, // mobile of the actual salesman (S-A); shared across that salesman's routes
+    routeName: {type: String}, // route (Focus vmCore_Account.SalesmanName, e.g. R-A) the dealer is mapped to
     parentSalesExecutive: { type: String }, // mobile of the senior SE overseeing this SE (SE accounts only)
     state: { type: String },
     zone: { type: String },

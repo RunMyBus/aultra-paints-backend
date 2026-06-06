@@ -60,6 +60,23 @@ const orderSchema = new Schema({
   branchId: { type: Number },
   narration: { type: String },
 
+  // Route / salesman snapshot for DISPLAY — frozen at order time so history
+  // doesn't shift when a dealer is later re-mapped to a different route in Focus.
+  routeName: { type: String }, // route the order was placed on (vmCore_Account.SalesmanName)
+  salesExecutiveMobile: { type: String }, // actual salesman's mobile at time of order
+
+  // Focus master references resolved during sync (the opaque IDs actually posted
+  // to Focus). Grouped because they share an origin and aren't queried individually.
+  focusRefs: {
+    type: new mongoose.Schema({
+      customerAccountId: { type: Number }, // CustomerAC__Id
+      salesmanId: { type: Number }, // Salesman__Id (route iMasterId)
+      districtsId: { type: Number }, // Districts__Id
+      isIGST: { type: Number } // IsIGST
+    }, { _id: false }),
+    default: undefined
+  },
+
   // Focus Integration Fields
   focusSyncStatus: { type: String, enum: ['PENDING', 'SUCCESS', 'FAILED'], default: 'PENDING' },
   focusOrderId: { type: String }, // SO VoucherNo returned by Focus
