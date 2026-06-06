@@ -101,6 +101,10 @@ router.get('/sales-executives', requireRole(ADMIN), async (req, res) => {
     userController.getAllSalesExecutives(req, res);
 });
 
+router.get('/routes', requireRole(ADMIN), async (req, res) => {
+    userController.getRoutes(req, res);
+});
+
 router.get('/junior-sales-executives', requireRole(STAFF), async (req, res) => {
     userController.getJuniorSalesExecutives(req, res);
 });

@@ -6,7 +6,7 @@ const redeemedUserModel = require("../models/redeemedUser.model");
 const UserLoginSMSModel = require("../models/UserLoginSMS");
 const axios = require("axios");
 const { validateAndCreateOTP } = require('../services/user.service');
-const { getDealerFinancialData } = require('../services/focus8Order.service');
+const { getDealerFinancialData, getRouteMaster } = require('../services/focus8Order.service');
 const { Parser } = require('json2csv');
 const { escapeRegex, clampLimit, clampPage, isValidMobile } = require('../utils/validators');
 
@@ -15,7 +15,7 @@ const USER_PROTECTED_FIELDS = ['rewardPoints', 'cash', 'legacyCash', 'token', '_
 const USER_ALLOWED_CREATE_FIELDS = [
     'name', 'mobile', 'address', 'email', 'primaryContactPerson', 'primaryContactPersonMobile',
     'dealerCode', 'parentDealerCode', 'accountType', 'upiID', 'salesExecutive', 'parentSalesExecutive',
-    'state', 'zone', 'district', 'status', 'productCategories'
+    'routeName', 'state', 'zone', 'district', 'status', 'productCategories'
 ];
 const USER_ALLOWED_UPDATE_FIELDS = USER_ALLOWED_CREATE_FIELDS.filter(f => f !== 'accountType');
 
@@ -587,6 +587,30 @@ exports.getAllDealers = async (req, res) => {
         return res.status(500).json({
             status: 'error',
             message: 'Error fetching dealers',
+        });
+    }
+};
+
+// Routes change rarely in Focus; cache the master briefly so the dealer-form
+// dropdown doesn't hit Focus on every open.
+const ROUTE_CACHE_TTL_MS = 10 * 60 * 1000;
+let routeMasterCache = { data: null, fetchedAt: 0 };
+
+exports.getRoutes = async (req, res) => {
+    try {
+        const now = Date.now();
+        if (!routeMasterCache.data || (now - routeMasterCache.fetchedAt) > ROUTE_CACHE_TTL_MS) {
+            const routes = await getRouteMaster();
+            routeMasterCache = { data: routes, fetchedAt: now };
+        }
+        return res.status(200).json({
+            status: 'success',
+            data: routeMasterCache.data
+        });
+    } catch (error) {
+        return res.status(500).json({
+            status: 'error',
+            message: 'Error fetching routes'
         });
     }
 };

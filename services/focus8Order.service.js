@@ -1,5 +1,6 @@
 const axios = require("axios");
 const logger = require("../utils/logger");
+const { normalizePhone } = require("../utils/CommonFuctions");
 require("dotenv").config();
 
 const FOCUS8_BASE_URL = process.env.FOCUS8_BASE_URL;
@@ -176,6 +177,7 @@ async function getOrderHeaderData(filters = {}) {
     return {
         CustomerAC__Id: Number(customer.iMasterId),
         Salesman__Id: Number(Salesman__Id),
+        SalesmanName: customer.SalesmanName ? String(customer.SalesmanName).trim() : null, // route
         Districts__Id: Number(Districts__Id),
         IsIGST: 0
     };
@@ -321,6 +323,44 @@ async function getBranchMaster() {
 
 /**
  * ===============================
+ * GET ROUTE MASTER
+ * ===============================
+ * Returns the canonical list of routes from the Focus `Core__salesman` master,
+ * one entry per route (sName). Normalization mirrors scripts/update-dealer-salesexec.js
+ * so a route picked in the UI matches exactly what the sync/order flow resolves.
+ */
+async function getRouteMaster() {
+    const sid = await getFocusSessionId();
+    const res = await axios.get(`${FOCUS8_BASE_URL}/List/Masters/Core__salesman`, {
+        headers: { fSessionId: sid }
+    });
+
+    const rows = res.data?.data || [];
+    const routes = [];
+
+    // No dedup by route name: the same route name can belong to different
+    // salesmen, so every Core__salesman row is a distinct route option. The
+    // admin disambiguates by the salesman name shown alongside the route.
+    for (const sm of rows) {
+        if (!sm.sName) continue;
+        const routeName = String(sm.sName).trim();
+        if (!routeName) continue;
+
+        const salesExecutiveMobile = normalizePhone(sm.SalesManPhNO) || null;
+
+        const salesmanName = sm.SalesmanName && String(sm.SalesmanName).trim()
+            ? String(sm.SalesmanName).trim()
+            : routeName;
+
+        routes.push({ routeName, salesmanName, salesExecutiveMobile });
+    }
+
+    routes.sort((a, b) => a.routeName.localeCompare(b.routeName));
+    return routes;
+}
+
+/**
+ * ===============================
  * PUSH SALES ORDER TO FOCUS8
  * ===============================
  */
@@ -330,6 +370,7 @@ async function pushOrderToFocus8(order, user, { entityId, warehouseId, branchId,
         const {
             CustomerAC__Id,
             Salesman__Id,
+            SalesmanName,
             Districts__Id,
             IsIGST
         } = await getOrderHeaderData({ mobile: user.mobile ?? null, sName: user.name ?? null, sCode: user.dealerCode ?? null });
@@ -389,6 +430,12 @@ async function pushOrderToFocus8(order, user, { entityId, warehouseId, branchId,
             success: true,
             voucherNo: voucher.VoucherNo,
             headerId: voucher.HeaderId,
+            routeName: SalesmanName, // route name (display) — corresponds to Salesman__Id
+            // Focus master references actually posted (grouped into focusRefs on the order).
+            customerAccountId: CustomerAC__Id,
+            salesmanId: Salesman__Id,
+            districtsId: Districts__Id,
+            isIGST: IsIGST,
             focus8Response: response.data
         };
 
@@ -584,6 +631,7 @@ module.exports = {
     getEntityMaster,
     getWarehouseMaster,
     getBranchMaster,
+    getRouteMaster,
     pushOrderToFocus8,
     getPriceBookData,
     getDealerAccountId,
