@@ -33,6 +33,52 @@ exports.getAllTransactions = async (req, res) => {
             query.narration = { $regex: safeCode, $options: 'i' };
         }
 
+        // Dealer code / dealer name filters.
+        //
+        // Each transfer creates two ledger rows that share the same uniqueCode:
+        //   • dealer row  → userId = dealer._id,    narration = "Transferred reward points to Super User"
+        //   • superuser row → userId = superUser._id, narration = "Received reward points from dealer"
+        //
+        // Strategy: find the matching dealer User(s) by dealerCode / name, look up their
+        // ledger rows (by userId) to collect the shared uniqueCodes, then restrict this
+        // query to those uniqueCodes.
+        const dealerUserFilter = {};
+        if (req.body.dealerCode) {
+            dealerUserFilter.dealerCode = { $regex: req.body.dealerCode.toString(), $options: 'i' };
+        }
+        if (req.body.dealerName) {
+            dealerUserFilter.name = { $regex: req.body.dealerName.toString(), $options: 'i' };
+        }
+
+        if (Object.keys(dealerUserFilter).length > 0) {
+            dealerUserFilter.accountType = 'Dealer';
+            const matchedDealers = await User.find(dealerUserFilter, { _id: 1 });
+            const dealerIds = matchedDealers.map(d => d._id.toString());
+
+            if (dealerIds.length === 0) {
+                return res.json({
+                    transactions: [],
+                    pagination: { currentPage: page, totalPages: 0, totalTransactions: 0 },
+                });
+            }
+
+            // Pull the uniqueCodes from the dealer-side ledger rows
+            const dealerLedgerRows = await TransactionLedger.find(
+                { userId: { $in: dealerIds }, narration: 'Transferred reward points to Super User' },
+                { uniqueCode: 1 }
+            );
+            const uniqueCodes = dealerLedgerRows.map(r => r.uniqueCode).filter(Boolean);
+
+            if (uniqueCodes.length === 0) {
+                return res.json({
+                    transactions: [],
+                    pagination: { currentPage: page, totalPages: 0, totalTransactions: 0 },
+                });
+            }
+
+            query.uniqueCode = { $in: uniqueCodes };
+        }
+
         // Apply credit note status filter if provided
         if (req.body.creditNoteStatus === 'issued') {
             query.creditNoteIssued = true;
