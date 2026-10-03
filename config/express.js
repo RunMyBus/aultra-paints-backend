@@ -1,6 +1,7 @@
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
+const MemoryStore = require('memorystore')(session);
 const httpError = require('http-errors');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
@@ -19,14 +20,24 @@ const requestContext = require('../utils/requestContext');
 
 const app = express();
 
+// Sessions expire after 24h and memorystore prunes expired entries hourly.
+// The default express-session MemoryStore never evicts, so every login
+// leaked an entry for the lifetime of the process.
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
 app.use(session({
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
+    store: new MemoryStore({
+        checkPeriod: 60 * 60 * 1000,
+        ttl: SESSION_TTL_MS,
+    }),
     cookie: {
         httpOnly: true,
         sameSite: 'lax',
         secure: IS_PROD,
+        maxAge: SESSION_TTL_MS,
     }
 }));
 
